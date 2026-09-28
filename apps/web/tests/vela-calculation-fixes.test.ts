@@ -1,0 +1,223 @@
+import { describe, expect, it, vi } from "vitest";
+import * as vela from "@luxalgo/vela";
+import {
+  anchoredVwap,
+  applyCalculationFixes,
+  candlesFrom,
+  patchVisibleRangeProfile,
+} from "../src/components/vela-calculation-fixes";
+import { buildVolumeProfile, type ProfileBar } from "../src/lib/volume-profile";
+
+// Vela's own drawings, kept before the fixes replace them.
+const originalProfile = vela.createDrawing("fixedrangevp", { paneId: "price" });
+applyCalculationFixes(vela);
+
+const M = 60_000;
+const Q = 15 * M;
+const T0 = Date.UTC(2026, 8, 28, 0, 0);
+
+/** Minute candles for `hours`, a wave around 100 with some volume. */
+function minutes(hours: number): ProfileBar[] {
+  return Array.from({ length: hours * 60 }, (_, i) => {
+    const mid = 100 + Math.sin(i / 37) * 4 + Math.sin(i / 5);
+    const open = mid - 0.3 * Math.cos(i);
+    const close = mid + 0.3 * Math.cos(i);
+    return {
+      time: T0 + i * M,
+      open,
+      close,
+      high: Math.max(open, close) + 0.4,
+      low: Math.min(open, close) - 0.4,
+      volume: 10 + (i % 7) * 3,
+    };
+  });
+}
+/** Chart candles built from minute candles. */
+function aggregate(bars: ProfileBar[], ms: number): ProfileBar[] {
+  const out: ProfileBar[] = [];
+  for (const bar of bars) {
+    const time = Math.floor(bar.time / ms) * ms;
+    const last = out.at(-1);
+    if (last && last.time === time) {
+      last.high = Math.max(last.high, bar.high);
+      last.low = Math.min(last.low, bar.low);
+      last.close = bar.close;
+      last.volume = (last.volume ?? 0) + (bar.volume ?? 0);
+    } else out.push({ ...bar, time });
+  }
+  return out;
+}
+const oneMinute = minutes(12);
+const quarter = aggregate(oneMinute, Q);
+
+/** Vela's projector, as the chart builds it: candles open inside [from, to], finer on request. */
+function projector(
+  chart: ProfileBar[],
+  fine: Record<string, ProfileBar[]>,
+  state: "ready" | "loading" = "ready",
+) {
+  const seriesInRange = vi.fn(
+    (
+      timeframe: string,
+      from: number,
+      to: number,
+    ): { state: "ready" | "loading" | "unavailable"; bars?: ProfileBar[] } =>
+      fine[timeframe]
+        ? { state, bars: fine[timeframe]!.filter((b) => b.time >= from && b.time <= to) }
+        : { state: "unavailable" },
+  );
+  return {
+    barsInRange: (from: number, to: number) => chart.filter((b) => b.time >= from && b.time <= to),
+    seriesInRange,
+    xOf: (t: number) => t,
+    yOf: (p: number) => p,
+  };
+}
+
+type Profile = {
+  compute(proj: unknown): {
+    profile: { rows: { up: number; down: number }[]; poc: number; vaFrom: number; vaTo: number };
+    developingPoc: { time: number }[];
+  } | null;
+  frvp: Record<string, unknown>;
+};
+const profileDrawing = (from: number, to: number) =>
+  vela.createDrawing("fixedrangevp", {
+    paneId: "price",
+    anchors: [
+      { time: from, price: 100 },
+      { time: to, price: 100 },
+    ],
+  }) as unknown as Profile;
+
+const rowVolume = (rows: { up: number; down: number }[]) =>
+  rows.reduce((sum, row) => sum + row.up + row.down, 0);
+
+describe("the fixed range volume profile, as TradingView computes it", () => {
+  it("Vela's own counted a candle's volume once per row its open, high, low and close hit", () => {
+    const d = originalProfile as unknown as Profile;
+    (d as unknown as { anchors: unknown[] }).anchors = [
+      { time: quarter[0]!.time, price: 100 },
+      { time: quarter.at(-1)!.time, price: 100 },
+    ];
+    const volume = quarter.reduce((sum, b) => sum + (b.volume ?? 0), 0);
+    const counted = rowVolume(d.compute(projector(quarter, {}))!.profile.rows);
+    expect(counted).toBeGreaterThan(volume * 1.2);
+  });
+
+  it("is built from the one-minute candles of the range when they fit in 5000", async () => {
+    const proj = projector(quarter, { "1": oneMinute });
+    const d = profileDrawing(quarter[0]!.time, quarter.at(-1)!.time);
+    const result = d.compute(proj)!;
+    expect(proj.seriesInRange).toHaveBeenCalledWith("1", quarter[0]!.time, expect.any(Number));
+    const expected = buildVolumeProfile(oneMinute, 24, 0.7)!;
+    expect(result.profile.poc).toBe(expected.poc);
+    expect([result.profile.vaFrom, result.profile.vaTo]).toEqual([expected.vaFrom, expected.vaTo]);
+    // Every unit of volume counted once.
+    const volume = oneMinute.reduce((sum, b) => sum + (b.volume ?? 0), 0);
+    expect(rowVolume(result.profile.rows)).toBeCloseTo(volume, 6);
+  });
+
+  it("uses the chart's candles until the finer ones have loaded", () => {
+    const proj = projector(quarter, { "1": oneMinute.slice(0, 10) }, "loading");
+    const result = profileDrawing(quarter[0]!.time, quarter.at(-1)!.time).compute(proj)!;
+    expect(result.profile.poc).toBe(buildVolumeProfile(quarter, 24, 0.7)!.poc);
+  });
+
+  it("includes the candle an anchor sits inside, not only candles opening after it", () => {
+    const proj = projector(quarter, {});
+    const inside = quarter[4]!.time + 7 * M;
+    const d = profileDrawing(inside, quarter[10]!.time);
+    const expected = buildVolumeProfile(quarter.slice(4, 11), 24, 0.7)!;
+    expect(rowVolume(d.compute(proj)!.profile.rows)).toBeCloseTo(rowVolume(expected.rows), 6);
+  });
+
+  it("steps the developing POC once per chart candle", () => {
+    const proj = projector(quarter, { "1": oneMinute });
+    const d = profileDrawing(quarter[0]!.time, quarter.at(-1)!.time);
+    d.frvp.showDevelopingPoc = true;
+    const result = d.compute(proj)!;
+    expect(result.developingPoc.map((p) => p.time)).toEqual(quarter.map((b) => b.time));
+  });
+});
+
+describe("the anchored VWAP", () => {
+  it("starts at the candle holding the anchor", () => {
+    const proj = projector(quarter, {});
+    const anchor = quarter[3]!.time + 9 * M;
+    const bars = candlesFrom(proj, anchor, Infinity)!;
+    expect(bars[0]!.time).toBe(quarter[3]!.time);
+    const d = vela.createDrawing("anchoredvwap", {
+      paneId: "price",
+      anchors: [{ time: anchor, price: 100 }],
+    }) as unknown as { series(proj: unknown): { time: number; mid: number }[] };
+    const series = d.series(proj);
+    expect(series[0]!.time).toBe(quarter[3]!.time);
+    const expected = anchoredVwap(quarter.slice(3), 1);
+    expect(series.at(-1)!.mid).toBeCloseTo(expected.at(-1)!.mid, 10);
+  });
+
+  it("is TradingView's hlc3 VWAP with volume-weighted deviation bands", () => {
+    const bars = quarter.slice(0, 20);
+    const out = anchoredVwap(bars, 2).at(-1)!;
+    let pv = 0;
+    let v = 0;
+    let p2v = 0;
+    for (const b of bars) {
+      const tp = (b.high + b.low + b.close) / 3;
+      pv += tp * b.volume!;
+      p2v += tp * tp * b.volume!;
+      v += b.volume!;
+    }
+    const mid = pv / v;
+    expect(out.mid).toBeCloseTo(mid, 10);
+    expect(out.upper - out.mid).toBeCloseTo(2 * Math.sqrt(p2v / v - mid * mid), 8);
+  });
+});
+
+describe("the visible range volume profile", () => {
+  it("replaces the layer's computation, and leaves an unknown renderer alone", () => {
+    expect(patchVisibleRangeProfile({})).toBe(false);
+    expect(patchVisibleRangeProfile(null)).toBe(false);
+    const calls: string[] = [];
+    const ctx = new Proxy(
+      {},
+      {
+        get: (_t, prop) =>
+          typeof prop === "string" &&
+          /Rect|save|restore|clip|beginPath|rect|setTransform/.test(prop)
+            ? () => calls.push(prop)
+            : undefined,
+        set: () => true,
+      },
+    ) as unknown as CanvasRenderingContext2D;
+    const layer = { ctx, canvas: { width: 100, height: 100 }, render: (_args: unknown) => {} };
+    const seriesInRange = vi.fn(() => ({ state: "ready", bars: oneMinute }));
+    const renderer = { vpvrRenderer: layer, userDrawings: { seriesGateway: { seriesInRange } } };
+    expect(patchVisibleRangeProfile(renderer)).toBe(true);
+    layer.render({
+      bars: quarter,
+      data: {
+        rows: 24,
+        widthFrac: 0.3,
+        upColor: "#0f0",
+        downColor: "#f00",
+        showPoc: true,
+        valueAreaFrac: 0.7,
+      },
+      visible: true,
+      coords: {
+        dpr: 1,
+        width: 100,
+        visibleLogicalRange: () => ({ from: 0, to: quarter.length - 1 }),
+        priceToY: (p: number) => p,
+      },
+      scale: null,
+      bounds: { top: 0, height: 100 },
+      theme: { textColor: "#fff" },
+    } as never);
+    expect(seriesInRange).toHaveBeenCalledWith("1", quarter[0]!.time, expect.any(Number));
+    expect(calls).toContain("fillRect");
+    expect(calls).toContain("strokeRect");
+  });
+});

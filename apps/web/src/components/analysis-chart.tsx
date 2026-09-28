@@ -54,6 +54,7 @@ import {
 } from "@/lib/chart-preferences";
 import { attachStylus } from "./chart-stylus";
 import { applyPatternFixes } from "./vela-pattern-fixes";
+import { applyCalculationFixes, patchVisibleRangeProfile } from "./vela-calculation-fixes";
 import { DrawingTemplatesMenu } from "./drawing-templates-menu";
 import {
   findTemplate,
@@ -499,6 +500,7 @@ export function AnalysisChart({
         while (teardown.length) teardown.pop()!();
       };
       applyPatternFixes(vela);
+      applyCalculationFixes(vela);
       const { drawings, visible } = seed.current;
       const step = RESOLUTIONS[resolutionRef.current];
       // Enough history to show a saved view, within the chart's depth cap.
@@ -541,6 +543,7 @@ export function AnalysisChart({
         if (chart.current === instance) chart.current = null;
       });
       instance.data.registerProvider(name, feed);
+      patchVisibleRangeProfile(instance.renderer);
       // Pine Script indicators run in a Web Worker so heavy scripts never block drawing.
       // Scripts too deep for the worker's smaller stack fall back to the page's thread.
       engine = new FallbackPineEngine(

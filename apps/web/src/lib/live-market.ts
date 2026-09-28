@@ -93,7 +93,13 @@ export function applyLive(
   return [...changed.values()];
 }
 
-export const INITIAL_BARS = 500;
+/**
+ * Candles a chart loads before you scroll back. Indicators are computed over what is loaded,
+ * so this is also their history: 2000 lets long averages settle to TradingView's values
+ * (an EMA 200 on 500 candles was still off) and always covers the whole current day on 1m,
+ * which a session VWAP needs (500 one-minute candles are only 8 hours).
+ */
+export const INITIAL_BARS = 2000;
 /** Deepest history a chart grows to by scrolling back, matching the adapters' cap. */
 export const MAX_CHART_BARS = 20_000;
 /** One request never asks for more than this; Vela pages deeper history in chunks. */
@@ -112,8 +118,10 @@ export type HistoryWindow = { from: number; to: number } | { to: number; limit: 
  * when Vela names one, otherwise "the latest `limit` candles up to `to`".
  */
 export function historyWindow(range: BarRange, now = Date.now()): HistoryWindow {
-  const to = Math.min(range.to ?? now, now);
-  if (range.from != null) return { from: Math.min(range.from, to - 1), to };
+  // Whole milliseconds, rounded outward: Vela pads some windows by fractions of a candle
+  // (drawings reading finer candles), and the history API takes integer times.
+  const to = Math.ceil(Math.min(range.to ?? now, now));
+  if (range.from != null) return { from: Math.floor(Math.min(range.from, to - 1)), to };
   return { to, limit: Math.max(1, Math.min(range.limit ?? INITIAL_BARS, MAX_REQUEST_BARS)) };
 }
 

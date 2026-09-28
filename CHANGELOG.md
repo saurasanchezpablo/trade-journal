@@ -61,6 +61,9 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Fixed
 
+- Volume profiles and their value area match TradingView: the fixed range volume profile counted a candle's whole volume in every row its open, high, low and close touched; both profiles now spread volume over each candle's range, are built from finer candles (1m, 5m, ... as TradingView picks them), and grow the value area TradingView's way, never past its 70%. The anchored VWAP starts at the candle holding its anchor
+- Charts load 2000 candles instead of 500, so indicators match TradingView: a session VWAP on 1m saw only the last 8 hours of the day (off by $80 on BTC in a test), and an EMA 200 had not settled
+- Drawings that read finer candles (the volume profile, the magnifier) no longer fail with "Choose a start date before the end date"
 - Duplicating or pasting a drawing keeps its source's look instead of restyling the copy with the tool's default template or ink
 - Pine scripts with very long expressions or condition chains no longer fail with "Maximum call stack size exceeded": a script too deep for the indicator worker runs on the page instead, and one too deep for both explains how to split it
 - Chart pattern tools: the Elliott impulse is placed on six points (0-1-2-3-4-5, five waves) and the correction on four (0-A-B-C, three waves), instead of Vela's five and three points; the Shark harmonic is labelled 0-X-A-B-C. Wave drawings made with the old point count keep their points and labels

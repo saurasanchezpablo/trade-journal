@@ -14,7 +14,7 @@ click.
    public crypto feed (Binance, Coinbase), or an uploaded candle CSV (see
    [market-data.md](market-data.md)).
 2. Open **Charts**, choose the source, type the provider's exact symbol and press **Open**.
-   The chart loads the latest 500 candles; there are no dates to enter. The page reopens
+   The chart loads the latest 2000 candles; there are no dates to enter. The page reopens
    the last symbol you watched, and recent symbols stay one tap away.
 3. Switch candle size with the timeframe bar (**1m · 5m · 15m · 1h · 4h · 1d** by default).
    The sliders button next to it picks which sizes the bar shows, from 1m, 3m, 5m, 15m,
@@ -462,6 +462,27 @@ meet AGPL-3.0 terms, including offering the corresponding source to its network 
 journal's own code stays MIT. Pine Script is a trademark of TradingView, Inc.; PineTS is an
 independent runtime not affiliated with TradingView.
 
+## Volume profiles and VWAP
+
+These follow TradingView's definitions, so their levels match what TradingView shows for
+the same candles:
+
+- **Fixed range volume profile** (drawing) and **Visible range volume profile** (indicator)
+  are built from finer candles, as TradingView does: the first of 1m, 5m, 15m, 30m, 1h, 4h
+  and 1d that covers the range in fewer than 5000 candles (fetched from the chart's own
+  source; the chart's candles stand in while they load, and when nothing finer exists).
+  Each candle's volume is spread over the rows its high-low range covers, in proportion to
+  the overlap, as up volume when it closes at or above its open and down volume otherwise.
+- The **value area** starts at the point of control and adds, one row at a time, the larger
+  of the next row above and below (a tie goes to the row closer to the point of control,
+  then to the one above), stopping at the first row that would take it past its share
+  (70% by default). It never holds more than its share.
+- The **anchored VWAP** starts at the candle that holds its anchor (also after switching
+  candle size), with hlc3 as the price and bands at volume-weighted standard deviations.
+- Indicators are computed over the loaded candles (2000 to start), enough for long averages
+  such as an EMA 200 to settle to TradingView's values and for a session VWAP to cover the
+  whole day on 1m.
+
 ## Pattern tools
 
 Vela's side toolbar **Patterns** group holds XABCD, ABCD, the harmonic patterns (Gartley,
@@ -528,6 +549,8 @@ copied into the analysis. `economic_events` holds the stored calendar.
 
 ## Code map
 
+- `lib/volume-profile.ts` and `components/vela-calculation-fixes.ts`: volume profiles, value
+  area and anchored VWAP as TradingView computes them, replacing Vela's computations.
 - `lib/live-market.ts`: the Vela data provider (history windows, polling, retries, merging
   streamed trades into the forming candle); `server/market-data/live.ts` and
   `app/api/market-data/stream`: the shared exchange feeds and their SSE relay.

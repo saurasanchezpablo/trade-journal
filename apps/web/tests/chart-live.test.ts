@@ -278,6 +278,12 @@ describe("line alerts fire when a live close crosses a drawn line", () => {
 describe("live charts ask for the latest candles without dates", () => {
   const now = Date.parse("2026-09-25T12:00:00Z");
 
+  it("asks for whole milliseconds, rounded outward, when Vela pads a window by a fraction", () => {
+    expect(
+      historyWindow({ from: 1_790_405_775_000.25, to: 1_790_623_582_546.6 }, now + 1e12),
+    ).toEqual({ from: 1_790_405_775_000, to: 1_790_623_582_547 });
+  });
+
   it("asks for the latest candles when Vela names no start", () => {
     expect(historyWindow({ limit: 500 }, now)).toEqual({ to: now, limit: 500 });
     expect(historyWindow({ to: now - 1000, limit: 50_000 }, now)).toEqual({
