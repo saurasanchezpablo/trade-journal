@@ -14,6 +14,14 @@ export interface HistoryRequest {
   forming?: boolean;
 }
 
+/** One instrument a source lists, for the chart's symbol search. */
+export interface SymbolMatch {
+  /** The exact symbol to open. */
+  symbol: string;
+  /** What it is, in words (`BTC / USDT perpetual`). */
+  description: string;
+}
+
 /** Adapters supply data only. Chart rendering and analytics do not depend on an adapter. */
 export interface MarketDataProvider {
   id: string;
@@ -21,6 +29,13 @@ export interface MarketDataProvider {
   environmentKey: string;
   history(request: HistoryRequest, apiKey: string): Promise<MarketHistory>;
   test(apiKey: string): Promise<void>;
+  /** Instruments matching a search, best first; sources without a listing omit it. */
+  symbols?(
+    query: string,
+    dataset: string | null,
+    apiKey: string,
+    signal?: AbortSignal,
+  ): Promise<SymbolMatch[]>;
 }
 
 export class MarketDataError extends Error {}

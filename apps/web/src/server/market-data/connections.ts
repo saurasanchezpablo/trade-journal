@@ -5,6 +5,7 @@ import { providerInfo } from "@/lib/market-providers";
 import { londonStrategicEdge } from "./london-strategic-edge";
 import { alpaca } from "./alpaca";
 import { binance, coinbase } from "./public-crypto";
+import { bybit } from "./bybit";
 import { oanda } from "./oanda";
 import { csvDatasets, marketCsv } from "./csv";
 import { MarketDataError, type MarketDataProvider } from "./provider";
@@ -14,11 +15,15 @@ const providers: MarketDataProvider[] = [
   alpaca,
   // Binance klines for these sizes open on UTC multiples, so they are fetched directly.
   withAggregation(binance, ["3m", "30m", "2h", "4h"]),
+  // Every journal candle size is a native Bybit interval, aligned to UTC (weeks from Monday).
+  withAggregation(bybit, ["3m", "30m", "2h", "4h", "1w"]),
   coinbase,
   oanda,
   marketCsv,
 ]
-  .map((provider) => (provider.id === "binance" ? provider : withAggregation(provider)))
+  .map((provider) =>
+    provider.id === "binance" || provider.id === "bybit" ? provider : withAggregation(provider),
+  )
   .sort((a, b) => a.name.localeCompare(b.name));
 export const providerFor = (id: string) => {
   const provider = providers.find((entry) => entry.id === id);

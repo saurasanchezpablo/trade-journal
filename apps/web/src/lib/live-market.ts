@@ -26,7 +26,7 @@ export const LIVE_POLL_MS: Record<Resolution, number> = {
 };
 
 /** Sources the server streams in real time (`/api/market-data/stream`); others poll. */
-export const STREAMING_PROVIDERS: ReadonlySet<string> = new Set(["binance", "coinbase"]);
+export const STREAMING_PROVIDERS: ReadonlySet<string> = new Set(["binance", "bybit", "coinbase"]);
 /** With a stream open, polling only reconciles finished candles, so it can be slow. */
 export const RECONCILE_POLL_MS = 60_000;
 /** Price header and alerts follow the stream at most this often (the chart itself every update). */

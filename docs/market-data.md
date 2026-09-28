@@ -125,21 +125,24 @@ market prices; they do not create broker-sync accounts, place orders, or change 
 Public sources require an explicit Enable source action. No source is contacted just
 because Settings or Reports is opened. **Charts** is the exception by design: an open chart
 requests its symbol's candles and polls for new ones while visible and not paused (see
-[charts.md](charts.md#live-updates) for the pace). For Binance and Coinbase, an open chart
-also makes the server hold a WebSocket to the exchange's public market-data feed
-(`data-stream.binance.vision`, `ws-feed.exchange.coinbase.com`) for real-time trades. Candle sizes a source does not offer (3m,
+[charts.md](charts.md#live-updates) for the pace). For Binance, Bybit and Coinbase, an open
+chart also makes the server hold a WebSocket to the exchange's public market-data feed
+(`data-stream.binance.vision`, `stream.bybit.com`, `ws-feed.exchange.coinbase.com`) for
+real-time trades. For these three, typing in the chart's symbol field searches the
+exchange's public instrument list (fetched at most once an hour). Candle sizes a source does not offer (3m,
 30m, 2h, 4h, 1w) are built from finer candles it does, aligned to UTC. The optional economic
 calendar on Charts is a separate public feed, off until enabled (see
 [charts.md](charts.md#economic-calendar)).
 
-| Source                | Setup                                                                                                   | Symbols and coverage                                                                                                                                      |
-| --------------------- | ------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Alpaca                | Key ID and secret, or `ALPACA_API_KEY` + `ALPACA_SECRET_KEY`                                            | US stocks such as `AAPL`; choose IEX or SIP. Prices are raw/unadjusted. Choose Crypto for `BTC/USD`.                                                      |
-| Binance               | Enable source; no key                                                                                   | Binance spot pairs such as `BTCUSDT`, through its public market-data host. No futures or automatic quote-currency conversion.                             |
-| Coinbase              | Enable source; no key                                                                                   | Coinbase Exchange spot products such as `BTC-USD`. Empty intervals may have no candles.                                                                   |
-| London Strategic Edge | API key in Settings, or `LSE_API_KEY`                                                                   | Historical candles for supported instruments and datasets; coverage depends on provider access.                                                           |
-| Market data CSV       | Upload and preview local candle files                                                                   | Exact recorded symbol and resolution, with declared quote currency and price basis.                                                                       |
-| OANDA                 | v20 token, account ID, and Practice/Live; or `OANDA_API_TOKEN`, `OANDA_ACCOUNT_ID`, `OANDA_ENVIRONMENT` | Instruments such as `EUR_USD`. Complete midpoint candles aligned to UTC; volume is price-update count. Multiplier must match the imported quantity units. |
+| Source                | Setup                                                                                                   | Symbols and coverage                                                                                                                                                 |
+| --------------------- | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Alpaca                | Key ID and secret, or `ALPACA_API_KEY` + `ALPACA_SECRET_KEY`                                            | US stocks such as `AAPL`; choose IEX or SIP. Prices are raw/unadjusted. Choose Crypto for `BTC/USD`.                                                                 |
+| Binance               | Enable source; no key                                                                                   | Binance spot pairs such as `BTCUSDT`, through its public market-data host. No futures or automatic quote-currency conversion.                                        |
+| Bybit                 | Enable source; no key. Choose the market: perpetuals and futures (USDT/USDC), spot, or inverse          | Bybit v5 symbols such as `BTCUSDT` (perpetual and spot) or `BTCUSDT-26DEC26` (futures). Every candle size comes from Bybit itself. Contract volume is in base units. |
+| Coinbase              | Enable source; no key                                                                                   | Coinbase Exchange spot products such as `BTC-USD`. Empty intervals may have no candles.                                                                              |
+| London Strategic Edge | API key in Settings, or `LSE_API_KEY`                                                                   | Historical candles for supported instruments and datasets; coverage depends on provider access.                                                                      |
+| Market data CSV       | Upload and preview local candle files                                                                   | Exact recorded symbol and resolution, with declared quote currency and price basis.                                                                                  |
+| OANDA                 | v20 token, account ID, and Practice/Live; or `OANDA_API_TOKEN`, `OANDA_ACCOUNT_ID`, `OANDA_ENVIRONMENT` | Instruments such as `EUR_USD`. Complete midpoint candles aligned to UTC; volume is price-update count. Multiplier must match the imported quantity units.            |
 
 Credential sets are encrypted together. Environment credentials take precedence;
 partial environment configuration is shown as unavailable rather than mixing values
@@ -148,7 +151,7 @@ browser. Test connection is an explicit, read-only market-data request.
 
 Remote history is normalized to ascending UTC millisecond OHLCV. New network adapters
 have bounded pages, a 20,000-candle result limit, timeouts and abort support. Alpaca
-follows `next_page_token`; Coinbase, Binance and OANDA use windows below their candle
+follows `next_page_token`; Coinbase, Binance, Bybit and OANDA use windows below their candle
 limits. Limits produce truncated history and unavailable estimates, not false zeroes.
 Known quote-currency mismatches block monetary estimates even if the confirmation is
 checked. In particular, USDT is not treated as USD. Candles can still be replayed.
@@ -189,6 +192,7 @@ also removes its saved derived estimates, leaving all trade executions intact.
 
 - [Alpaca stock bars](https://docs.alpaca.markets/us/reference/stockbarsingle-1) and [crypto bars](https://docs.alpaca.markets/us/reference/cryptobars-1)
 - [Binance market-data-only endpoints](https://developers.binance.com/en/docs/products/spot/faqs/market_data_only)
+- [Bybit v5 kline](https://bybit-exchange.github.io/docs/v5/market/kline), [instruments](https://bybit-exchange.github.io/docs/v5/market/instrument), [tickers](https://bybit-exchange.github.io/docs/v5/market/tickers) and [public WebSocket](https://bybit-exchange.github.io/docs/v5/ws/connect)
 - [Coinbase Exchange candles](https://docs.cdp.coinbase.com/api-reference/exchange-api/rest-api/products/get-product-candles)
 - [OANDA candle endpoints](https://developer.oanda.com/rest-live-v20/pricing-ep/) and [environments](https://developer.oanda.com/rest-live-v20/development-guide/)
 

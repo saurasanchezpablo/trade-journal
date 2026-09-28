@@ -106,6 +106,7 @@ import type { MarketCsvDataset } from "@/lib/market-csv";
 import { providerInfo } from "@/lib/market-providers";
 import { lineCrossings, type LineSides } from "@/lib/price-alerts";
 import { queueFlush } from "@/lib/save-queue";
+import { SymbolSearchInput } from "@/components/symbol-search";
 import { recentSymbols, type RecentSymbol } from "@/lib/recent-symbols";
 import { postJson, useApi } from "@/lib/use-api";
 import { cn, fmtNumber } from "@/lib/utils";
@@ -1820,15 +1821,15 @@ const ChartBoard = memo(function ChartBoard({
                 </OptionSelect>
               </div>
             )}
-            <div className="w-36 space-y-1">
+            <div className="w-44 space-y-1">
               <Label htmlFor="chart-symbol">Symbol</Label>
-              <Input
+              <SymbolSearchInput
                 id="chart-symbol"
                 value={symbolDraft}
-                placeholder="AAPL"
-                autoCapitalize="characters"
-                autoComplete="off"
-                onChange={(event) => setSymbolDraft(event.target.value)}
+                onChange={setSymbolDraft}
+                provider={provider}
+                dataset={dataset}
+                searchable={Boolean(info?.searchable) && !(needsDataset && !dataset)}
               />
             </div>
             <Button type="submit" disabled={!canOpen}>

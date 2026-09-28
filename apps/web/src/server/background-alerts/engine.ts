@@ -236,6 +236,7 @@ export class AlertEngine {
           } else if (message.kind === "bar") this.price(watch, message.bar.time, message.bar.close);
           else for (const [time, price] of message.trades) this.price(watch, time, price);
         },
+        watch.dataset,
       );
       return off ?? (() => {});
     } catch (error) {

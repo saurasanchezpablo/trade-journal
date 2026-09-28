@@ -1,5 +1,7 @@
 import { RESOLUTIONS } from "@/lib/market-data";
 import { MarketDataError, type MarketDataProvider } from "./provider";
+import { quoteWeight, rankSymbols } from "@/lib/symbol-search";
+import { cachedListing } from "./listings";
 import { array, number, readJson, record, result, validateBars, windows } from "./http";
 const BINANCE = "https://data-api.binance.vision";
 const COINBASE = "https://api.exchange.coinbase.com";
@@ -60,6 +62,23 @@ export const binance: MarketDataProvider = {
       market.quoteAsset,
     );
   },
+  async symbols(query, _dataset, _key, signal) {
+    const listed = await cachedListing("binance|spot", async () =>
+      array(
+        record(await readJson(`${BINANCE}/api/v3/exchangeInfo?permissions=SPOT`, {}, signal))
+          .symbols,
+      )
+        .map(record)
+        .filter((row) => row.status === "TRADING" && typeof row.symbol === "string")
+        .map((row) => ({
+          symbol: String(row.symbol),
+          description: `${String(row.baseAsset)} / ${String(row.quoteAsset)} spot`,
+          aliases: typeof row.baseAsset === "string" ? [row.baseAsset] : [],
+          weight: quoteWeight(String(row.quoteAsset)),
+        })),
+    );
+    return rankSymbols(listed, query).map(({ symbol, description }) => ({ symbol, description }));
+  },
 };
 export const coinbase: MarketDataProvider = {
   id: "coinbase",
@@ -109,5 +128,22 @@ export const coinbase: MarketDataProvider = {
       ],
       request.symbol.split("-")[1],
     );
+  },
+  async symbols(query, _dataset, _key, signal) {
+    const listed = await cachedListing("coinbase|products", async () =>
+      array(await readJson(`${COINBASE}/products`, {}, signal))
+        .map(record)
+        .filter(
+          (row) =>
+            typeof row.id === "string" && row.status === "online" && row.trading_disabled !== true,
+        )
+        .map((row) => ({
+          symbol: String(row.id),
+          description: `${String(row.base_currency)} / ${String(row.quote_currency)} spot`,
+          aliases: typeof row.base_currency === "string" ? [row.base_currency] : [],
+          weight: quoteWeight(String(row.quote_currency)),
+        })),
+    );
+    return rankSymbols(listed, query).map(({ symbol, description }) => ({ symbol, description }));
   },
 };

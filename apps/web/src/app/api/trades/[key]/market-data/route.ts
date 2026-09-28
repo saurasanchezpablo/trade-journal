@@ -60,10 +60,10 @@ export const POST = handler(
     );
     try {
       const provider = providerFor(body.provider);
-      if (["binance", "coinbase"].includes(provider.id))
+      if (["binance", "bybit", "coinbase"].includes(provider.id))
         requireValue(
           row.assetClass == null || row.assetClass === "crypto",
-          "This provider supplies spot crypto candles only. Choose a crypto trade.",
+          "This provider supplies crypto candles only. Choose a crypto trade.",
         );
       if (provider.id === "alpaca")
         requireValue(

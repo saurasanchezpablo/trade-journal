@@ -1,6 +1,10 @@
 import { bad, handler, requireValue } from "@/server/api";
 import { connectionKey } from "@/server/market-data/connections";
-import { requireProvider, requireSymbol } from "@/server/market-data/request-checks";
+import {
+  requireDataset,
+  requireProvider,
+  requireSymbol,
+} from "@/server/market-data/request-checks";
 import { listenLive, upstreamFor } from "@/server/market-data/live";
 import { MarketDataError } from "@/server/market-data/provider";
 import { isResolution } from "@/lib/market-data";
@@ -20,9 +24,11 @@ export const GET = handler((request: Request) => {
   const resolution = params.get("resolution");
   requireProvider(providerId);
   const symbol = requireSymbol(params.get("symbol") ?? "");
+  const dataset = requireDataset(params.get("dataset") ?? undefined);
   requireValue(isResolution(resolution), "Choose a supported candle resolution.");
   try {
-    if (!upstreamFor(providerId, symbol, resolution)) return new Response(null, { status: 204 });
+    if (!upstreamFor(providerId, symbol, resolution, dataset))
+      return new Response(null, { status: 204 });
     // Same gate as history: a public source must be enabled in Settings first.
     connectionKey(providerId);
   } catch (error) {
@@ -57,8 +63,12 @@ export const GET = handler((request: Request) => {
         }
       };
       write("retry: 3000\n\n");
-      unsubscribe = listenLive(providerId, symbol, resolution, (message) =>
-        write(`data: ${JSON.stringify(message)}\n\n`),
+      unsubscribe = listenLive(
+        providerId,
+        symbol,
+        resolution,
+        (message) => write(`data: ${JSON.stringify(message)}\n\n`),
+        dataset,
       );
       if (request.signal.aborted) stop();
       else request.signal.addEventListener("abort", () => stop(), { once: true });

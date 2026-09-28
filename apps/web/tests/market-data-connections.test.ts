@@ -355,14 +355,14 @@ describe("market data credential lifecycle", () => {
     const fetcher = vi.fn();
     vi.stubGlobal("fetch", fetcher);
     const state = connections();
-    expect(state).toHaveLength(6);
+    expect(state).toHaveLength(7);
     expect(state.every((item) => !item.configured && item.source === null)).toBe(true);
     expect(state.map((item) => item.name)).toEqual(
       state.map((item) => item.name).sort((a, b) => a.localeCompare(b)),
     );
     const response = await GET();
     expect(response.status).toBe(200);
-    for (const id of ["london-strategic-edge", "alpaca", "binance", "coinbase", "oanda"])
+    for (const id of ["london-strategic-edge", "alpaca", "binance", "bybit", "coinbase", "oanda"])
       expect(() => connectionKey(id)).toThrow();
     expect(fetcher).not.toHaveBeenCalled();
   });

@@ -16,6 +16,8 @@ export interface ProviderInfo {
   fields: CredentialField[];
   datasets?: { value: string; label: string }[];
   resolutions?: Resolution[];
+  /** The chart's symbol field can search this source's listing (`/api/market-data/symbols`). */
+  searchable?: boolean;
 }
 export const MARKET_PROVIDERS: ProviderInfo[] = [
   {
@@ -53,7 +55,25 @@ export const MARKET_PROVIDERS: ProviderInfo[] = [
       "Public Binance spot candles. No API key required. Availability depends on your region and the listed pair.",
     symbolHint:
       "Spot pairs use BTCUSDT or ETHUSDT. USDT is not USD; account and quote currencies must match for estimates.",
+    searchable: true,
     fields: [],
+  },
+  {
+    id: "bybit",
+    name: "Bybit",
+    mode: "public",
+    description:
+      "Public Bybit candles and live prices for perpetuals and futures, spot and inverse contracts. No API key required; availability depends on your region.",
+    symbolHint:
+      "Pick the market, then search its symbols (BTCUSDT). The same symbol can trade as a perpetual and on spot.",
+    searchable: true,
+    fields: [],
+    datasets: [
+      { value: "", label: "Choose a market" },
+      { value: "linear", label: "Perpetuals and futures (USDT, USDC)" },
+      { value: "spot", label: "Spot" },
+      { value: "inverse", label: "Inverse (coin-margined)" },
+    ],
   },
   {
     id: "coinbase",
@@ -62,6 +82,7 @@ export const MARKET_PROVIDERS: ProviderInfo[] = [
     description:
       "Public Coinbase Exchange spot candles. No API key required; intervals without trades may have no candle.",
     symbolHint: "Use a Coinbase Exchange product such as BTC-USD or ETH-USD.",
+    searchable: true,
     fields: [],
   },
   {

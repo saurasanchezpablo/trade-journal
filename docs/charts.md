@@ -11,9 +11,12 @@ click.
 ## Use it
 
 1. Configure a source under **Settings → Market data**: a provider connection, an enabled
-   public crypto feed (Binance, Coinbase), or an uploaded candle CSV (see
+   public crypto feed (Binance, Bybit, Coinbase), or an uploaded candle CSV (see
    [market-data.md](market-data.md)).
 2. Open **Charts**, choose the source, type the provider's exact symbol and press **Open**.
+   For Binance, Bybit and Coinbase, typing searches the exchange's symbols (the most traded
+   first) and suggests them as you type; for Bybit, choose the market first (perpetuals and
+   futures, spot or inverse), since the same symbol trades in several.
    The chart loads the latest 2000 candles; there are no dates to enter. The page reopens
    the last symbol you watched, and recent symbols stay one tap away.
 3. Switch candle size with the timeframe bar (**1m · 5m · 15m · 1h · 4h · 1d** by default).
@@ -39,11 +42,11 @@ calendar fold too. Folded sections are remembered per browser.
 
 ## Live updates
 
-**Binance and Coinbase update in real time.** The journal server opens the exchange's public
+**Binance, Bybit and Coinbase update in real time.** The journal server opens the exchange's public
 WebSocket feed and relays it to the chart over Server-Sent Events
 (`/api/market-data/stream`), so the browser still only talks to your journal. Every trade
 moves the forming candle as it happens; Binance also sends its own candle every couple of
-seconds, which keeps open, high, low, close and volume exact. The badge shows **Real time**.
+seconds, and Bybit on every update, which keeps open, high, low, close and volume exact. The badge shows **Real time**.
 
 - One upstream connection per instrument serves every open chart on it, and closes a few
   seconds after the last one leaves. A dropped connection reconnects with backoff (1 s up

@@ -1,6 +1,7 @@
 import type { Resolution } from "@/lib/market-data";
 import type { LiveMessage, LiveTrade } from "@/lib/live-market";
 import { MarketDataError } from "./provider";
+import { BYBIT_INTERVALS, BYBIT_SYMBOL, isBybitCategory } from "./bybit";
 
 /**
  * Real-time prices for an open chart. The server holds one upstream WebSocket per
@@ -10,11 +11,15 @@ import { MarketDataError } from "./provider";
  * - Binance: aggregate trades as they happen, plus the kline stream (the forming candle
  *   itself, about every 2 s), which keeps the candle's OHLCV authoritative.
  * - Coinbase: the matches channel, every trade.
+ * - Bybit: public trades plus the kline topic (the forming candle, pushed on every update), on
+ *   the stream of the chosen market (spot, linear, inverse), pinged every 20 s as Bybit asks.
  *
  * Trades go out in batches at most 4 times a second.
  */
 const BINANCE_WS = "wss://data-stream.binance.vision/stream";
 const COINBASE_WS = "wss://ws-feed.exchange.coinbase.com";
+const BYBIT_WS = "wss://stream.bybit.com/v5/public";
+const BYBIT_PING_MS = 20_000;
 const BATCH_MS = 250;
 /** Keep an idle upstream open briefly so a reload or candle-size switch reuses it. */
 const LINGER_MS = 5_000;
@@ -22,8 +27,10 @@ const BACKOFF_MS = [1_000, 2_000, 5_000, 10_000, 30_000];
 
 interface Upstream {
   url: string;
-  /** Sent once connected (Coinbase subscribes by message). */
+  /** Sent once connected (Coinbase and Bybit subscribe by message). */
   hello?: string;
+  /** Sent periodically while connected, for sources that drop quiet connections. */
+  ping?: { message: string; everyMs: number };
   /**
    * Turn one upstream message into trades or a candle (with the time it reflects trades up
    * to); throws MarketDataError on a fatal reply.
@@ -79,12 +86,85 @@ export function parseCoinbaseMatch(data: unknown): LiveTrade | null {
   return [time, price, size];
 }
 
+/** Bybit v5 kline: the candle being formed (or just closed), and when it was last updated. */
+export function parseBybitKline(
+  data: unknown,
+): { bar: LiveMessage & { kind: "bar" }; asOf: number | undefined } | null {
+  const m = data as { topic?: unknown; data?: unknown } | null;
+  if (typeof m?.topic !== "string" || !m.topic.startsWith("kline.") || !Array.isArray(m.data))
+    return null;
+  const k = m.data.at(-1) as Record<string, unknown> | undefined;
+  if (!k) return null;
+  const [time, open, high, low, close, volume] = [
+    k.start,
+    k.open,
+    k.high,
+    k.low,
+    k.close,
+    k.volume,
+  ].map(num);
+  if ([time, open, high, low, close, volume].some((v) => v === null)) return null;
+  return {
+    bar: {
+      kind: "bar",
+      bar: { time: time!, open: open!, high: high!, low: low!, close: close!, volume: volume! },
+    },
+    asOf: num(k.timestamp) ?? undefined,
+  };
+}
+
+/** Bybit v5 public trades: time (ms), price, size. */
+export function parseBybitTrades(data: unknown): LiveTrade[] | null {
+  const m = data as { topic?: unknown; data?: unknown } | null;
+  if (typeof m?.topic !== "string" || !m.topic.startsWith("publicTrade.") || !Array.isArray(m.data))
+    return null;
+  const trades: LiveTrade[] = [];
+  for (const item of m.data as Record<string, unknown>[]) {
+    const time = num(item?.T);
+    const price = num(item?.p);
+    const size = num(item?.v);
+    if (time !== null && price !== null && size !== null) trades.push([time, price, size]);
+  }
+  return trades;
+}
+
 /** Which upstream serves a chart, or null when the source has no public stream. */
 export function upstreamFor(
   provider: string,
   symbol: string,
   resolution: Resolution,
+  /** The source's market or feed (Bybit: linear, spot or inverse). */
+  dataset?: string | null,
 ): (Upstream & { key: string }) | null {
+  if (provider === "bybit") {
+    if (!isBybitCategory(dataset))
+      throw new MarketDataError(
+        "Choose a Bybit market: perpetuals and futures, spot, or inverse contracts.",
+      );
+    if (!BYBIT_SYMBOL.test(symbol))
+      throw new MarketDataError("Use a Bybit symbol such as BTCUSDT.");
+    const interval = BYBIT_INTERVALS[resolution];
+    return {
+      key: `bybit|${dataset}|${symbol}|${resolution}`,
+      url: `${BYBIT_WS}/${dataset}`,
+      hello: JSON.stringify({
+        op: "subscribe",
+        args: [`kline.${interval}.${symbol}`, `publicTrade.${symbol}`],
+      }),
+      ping: { message: JSON.stringify({ op: "ping" }), everyMs: BYBIT_PING_MS },
+      parse: (data) => {
+        const m = data as { op?: unknown; success?: unknown; ret_msg?: unknown } | null;
+        if (m?.op === "subscribe" && m.success === false)
+          throw new MarketDataError(
+            `Bybit refused the live feed${typeof m.ret_msg === "string" ? `: ${m.ret_msg.slice(0, 120)}` : ""}.`,
+          );
+        const trades = parseBybitTrades(data);
+        if (trades) return { trades };
+        const kline = parseBybitKline(data);
+        return kline ? { bar: kline.bar, asOf: kline.asOf } : null;
+      },
+    };
+  }
   if (provider === "binance") {
     if (!/^[A-Z0-9]{4,30}$/.test(symbol))
       throw new MarketDataError("Use a Binance spot symbol such as BTCUSDT.");
@@ -138,6 +218,7 @@ class Feed {
   private batchTimer: ReturnType<typeof setTimeout> | null = null;
   private state: LiveMessage = { kind: "status", state: "connecting" };
   private closed = false;
+  private pingTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(
     private readonly upstream: Upstream,
@@ -186,6 +267,13 @@ class Feed {
     this.socket = socket;
     socket.onopen = () => {
       if (this.upstream.hello) socket.send(this.upstream.hello);
+      const ping = this.upstream.ping;
+      if (ping) {
+        if (this.pingTimer) clearInterval(this.pingTimer);
+        this.pingTimer = setInterval(() => {
+          if (this.socket === socket) socket.send(ping.message);
+        }, ping.everyMs);
+      }
       this.attempt = 0;
       this.send({ kind: "status", state: "live" });
     };
@@ -223,6 +311,8 @@ class Feed {
     socket.onclose = () => {
       if (this.socket !== socket) return;
       this.socket = null;
+      if (this.pingTimer) clearInterval(this.pingTimer);
+      this.pingTimer = null;
       this.flush();
       if (!this.closed && this.listeners.size) this.retry();
     };
@@ -245,6 +335,8 @@ class Feed {
     this.closed = true;
     for (const timer of [this.retryTimer, this.lingerTimer, this.batchTimer])
       if (timer) clearTimeout(timer);
+    if (this.pingTimer) clearInterval(this.pingTimer);
+    this.pingTimer = null;
     this.socket?.close();
     this.socket = null;
     this.onEmpty();
@@ -265,8 +357,9 @@ export function listenLive(
   symbol: string,
   resolution: Resolution,
   listener: LiveListener,
+  dataset?: string | null,
 ): (() => void) | null {
-  const upstream = upstreamFor(provider, symbol, resolution);
+  const upstream = upstreamFor(provider, symbol, resolution, dataset);
   if (!upstream) return null;
   let feed = feeds.get(upstream.key);
   if (!feed) {
