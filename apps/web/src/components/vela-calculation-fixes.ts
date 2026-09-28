@@ -10,6 +10,7 @@ import {
 } from "@/lib/volume-profile";
 import { FOREX_SESSION, VWAP_SESSION_ZONES } from "@/lib/market-sessions";
 import { REVERSE_PROP, retracementPrice } from "@/lib/fib-direction";
+import { levelPrice } from "@/lib/price-format";
 
 /**
  * Vela's volume profile and anchored VWAP, computed the way TradingView does (see
@@ -293,6 +294,34 @@ interface PixelProjector {
   yOf(price: number, paneId: string): number | null;
 }
 
+interface LevelLine {
+  ratio: number;
+  color: string;
+  label?: string;
+  price: number;
+  x1: number;
+  x2: number;
+  y: number;
+}
+/** The label rows of a Fibonacci tool's levels, prices with the instrument's decimals. */
+function levelEntries(lines: LevelLine[] | null) {
+  if (!lines) return null;
+  return lines.map((l) => ({
+    color: l.color,
+    label: l.label,
+    x1: l.x1,
+    y1: l.y,
+    x2: l.x2,
+    y2: l.y,
+    numberText: `${l.ratio} (${levelPrice(l.price)})`,
+    numberX: l.x1 + 4,
+    numberY: l.y - 7,
+    numberAlign: "left",
+    labelX: (l.x1 + l.x2) / 2,
+    labelY: l.y - 7,
+  }));
+}
+
 function fixFibRetracement(api: RegistryApi) {
   const meta = api.getDrawingType("fibretracement");
   if (!meta || (meta as unknown as Record<symbol, boolean>)[FIXED]) return;
@@ -316,6 +345,9 @@ function fixFibRetracement(api: RegistryApi) {
         out.push({ ratio: level.ratio, color: level.color, label: level.label, price, x1, x2, y });
       }
       return out;
+    }
+    entryLines(proj: PixelProjector) {
+      return levelEntries(this.levelLines(proj));
     }
     priceRange() {
       const [a, b] = this.anchors;
@@ -350,11 +382,89 @@ function fixFibRetracement(api: RegistryApi) {
   } as DrawingTypeMeta);
 }
 
+// ── Price labels with the instrument's decimals ──
+
+interface EntryRow {
+  numberText?: string;
+  [key: string]: unknown;
+}
+interface LabelledFib {
+  anchors: Anchor[];
+  entryLines(proj: unknown): EntryRow[] | null;
+  levelLines?(proj: unknown): LevelLine[] | null;
+}
+interface PositionInstance {
+  showPrices?: boolean;
+  prices(): { entry: number; stop: number; target: number } | null;
+  rewardPct(): number;
+  riskPct(): number;
+}
+
+function fixFibLabels(api: RegistryApi, type: string) {
+  const meta = api.getDrawingType(type);
+  if (!meta || (meta as unknown as Record<symbol, boolean>)[FIXED]) return;
+  const Base = meta.create({ paneId: "price" }).constructor as new (
+    init: DrawingInit,
+  ) => LabelledFib;
+  class Labelled extends Base {
+    entryLines(proj: unknown) {
+      if (typeof this.levelLines === "function") return levelEntries(this.levelLines(proj));
+      // The trend-based extension builds its rows directly: re-price them from the ratio.
+      const rows = super.entryLines(proj);
+      const [a, b, c] = this.anchors;
+      if (!rows || !a || !b || !c) return rows;
+      return rows.map((row) => {
+        const ratio = Number(row.numberText?.split(" (")[0]);
+        return Number.isFinite(ratio)
+          ? {
+              ...row,
+              numberText: `${ratio} (${levelPrice(c.price + ratio * (b.price - a.price))})`,
+            }
+          : row;
+      });
+    }
+  }
+  api.registerDrawingType({
+    ...meta,
+    create: (init) => new Labelled(init) as unknown as Drawing,
+    [FIXED]: true,
+  } as DrawingTypeMeta);
+}
+
+function fixPositionLabels(api: RegistryApi, type: string) {
+  const meta = api.getDrawingType(type);
+  if (!meta || (meta as unknown as Record<symbol, boolean>)[FIXED]) return;
+  const Base = meta.create({ paneId: "price" }).constructor as new (
+    init: DrawingInit,
+  ) => PositionInstance;
+  if (typeof Base.prototype.prices !== "function") return;
+  class Labelled extends Base {
+    targetLabel() {
+      const p = this.prices();
+      const at = this.showPrices && p ? `  @ ${levelPrice(p.target)}` : "";
+      return `Target +${this.rewardPct().toFixed(2)}%${at}`;
+    }
+    stopLabel() {
+      const p = this.prices();
+      const at = this.showPrices && p ? `  @ ${levelPrice(p.stop)}` : "";
+      return `Stop \u2212${this.riskPct().toFixed(2)}%${at}`;
+    }
+  }
+  api.registerDrawingType({
+    ...meta,
+    create: (init) => new Labelled(init) as unknown as Drawing,
+    [FIXED]: true,
+  } as DrawingTypeMeta);
+}
+
 /** Replace the drawing computations; run before a chart is created, safe to repeat. */
 export function applyCalculationFixes(api: RegistryApi): void {
   fixFixedRange(api);
   fixAnchoredVwap(api);
   fixFibRetracement(api);
+  fixFibLabels(api, "fibextension");
+  fixFibLabels(api, "fibextensiontrend");
+  fixPositionLabels(api, "position");
 }
 
 // ── Visible range volume profile (a renderer layer, patched per chart) ──

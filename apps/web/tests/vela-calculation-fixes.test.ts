@@ -341,3 +341,54 @@ describe("Fibonacci retracements, as TradingView draws them", () => {
     expect(levels(d)).toMatchObject({ 0.618: 161.8 });
   });
 });
+
+describe("drawing labels show prices with the instrument's decimals", () => {
+  it("six significant digits, between 2 and 8 decimals", async () => {
+    const { levelPrice } = await import("../src/lib/price-format");
+    expect(levelPrice(83665.162)).toBe("83665.16");
+    expect(levelPrice(2682.8)).toBe("2682.80");
+    expect(levelPrice(1.0825)).toBe("1.08250");
+    expect(levelPrice(150.1234)).toBe("150.123");
+    expect(levelPrice(0.00001234)).toBe("0.00001234");
+    expect(levelPrice(-12.5)).toBe("-12.5000");
+    expect(levelPrice(0)).toBe("0.00");
+    expect(levelPrice(Number.NaN)).toBe("0");
+  });
+
+  type Rows = { entryLines(proj: unknown): { numberText: string }[] };
+  const px = { xOf: (t: number) => t, yOf: (p: number) => p };
+  const eurusd = [
+    { time: T0, price: 1.0825 },
+    { time: T0 + 10 * Q, price: 1.0975 },
+    { time: T0 + 20 * Q, price: 1.09 },
+  ];
+
+  it("on Fibonacci retracements, extensions and trend-based extensions", () => {
+    const texts = (type: vela.DrawingTypeKey, points: number) =>
+      (
+        vela.createDrawing(type, {
+          paneId: "price",
+          anchors: eurusd.slice(0, points),
+        }) as unknown as Rows
+      )
+        .entryLines(px)
+        .map((r) => r.numberText);
+    expect(texts("fibretracement", 2)).toContain("0.618 (1.08823)");
+    expect(texts("fibextension", 2)).toContain("1.618 (1.10677)");
+    expect(texts("fibextensiontrend", 3)).toContain("1 (1.10500)");
+  });
+
+  it("on the position tool's target and stop", () => {
+    const d = vela.createDrawing("position", {
+      paneId: "price",
+      anchors: [
+        { time: T0, price: 1.0825 },
+        { time: T0 + 10 * Q, price: 1.0875 },
+        { time: T0 + 10 * Q, price: 1.08 },
+      ],
+    }) as unknown as { showPrices: boolean; targetLabel(): string; stopLabel(): string };
+    d.showPrices = true;
+    expect(d.targetLabel()).toMatch(/@ 1\.08\d{3}$/);
+    expect(d.stopLabel()).toMatch(/@ 1\.08\d{3}$/);
+  });
+});

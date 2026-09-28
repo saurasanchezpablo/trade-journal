@@ -497,7 +497,8 @@ it: drawn from a swing low to a swing high, level 0 sits on the high and 1 on th
 from the first point instead. Retracements drawn before this change keep their levels
 where they were (they open with Reverse on); switch it off to measure them TradingView's
 way. Fibonacci extensions and the trend-based extension are unchanged. The journal day
-review and AI reviews read the same levels.
+review and AI reviews read the same levels. Level and position tool prices show enough
+decimals for the instrument (six significant digits, 2 to 8 decimals: 1.08250 on EUR/USD).
 
 ## Pattern tools
 
