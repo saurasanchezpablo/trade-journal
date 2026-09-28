@@ -64,7 +64,8 @@ describe("built-in indicators run on the Pine engine", () => {
     { key: "template", name: "New indicator template", source: NEW_INDICATOR_TEMPLATE },
   ]) {
     it(`${indicator.name} compiles, runs and plots`, async () => {
-      const { plots } = await new PineTS(candles).run(indicator.source);
+      // As the chart's engine runs them: with the market's ticker and candle size.
+      const { plots } = await new PineTS(candles, "BINANCE:BTCUSDT", "60").run(indicator.source);
       const series = Object.entries(plots as Record<string, { data?: { value: unknown }[] }>)
         .filter(([name]) => !name.startsWith("__"))
         .map(([, plot]) => plot.data ?? []);

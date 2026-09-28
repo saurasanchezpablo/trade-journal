@@ -218,3 +218,31 @@ describe("the VWAP, as TradingView's", () => {
     expect(vwap.every((d) => typeof d.value !== "number" || Number.isNaN(d.value))).toBe(true);
   });
 });
+
+describe("historical volatility, as TradingView's HV", () => {
+  const closes = Array.from(
+    { length: 60 },
+    (_, i) => 100 * Math.exp(0.01 * Math.sin(i) + i * 0.002),
+  );
+  /** Population stdev of the last 10 log returns, annualised with sqrt(365 / per). */
+  const reference = (per: number) => {
+    const rets = closes
+      .slice(-11)
+      .map((c, i, all) => (i ? Math.log(c / all[i - 1]!) : NaN))
+      .slice(1);
+    const mean = rets.reduce((a, b) => a + b, 0) / rets.length;
+    const sd = Math.sqrt(rets.reduce((a, b) => a + (b - mean) ** 2, 0) / rets.length);
+    return 100 * sd * Math.sqrt(365 / per);
+  };
+  const run = async (timeframe: string) => {
+    const { plots } = await new PineTS(series(closes), "BINANCE:BTCUSDT", timeframe).run(
+      source("hist-vol"),
+    );
+    return (plots as Record<string, { data: { value: number }[] }>)["HV %"]!.data.at(-1)!.value;
+  };
+  it("annualises by days up to daily candles, and by weeks above", async () => {
+    expect(await run("60")).toBeCloseTo(reference(1), 6);
+    expect(await run("1D")).toBeCloseTo(reference(1), 6);
+    expect(await run("1W")).toBeCloseTo(reference(7), 6);
+  });
+});

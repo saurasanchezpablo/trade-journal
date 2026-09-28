@@ -61,6 +61,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Fixed
 
+- Built-in Historical volatility is TradingView's HV (length 10, annualised by weeks on weekly candles and above; it was 2.6 times too high on weekly charts), and new SMA, EMA, WMA, Hull and ALMA indicators start at TradingView's length of 9 and the Stochastic at its %K smoothing of 1. Indicators already on a chart keep their settings
 - Fibonacci and position tool labels show prices with the instrument's decimals; they were rounded to 2, so every level of a EUR/USD retracement read "(1.08)"
 - The date and price range shows the price change in the instrument's decimals, a negative bar count when measured back in time, and durations that never read "1d 24h" or "1h 60m"
 - Fibonacci retracements put level 0 on the second point and 1 on the first, as TradingView does (Vela measured from the first point, so a retracement drawn low to high showed 0.618 where TradingView shows 0.382), with TradingView's **Reverse** setting. Retracements drawn before keep their levels (they open with Reverse on)

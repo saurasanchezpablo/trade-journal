@@ -20,7 +20,7 @@ export const INDICATOR_LIBRARY: LibraryIndicator[] = [
     description: "Average close over a lookback, drawn on price.",
     source: `//@version=5
 indicator("SMA", overlay=true)
-len = input.int(20, "Length", minval=1)
+len = input.int(9, "Length", minval=1)
 src = input.source(close, "Source")
 plot(ta.sma(src, len), "SMA", color=color.orange, linewidth=2)`,
   },
@@ -31,7 +31,7 @@ plot(ta.sma(src, len), "SMA", color=color.orange, linewidth=2)`,
     description: "Moving average weighted toward recent candles.",
     source: `//@version=5
 indicator("EMA", overlay=true)
-len = input.int(21, "Length", minval=1)
+len = input.int(9, "Length", minval=1)
 src = input.source(close, "Source")
 plot(ta.ema(src, len), "EMA", color=color.aqua, linewidth=2)`,
   },
@@ -202,7 +202,7 @@ hline(0, "Zero", color=color.gray)`,
     source: `//@version=5
 indicator("Stochastic")
 len = input.int(14, "%K length", minval=1)
-smoothK = input.int(3, "%K smoothing", minval=1)
+smoothK = input.int(1, "%K smoothing", minval=1)
 smoothD = input.int(3, "%D smoothing", minval=1)
 k = ta.sma(ta.stoch(close, high, low, len), smoothK)
 plot(k, "%K", color=color.blue)
@@ -241,7 +241,7 @@ plot(ta.obv, "OBV", color=color.teal)`,
     description: "Linear-weighted average; newer candles count more.",
     source: `//@version=5
 indicator("WMA", overlay=true)
-len = input.int(20, "Length", minval=1)
+len = input.int(9, "Length", minval=1)
 src = input.source(close, "Source")
 plot(ta.wma(src, len), "WMA", color=color.teal, linewidth=2)`,
   },
@@ -252,7 +252,7 @@ plot(ta.wma(src, len), "WMA", color=color.teal, linewidth=2)`,
     description: "Fast, smooth average with little lag; colour shows its slope.",
     source: `//@version=5
 indicator("HMA", overlay=true)
-len = input.int(55, "Length", minval=2)
+len = input.int(9, "Length", minval=2)
 src = input.source(close, "Source")
 h = ta.hma(src, len)
 plot(h, "HMA", color=h >= h[1] ? color.green : color.red, linewidth=2)`,
@@ -274,7 +274,7 @@ plot(ta.vwma(close, len), "VWMA", color=color.fuchsia, linewidth=2)`,
     description: "Gaussian-weighted average that balances smoothness and lag.",
     source: `//@version=5
 indicator("ALMA", overlay=true)
-len = input.int(21, "Length", minval=1)
+len = input.int(9, "Length", minval=1)
 offset = input.float(0.85, "Offset", step=0.05)
 sigma = input.float(6, "Sigma", step=0.5)
 plot(ta.alma(close, len, offset, sigma), "ALMA", color=color.lime, linewidth=2)`,
@@ -401,13 +401,16 @@ plot(ta.stdev(close, len), "StdDev", color=color.purple)`,
     key: "hist-vol",
     name: "Historical volatility",
     category: "Volatility",
-    description: "Annualised deviation of log returns, in percent.",
+    description: "Annualised deviation of log returns, in percent (TradingView's HV).",
     source: `//@version=5
 indicator("Historical volatility")
-len = input.int(20, "Length", minval=2)
-perYear = input.int(365, "Candles per year", minval=1)
+len = input.int(10, "Length", minval=2)
+// TradingView's HV: 365 periods a year, a period being a day up to daily candles and a
+// week above them.
+annual = 365
+per = timeframe.isintraday or timeframe.isdaily and timeframe.multiplier == 1 ? 1 : 7
 ret = math.log(close / close[1])
-plot(100 * ta.stdev(ret, len) * math.sqrt(perYear), "HV %", color=color.orange)`,
+plot(100 * ta.stdev(ret, len) * math.sqrt(annual / per), "HV %", color=color.orange)`,
   },
   {
     key: "chandelier",
