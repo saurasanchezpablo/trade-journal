@@ -392,3 +392,28 @@ describe("drawing labels show prices with the instrument's decimals", () => {
     expect(d.stopLabel()).toMatch(/@ 1\.08\d{3}$/);
   });
 });
+
+describe("the date and price range", () => {
+  it("spans read without a rounded-up unit", async () => {
+    const { formatSpan } = await import("../src/lib/price-format");
+    const H = 3_600_000;
+    expect(formatSpan(23.99 * H + 24 * H)).toBe("2d");
+    expect(formatSpan(59.7 * 60_000)).toBe("1h");
+    expect(formatSpan(26 * H + 30 * 60_000)).toBe("1d 3h");
+    expect(formatSpan(5 * H + 20 * 60_000)).toBe("5h 20m");
+    expect(formatSpan(-45 * 60_000)).toBe("45m");
+    expect(formatSpan(30_000)).toBe("30s");
+  });
+
+  it("shows the change in the instrument's decimals and a signed bar count", () => {
+    const d = vela.createDrawing("datepricerange", {
+      paneId: "price",
+      anchors: [
+        { time: T0 + 10 * Q, price: 1.0825 },
+        { time: T0, price: 1.086 },
+      ],
+    }) as unknown as { priceLabel(): string; timeLabel(proj: unknown): string };
+    expect(d.priceLabel()).toBe("+0.00350 (+0.32%)");
+    expect(d.timeLabel({ barsBetween: () => 10 })).toBe("-10 bars, 2h 30m");
+  });
+});

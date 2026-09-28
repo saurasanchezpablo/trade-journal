@@ -10,7 +10,7 @@ import {
 } from "@/lib/volume-profile";
 import { FOREX_SESSION, VWAP_SESSION_ZONES } from "@/lib/market-sessions";
 import { REVERSE_PROP, retracementPrice } from "@/lib/fib-direction";
-import { levelPrice } from "@/lib/price-format";
+import { formatSpan, levelPrice, signedPrice } from "@/lib/price-format";
 
 /**
  * Vela's volume profile and anchored VWAP, computed the way TradingView does (see
@@ -457,8 +457,49 @@ function fixPositionLabels(api: RegistryApi, type: string) {
   } as DrawingTypeMeta);
 }
 
+interface RangeInstance {
+  anchors: Anchor[];
+}
+interface BarCounter {
+  barsBetween?(t1: number, t2: number): number;
+}
+
+function fixRangeLabels(api: RegistryApi, type: string) {
+  const meta = api.getDrawingType(type);
+  if (!meta || (meta as unknown as Record<symbol, boolean>)[FIXED]) return;
+  const Base = meta.create({ paneId: "price" }).constructor as new (
+    init: DrawingInit,
+  ) => RangeInstance;
+  if (typeof (Base.prototype as { priceLabel?: unknown }).priceLabel !== "function") return;
+  class Labelled extends Base {
+    /** `Δprice (Δ%)`, the change in the instrument's decimals. */
+    priceLabel() {
+      const [a, b] = this.anchors;
+      if (!a || !b) return "";
+      const delta = b.price - a.price;
+      const percent = a.price !== 0 ? (delta / a.price) * 100 : 0;
+      return `${signedPrice(delta, a.price)} (${percent >= 0 ? "+" : ""}${percent.toFixed(2)}%)`;
+    }
+    /** `N bars, duration`: negative bars when measured back in time. */
+    timeLabel(proj: BarCounter) {
+      const [a, b] = this.anchors;
+      if (!a || !b) return "";
+      const span = formatSpan(b.time - a.time);
+      if (!proj.barsBetween) return span;
+      const bars = Math.round(proj.barsBetween(a.time, b.time)) * (b.time < a.time ? -1 : 1);
+      return `${bars} bars, ${span}`;
+    }
+  }
+  api.registerDrawingType({
+    ...meta,
+    create: (init) => new Labelled(init) as unknown as Drawing,
+    [FIXED]: true,
+  } as DrawingTypeMeta);
+}
+
 /** Replace the drawing computations; run before a chart is created, safe to repeat. */
 export function applyCalculationFixes(api: RegistryApi): void {
+  fixRangeLabels(api, "datepricerange");
   fixFixedRange(api);
   fixAnchoredVwap(api);
   fixFibRetracement(api);
