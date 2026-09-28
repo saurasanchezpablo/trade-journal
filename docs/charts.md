@@ -477,6 +477,12 @@ the same candles:
   of the next row above and below (a tie goes to the row closer to the point of control,
   then to the one above), stopping at the first row that would take it past its share
   (70% by default). It never holds more than its share.
+- The **VWAP** indicator is TradingView's: hlc3 weighted by volume from the start of each
+  session, week, month, quarter or year, with bands at volume-weighted standard deviations
+  (band #1 at 1 shown by default, #2 and #3 optional, or in percent) and an option to hide
+  it on daily candles. Sessions start at midnight UTC by default, as TradingView starts them
+  for crypto exchanges; pick the exchange's time zone for stocks (New York, London...), or
+  **Forex (17:00 New York)** for currency pairs.
 - The **anchored VWAP** starts at the candle that holds its anchor (also after switching
   candle size), with hlc3 as the price and bands at volume-weighted standard deviations.
 - Indicators are computed over the loaded candles (2000 to start), enough for long averages

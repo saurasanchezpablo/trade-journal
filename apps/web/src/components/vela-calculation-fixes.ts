@@ -8,6 +8,7 @@ import {
   type ProfileBar,
   type VolumeProfile,
 } from "@/lib/volume-profile";
+import { FOREX_SESSION, VWAP_SESSION_ZONES } from "@/lib/market-sessions";
 
 /**
  * Vela's volume profile and anchored VWAP, computed the way TradingView does (see
@@ -425,5 +426,132 @@ export function patchVisibleRangeProfile(renderer: unknown): boolean {
     );
     ctx.restore();
   };
+  return true;
+}
+
+// ── Native VWAP: sessions in the market's time zone ──
+
+interface NativeInput {
+  key: string;
+  title: string;
+  type: string;
+  defval: unknown;
+  options?: readonly string[];
+  tooltip?: string;
+  [key: string]: unknown;
+}
+interface ClassicSpec {
+  inputs: NativeInput[];
+  compute(bars: ProfileBar[], inputs: Record<string, unknown>): unknown;
+  [key: string]: unknown;
+}
+interface NativeDescriptor {
+  type: string;
+  inputsSchema(): NativeInput[];
+  defaultInputs(): Record<string, unknown>;
+  create(): unknown;
+  [key: string | symbol]: unknown;
+}
+type NativeApi = {
+  getNativeIndicator?(type: string): NativeDescriptor | undefined;
+  registerNativeIndicator?(descriptor: NativeDescriptor): void;
+};
+
+const HOUR = 3_600_000;
+const zoneFormatters = new Map<string, Intl.DateTimeFormat>();
+const offsets = new Map<string, number>();
+
+/** How far `zone`'s wall clock is ahead of UTC at `time`, in ms (cached per hour). */
+function zoneOffset(time: number, zone: string): number {
+  const key = `${zone}|${Math.floor(time / HOUR)}`;
+  const hit = offsets.get(key);
+  if (hit !== undefined) return hit;
+  let f = zoneFormatters.get(zone);
+  if (!f) {
+    f = new Intl.DateTimeFormat("en-US", {
+      timeZone: zone,
+      hourCycle: "h23",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    zoneFormatters.set(zone, f);
+  }
+  const at = Math.floor(time / HOUR) * HOUR;
+  const p = Object.fromEntries(f.formatToParts(at).map((part) => [part.type, part.value]));
+  const wall = Date.UTC(+p.year!, +p.month! - 1, +p.day!, +p.hour!, +p.minute!);
+  const offset = wall - at;
+  if (offsets.size > 100_000) offsets.clear();
+  offsets.set(key, offset);
+  return offset;
+}
+
+/**
+ * Candles with their times moved to the session zone's wall clock, so periods counted in
+ * UTC (Vela's) fall on the zone's midnights, weeks and months. Forex days start at 17:00 New
+ * York, seven hours before its midnight.
+ */
+export function inSessionZone<T extends { time: number }>(
+  bars: readonly T[],
+  session: unknown,
+): T[] {
+  if (
+    typeof session !== "string" ||
+    session === "UTC" ||
+    !VWAP_SESSION_ZONES.includes(session as never)
+  )
+    return bars as T[];
+  const forex = session === FOREX_SESSION;
+  const zone = forex ? "America/New_York" : session;
+  const shift = forex ? 7 * HOUR : 0;
+  return bars.map((bar) => ({ ...bar, time: bar.time + zoneOffset(bar.time, zone) + shift }));
+}
+
+/**
+ * Give Vela's native VWAP a session time zone (UTC by default, TradingView's for crypto).
+ * Vela registers its natives again whenever a chart is created, so run this after each
+ * `new Vela(...)`.
+ */
+export function patchNativeVwap(vela: unknown): boolean {
+  const api = vela as NativeApi;
+  const descriptor = api.getNativeIndicator?.("vwap");
+  if (!descriptor || descriptor[FIXED] || !api.registerNativeIndicator) return false;
+  const sample = descriptor.create() as { spec?: ClassicSpec } | null;
+  const spec = sample?.spec;
+  if (!spec || typeof spec.compute !== "function" || !Array.isArray(spec.inputs)) return false;
+  const Classic = (sample as object).constructor as new (spec: ClassicSpec) => unknown;
+  const session: NativeInput = {
+    key: "session",
+    title: "Session time zone",
+    type: "string",
+    defval: "UTC",
+    options: VWAP_SESSION_ZONES,
+    tooltip:
+      "Where each day starts: UTC for crypto, the exchange's time zone for stocks, 17:00 New York for forex",
+  };
+  const inputs: NativeInput[] = [];
+  for (const input of spec.inputs) {
+    inputs.push(
+      input.key === "anchor"
+        ? { ...input, tooltip: "Where the accumulation resets, in the session time zone" }
+        : input,
+    );
+    if (input.key === "anchor") inputs.push(session);
+  }
+  if (!inputs.includes(session)) inputs.push(session);
+  const fixed: ClassicSpec = {
+    ...spec,
+    inputs,
+    compute: (bars, values) => spec.compute(inSessionZone(bars, values.session), values),
+  };
+  api.registerNativeIndicator({
+    ...descriptor,
+    inputsSchema: () => inputs,
+    defaultInputs: () => ({ ...descriptor.defaultInputs(), session: "UTC" }),
+    create: () => new Classic(fixed),
+    [FIXED]: true,
+  });
   return true;
 }

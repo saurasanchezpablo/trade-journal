@@ -1,3 +1,4 @@
+import { FOREX_SESSION, VWAP_SESSION_ZONES } from "./market-sessions";
 /**
  * Built-in chart indicators, written in Pine Script v5 for the PineTS engine. They are
  * ordinary scripts: open one in the editor to see how it works or copy it as a start for
@@ -50,10 +51,65 @@ plot(ta.ema(close, input.int(200, "Long")), "EMA long", color=color.new(color.gr
     key: "vwap",
     name: "VWAP",
     category: "Volume",
-    description: "Volume-weighted average price, resetting each session.",
+    description:
+      "Volume-weighted average price with deviation bands, resetting each session, week, month, quarter or year (TradingView's VWAP).",
     source: `//@version=5
 indicator("VWAP", overlay=true)
-plot(ta.vwap(hlc3), "VWAP", color=color.yellow, linewidth=2)`,
+// TradingView's VWAP: hlc3 weighted by volume from the start of each period, with bands a
+// number of volume-weighted standard deviations (or percent) away.
+hideOnDWM = input.bool(false, "Hide VWAP on 1D or above")
+anchor = input.string("Session", "Anchor period", options=["Session", "Week", "Month", "Quarter", "Year"])
+src = input.source(hlc3, "Source")
+// Sessions start at midnight in this zone: UTC for crypto, the exchange's for stocks, and
+// 17:00 New York for forex (as TradingView starts their trading days).
+zoneInput = input.string("UTC", "Session time zone", options=[${VWAP_SESSION_ZONES.map((zone) => `"${zone}"`).join(", ")}])
+calcMode = input.string("Standard Deviation", "Bands calculation mode", options=["Standard Deviation", "Percentage"])
+showBand1 = input.bool(true, "Show band #1")
+mult1 = input.float(1.0, "Bands multiplier #1", step=0.5, minval=0)
+showBand2 = input.bool(false, "Show band #2")
+mult2 = input.float(2.0, "Bands multiplier #2", step=0.5, minval=0)
+showBand3 = input.bool(false, "Show band #3")
+mult3 = input.float(3.0, "Bands multiplier #3", step=0.5, minval=0)
+
+forex = zoneInput == "${FOREX_SESSION}"
+zone = forex ? "America/New_York" : zoneInput
+t = forex ? time + 7 * 3600000 : time
+yr = year(t, zone)
+mo = month(t, zone)
+dayKey = yr * 10000 + mo * 100 + dayofmonth(t, zone)
+// Weeks start on Monday: a new week when the weekday goes back, or a week or more passed.
+wd = (dayofweek(t, zone) + 5) % 7
+newWeek = wd < wd[1] or t - t[1] >= 7 * 86400000
+periodKey = anchor == "Month" ? yr * 100 + mo : anchor == "Quarter" ? yr * 10 + math.floor((mo - 1) / 3) : anchor == "Year" ? yr : dayKey
+isNew = na(src[1]) or (anchor == "Week" ? newWeek : periodKey != periodKey[1])
+
+var float sumV = 0.0
+var float sumPV = 0.0
+var float sumP2V = 0.0
+if isNew
+    sumV := 0.0
+    sumPV := 0.0
+    sumP2V := 0.0
+if not na(volume) and volume > 0
+    sumV += volume
+    sumPV += src * volume
+    sumP2V += src * src * volume
+
+hidden = hideOnDWM and not timeframe.isintraday
+vwap = hidden or sumV == 0 ? na : sumPV / sumV
+stdev = math.sqrt(math.max(sumP2V / sumV - vwap * vwap, 0))
+basis = calcMode == "Standard Deviation" ? stdev : vwap * 0.01
+
+plot(vwap, "VWAP", color=color.new(#2962FF, 0), linewidth=2)
+u1 = plot(showBand1 ? vwap + basis * mult1 : na, "Upper band #1", color=color.green)
+l1 = plot(showBand1 ? vwap - basis * mult1 : na, "Lower band #1", color=color.green)
+fill(u1, l1, color=color.new(color.green, 95), title="Bands fill #1")
+u2 = plot(showBand2 ? vwap + basis * mult2 : na, "Upper band #2", color=color.olive)
+l2 = plot(showBand2 ? vwap - basis * mult2 : na, "Lower band #2", color=color.olive)
+fill(u2, l2, color=color.new(color.olive, 95), title="Bands fill #2")
+u3 = plot(showBand3 ? vwap + basis * mult3 : na, "Upper band #3", color=color.teal)
+l3 = plot(showBand3 ? vwap - basis * mult3 : na, "Lower band #3", color=color.teal)
+fill(u3, l3, color=color.new(color.teal, 95), title="Bands fill #3")`,
   },
   {
     key: "bollinger",

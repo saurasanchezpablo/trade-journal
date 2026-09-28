@@ -4,6 +4,8 @@ import {
   anchoredVwap,
   applyCalculationFixes,
   candlesFrom,
+  inSessionZone,
+  patchNativeVwap,
   patchVisibleRangeProfile,
 } from "../src/components/vela-calculation-fixes";
 import { buildVolumeProfile, type ProfileBar } from "../src/lib/volume-profile";
@@ -219,5 +221,78 @@ describe("the visible range volume profile", () => {
     expect(seriesInRange).toHaveBeenCalledWith("1", quarter[0]!.time, expect.any(Number));
     expect(calls).toContain("fillRect");
     expect(calls).toContain("strokeRect");
+  });
+});
+
+describe("the native VWAP's sessions", () => {
+  it("moves candle times to the session zone's wall clock, across daylight saving", () => {
+    const winter = Date.UTC(2026, 2, 6, 5, 0); // 00:00 in New York (EST)
+    const summer = Date.UTC(2026, 2, 9, 4, 0); // 00:00 in New York (EDT)
+    const [a, b] = inSessionZone([{ time: winter }, { time: summer }], "America/New_York");
+    expect(new Date(a!.time).toISOString()).toBe("2026-03-06T00:00:00.000Z");
+    expect(new Date(b!.time).toISOString()).toBe("2026-03-09T00:00:00.000Z");
+    // Forex: 17:00 New York is the start of the next trading day.
+    const [fx] = inSessionZone([{ time: Date.UTC(2026, 2, 5, 22, 0) }], "Forex (17:00 New York)");
+    expect(new Date(fx!.time).toISOString()).toBe("2026-03-06T00:00:00.000Z");
+  });
+
+  it("leaves UTC and unknown zones as they are", () => {
+    const bars = [{ time: 1 }];
+    expect(inSessionZone(bars, "UTC")).toBe(bars);
+    expect(inSessionZone(bars, "Mars/Olympus")).toBe(bars);
+    expect(inSessionZone(bars, undefined)).toBe(bars);
+  });
+
+  it("adds a session input and computes in it, keeping everything else", () => {
+    const registry = new Map<string, unknown>();
+    const seen: number[][] = [];
+    class Classic {
+      constructor(
+        readonly spec: {
+          inputs: { key: string }[];
+          compute: (bars: { time: number }[], inputs: Record<string, unknown>) => unknown;
+        },
+      ) {}
+    }
+    const spec = {
+      type: "vwap",
+      inputs: [
+        { key: "anchor", title: "Period", type: "string", defval: "Day", tooltip: "UTC periods" },
+        { key: "source", title: "Source", type: "string", defval: "HLC3" },
+      ],
+      compute: (bars: { time: number }[]) => {
+        seen.push(bars.map((b) => b.time));
+        return { plots: [] };
+      },
+    };
+    registry.set("vwap", {
+      type: "vwap",
+      title: "VWAP",
+      multiInstance: true,
+      inputsSchema: () => spec.inputs,
+      defaultInputs: () => ({ anchor: "Day", source: "HLC3" }),
+      create: () => new Classic(spec),
+    });
+    const api = {
+      getNativeIndicator: (type: string) => registry.get(type),
+      registerNativeIndicator: (d: { type: string }) => registry.set(d.type, d),
+    };
+    expect(patchNativeVwap(api)).toBe(true);
+    expect(patchNativeVwap(api)).toBe(false);
+    const fixed = registry.get("vwap") as {
+      multiInstance: boolean;
+      inputsSchema(): { key: string }[];
+      defaultInputs(): Record<string, unknown>;
+      create(): Classic;
+    };
+    expect(fixed.multiInstance).toBe(true);
+    expect(fixed.inputsSchema().map((i) => i.key)).toEqual(["anchor", "session", "source"]);
+    expect(fixed.defaultInputs()).toMatchObject({ session: "UTC" });
+    const instance = fixed.create();
+    expect(instance).toBeInstanceOf(Classic);
+    const t = Date.UTC(2026, 2, 6, 5, 0);
+    instance.spec.compute([{ time: t }], { session: "America/New_York" } as never);
+    expect(seen.at(-1)).toEqual([t - 5 * 3_600_000]);
+    expect(patchNativeVwap({})).toBe(false);
   });
 });

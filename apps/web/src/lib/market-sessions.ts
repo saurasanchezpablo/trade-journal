@@ -162,3 +162,21 @@ export function sessionEvents(
   const unique = new Map(events.map((e) => [e.id, e]));
   return [...unique.values()].sort((a, b) => a.time - b.time);
 }
+
+/**
+ * Where a VWAP's sessions start, as TradingView starts them: midnight UTC for crypto
+ * exchanges, midnight at the exchange for stocks (its pre-market opens after it), and
+ * 17:00 New York for forex.
+ */
+export const VWAP_SESSION_ZONES = [
+  "UTC",
+  "America/New_York",
+  "America/Chicago",
+  "Europe/London",
+  "Europe/Berlin",
+  "Asia/Tokyo",
+  "Asia/Hong_Kong",
+  "Australia/Sydney",
+  "Forex (17:00 New York)",
+] as const;
+export const FOREX_SESSION = "Forex (17:00 New York)";
