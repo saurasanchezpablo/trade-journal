@@ -61,6 +61,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Fixed
 
+- Fibonacci retracements put level 0 on the second point and 1 on the first, as TradingView does (Vela measured from the first point, so a retracement drawn low to high showed 0.618 where TradingView shows 0.382), with TradingView's **Reverse** setting. Retracements drawn before keep their levels (they open with Reverse on)
 - The built-in VWAP indicator is now TradingView's VWAP: session, week, month, quarter or year anchors, deviation bands (band #1 shown), "hide on 1D or above", and a session time zone for stocks and forex (it reset at midnight UTC for every market)
 - Volume profiles and their value area match TradingView: the fixed range volume profile counted a candle's whole volume in every row its open, high, low and close touched; both profiles now spread volume over each candle's range, are built from finer candles (1m, 5m, ... as TradingView picks them), and grow the value area TradingView's way, never past its 70%. The anchored VWAP starts at the candle holding its anchor
 - Charts load 2000 candles instead of 500, so indicators match TradingView: a session VWAP on 1m saw only the last 8 hours of the day (off by $80 on BTC in a test), and an EMA 200 had not settled

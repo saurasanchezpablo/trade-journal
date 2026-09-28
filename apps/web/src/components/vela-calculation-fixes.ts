@@ -9,6 +9,7 @@ import {
   type VolumeProfile,
 } from "@/lib/volume-profile";
 import { FOREX_SESSION, VWAP_SESSION_ZONES } from "@/lib/market-sessions";
+import { REVERSE_PROP, retracementPrice } from "@/lib/fib-direction";
 
 /**
  * Vela's volume profile and anchored VWAP, computed the way TradingView does (see
@@ -270,10 +271,90 @@ function fixAnchoredVwap(api: RegistryApi) {
   } as DrawingTypeMeta);
 }
 
+// ── Fibonacci retracement: TradingView's direction, with its Reverse option ──
+
+interface FibLevel {
+  ratio: number;
+  enabled: boolean;
+  color: string;
+  label?: string;
+}
+interface FibInstance {
+  anchors: Anchor[];
+  levels: FibLevel[];
+  paneId: string;
+  readProps(props: Record<string, unknown>): void;
+  writeProps(): Record<string, unknown> | undefined;
+  schema(): { fields: Record<string, unknown>[] };
+}
+type FibClass = new (init: DrawingInit) => FibInstance;
+interface PixelProjector {
+  xOf(time: number): number;
+  yOf(price: number, paneId: string): number | null;
+}
+
+function fixFibRetracement(api: RegistryApi) {
+  const meta = api.getDrawingType("fibretracement");
+  if (!meta || (meta as unknown as Record<symbol, boolean>)[FIXED]) return;
+  const Base = meta.create({ paneId: "price" }).constructor as FibClass;
+  class TradingViewRetracement extends Base {
+    /** Measure from the first point (TradingView's Reverse); saved drawings may set it. */
+    declare reverse?: boolean;
+    levelLines(proj: PixelProjector) {
+      const [a, b] = this.anchors;
+      if (!a || !b) return null;
+      const xa = proj.xOf(a.time);
+      const xb = proj.xOf(b.time);
+      const x1 = Math.min(xa, xb);
+      const x2 = Math.max(xa, xb);
+      const out = [];
+      for (const level of this.levels) {
+        if (!level.enabled) continue;
+        const price = retracementPrice(a, b, level.ratio, this.reverse === true);
+        const y = proj.yOf(price, this.paneId);
+        if (y == null) continue;
+        out.push({ ratio: level.ratio, color: level.color, label: level.label, price, x1, x2, y });
+      }
+      return out;
+    }
+    priceRange() {
+      const [a, b] = this.anchors;
+      if (!a || !b) return null;
+      const prices = this.levels
+        .filter((level) => level.enabled)
+        .map((level) => retracementPrice(a, b, level.ratio, this.reverse === true));
+      return prices.length ? { min: Math.min(...prices), max: Math.max(...prices) } : null;
+    }
+    readProps(props: Record<string, unknown>) {
+      super.readProps(props);
+      if (typeof props[REVERSE_PROP] === "boolean") this.reverse = props[REVERSE_PROP];
+    }
+    writeProps() {
+      return { ...super.writeProps(), [REVERSE_PROP]: this.reverse === true };
+    }
+    schema() {
+      const base = super.schema();
+      return {
+        ...base,
+        fields: [
+          ...base.fields,
+          { path: REVERSE_PROP, label: "Reverse", kind: "boolean", group: "behavior" },
+        ],
+      };
+    }
+  }
+  api.registerDrawingType({
+    ...meta,
+    create: (init) => new TradingViewRetracement(init) as unknown as Drawing,
+    [FIXED]: true,
+  } as DrawingTypeMeta);
+}
+
 /** Replace the drawing computations; run before a chart is created, safe to repeat. */
 export function applyCalculationFixes(api: RegistryApi): void {
   fixFixedRange(api);
   fixAnchoredVwap(api);
+  fixFibRetracement(api);
 }
 
 // ── Visible range volume profile (a renderer layer, patched per chart) ──

@@ -489,6 +489,16 @@ the same candles:
   such as an EMA 200 to settle to TradingView's values and for a session VWAP to cover the
   whole day on 1m.
 
+## Fibonacci retracements
+
+A retracement measures from its second point back towards the first, as TradingView draws
+it: drawn from a swing low to a swing high, level 0 sits on the high and 1 on the low, so
+0.618 is the 61.8% pullback from the high. **Reverse** (in the drawing's settings) measures
+from the first point instead. Retracements drawn before this change keep their levels
+where they were (they open with Reverse on); switch it off to measure them TradingView's
+way. Fibonacci extensions and the trend-based extension are unchanged. The journal day
+review and AI reviews read the same levels.
+
 ## Pattern tools
 
 Vela's side toolbar **Patterns** group holds XABCD, ABCD, the harmonic patterns (Gartley,

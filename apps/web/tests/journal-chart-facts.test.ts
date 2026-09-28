@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { StoredDrawing } from "../src/lib/chart-analysis";
 import { describeDrawings, drawingFacts, fibPrices, fmtPrice } from "../src/lib/analysis-text";
+import { markLegacyFibs } from "../src/lib/fib-direction";
 import {
   analysisLevels,
   describeDay,
@@ -85,10 +86,24 @@ describe("chart analyses are described to the AI with their prices", () => {
       ],
       { props: { levels } },
     );
+    // Saved before the journal followed TradingView (no direction): as it was drawn.
     expect(fibPrices(retracement)).toEqual([
       { ratio: 0, price: 100 },
       { ratio: 0.618, price: 161.8, label: "GP" },
       { ratio: 1, price: 200 },
+    ]);
+    // TradingView's: from the second point back.
+    const tradingView = { ...retracement, props: { levels, reverse: false } };
+    expect(fibPrices(tradingView).map((l) => [l.ratio, +l.price.toFixed(2)])).toEqual([
+      [0, 200],
+      [0.618, 138.2],
+      [1, 100],
+    ]);
+    // Loading marks the old one reversed, and leaves marked ones alone.
+    const doc = markLegacyFibs({ version: 1, drawings: [retracement, tradingView] });
+    expect(doc.drawings.map((d) => (d.props as { reverse?: boolean }).reverse)).toEqual([
+      true,
+      false,
     ]);
     // The trend-based extension projects the first move from the third point.
     const trend = drawing(

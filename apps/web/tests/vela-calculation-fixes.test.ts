@@ -296,3 +296,48 @@ describe("the native VWAP's sessions", () => {
     expect(patchNativeVwap({})).toBe(false);
   });
 });
+
+describe("Fibonacci retracements, as TradingView draws them", () => {
+  type Fib = vela.Drawing & {
+    levelLines(proj: unknown): { ratio: number; price: number }[];
+    priceRange(): { min: number; max: number } | null;
+    writeProps(): Record<string, unknown>;
+    schema(): { fields: { path: string; label: string }[] };
+    applySettings(patch: Record<string, unknown>): void;
+  };
+  const low = { time: T0, price: 100 };
+  const high = { time: T0 + 10 * Q, price: 200 };
+  const px = { xOf: (t: number) => t, yOf: (p: number) => p };
+  const levels = (d: Fib) =>
+    Object.fromEntries(d.levelLines(px).map((l) => [l.ratio, +l.price.toFixed(2)]));
+
+  it("measure from the second point: drawn low to high, 0 is the high and 1 the low", () => {
+    const d = vela.createDrawing("fibretracement", {
+      paneId: "price",
+      anchors: [low, high],
+    }) as Fib;
+    expect(levels(d)).toMatchObject({ 0: 200, 0.236: 176.4, 0.382: 161.8, 0.618: 138.2, 1: 100 });
+    expect(d.writeProps()).toMatchObject({ reverse: false });
+    expect(d.priceRange()).toEqual({ min: 100, max: 200 });
+  });
+
+  it("Reverse measures from the first point, and is a setting", () => {
+    const d = vela.createDrawing("fibretracement", {
+      paneId: "price",
+      anchors: [low, high],
+    }) as Fib;
+    expect(d.schema().fields.some((f) => f.path === "reverse" && f.label === "Reverse")).toBe(true);
+    d.applySettings({ reverse: true });
+    expect(levels(d)).toMatchObject({ 0: 100, 0.236: 123.6, 0.618: 161.8, 1: 200 });
+    expect(d.writeProps()).toMatchObject({ reverse: true });
+  });
+
+  it("a retracement saved before stays where it was drawn", () => {
+    const d = vela.createDrawing("fibretracement", {
+      paneId: "price",
+      anchors: [low, high],
+      props: { reverse: true },
+    }) as Fib;
+    expect(levels(d)).toMatchObject({ 0.618: 161.8 });
+  });
+});

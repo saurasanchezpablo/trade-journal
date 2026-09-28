@@ -1,4 +1,5 @@
 import { drawingLabel, type StoredDrawing } from "./chart-analysis";
+import { retracementPrice, retracementReversed } from "./fib-direction";
 import {
   drawingName,
   drawingTree,
@@ -49,9 +50,10 @@ const fibLevels = (drawing: StoredDrawing): FibLevel[] => {
 };
 
 /**
- * The prices a Fibonacci tool draws, as Vela computes them: retracements and extensions
- * measure from the first point towards the second; the trend-based extension projects the
- * first move from the third point.
+ * The prices a Fibonacci tool draws: a retracement measures from its second point back
+ * towards the first, as TradingView does (from the first when reversed, see
+ * lib/fib-direction.ts); an extension from the first point towards the second; the
+ * trend-based extension projects the first move from the third point.
  */
 export function fibPrices(
   drawing: StoredDrawing,
@@ -61,9 +63,13 @@ export function fibPrices(
   const base = drawing.type === "fibextensiontrend" ? c : a;
   if (!base) return [];
   const move = b.price - a.price;
+  const reversed = drawing.type === "fibretracement" ? retracementReversed(drawing) : true;
   return fibLevels(drawing).map((level) => ({
     ratio: level.ratio,
-    price: base.price + level.ratio * move,
+    price:
+      drawing.type === "fibretracement"
+        ? retracementPrice(a, b, level.ratio, reversed)
+        : base.price + level.ratio * move,
     ...(level.label ? { label: level.label } : {}),
   }));
 }

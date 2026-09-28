@@ -40,6 +40,7 @@ import { STYLUS_COLORS, STYLUS_WIDTHS, isBrush, stylusPreference } from "@/lib/s
 import { cn } from "@/lib/utils";
 import { TOOLBAR_SHOWN, toolbarPreference, type ToolbarHidden } from "@/lib/chart-toolbar";
 import { markLegacyPatterns } from "@/lib/pattern-fixes";
+import { markLegacyFibs } from "@/lib/fib-direction";
 import {
   isColor,
   mergeStyle,
@@ -567,7 +568,7 @@ export function AnalysisChart({
       instance.setTheme(theme);
       applyLook(instance);
       applyDrawingPrefs(instance, appearanceRef.current);
-      instance.drawings.fromJSON(markLegacyPatterns(drawings));
+      instance.drawings.fromJSON(markLegacyFibs(markLegacyPatterns(drawings)));
       applyLayers(instance, layersRef.current);
       publish(instance);
       const indicators = createIndicatorBridge(instance, {
