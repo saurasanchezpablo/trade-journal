@@ -475,8 +475,10 @@ the same candles:
   the overlap, as up volume when it closes at or above its open and down volume otherwise.
 - The **value area** starts at the point of control and adds, one row at a time, the larger
   of the next row above and below (a tie goes to the row closer to the point of control,
-  then to the one above), stopping at the first row that would take it past its share
-  (70% by default). It never holds more than its share.
+  then to the one above), until it holds at least its share of the volume (70% by default).
+  The row that reaches the share is included, so the volume from VAL to VAH is always 70%
+  or more, as when you count it off the histogram. VAL is the bottom of its lowest row and
+  VAH the top of its highest.
 - The **VWAP** indicator is TradingView's: hlc3 weighted by volume from the start of each
   session, week, month, quarter or year, with bands at volume-weighted standard deviations
   (band #1 at 1 shown by default, #2 and #3 optional, or in percent) and an option to hide

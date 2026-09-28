@@ -53,32 +53,51 @@ describe("a candle's volume is spread over the rows its range covers", () => {
   });
 });
 
-describe("the value area, as TradingView grows it", () => {
-  it("never goes past its share of the volume", () => {
-    // Total 100, target 70: POC 40, then 20 (above), then the 15 below fits? 40+20=60, +15 > 70.
+describe("the value area", () => {
+  it("holds at least its share: the row that reaches 70% is part of it", () => {
+    // Total 100, target 70: POC 40, then 20 above (60), then 15 below beats 10 above (75).
     const rows = rowsOf([5, 15, 40, 20, 10, 10]);
-    expect(valueArea(rows, 2, 0.7)).toEqual({ vaFrom: 2, vaTo: 3 });
-    // Vela's version kept adding until it passed the target (75% here).
+    expect(valueArea(rows, 2, 0.7)).toEqual({ vaFrom: 1, vaTo: 3 });
   });
 
   it("adds the larger of the next row above and below, one row at a time", () => {
     const rows = rowsOf([10, 12, 40, 8, 30]);
     // Target 70: POC 40; above 8 vs below 12 → below (52); then above 8 vs below 10 → below (62);
-    // then only above 8 → 70.
+    // then only above 8 → 70, reached.
     expect(valueArea(rows, 2, 0.7)).toEqual({ vaFrom: 0, vaTo: 3 });
   });
 
   it("on equal volumes takes the row closer to the POC, then the one above", () => {
-    // Equal distance, equal volume: above first.
+    // Equal distance, equal volume: above first (and 60 is reached).
     expect(valueArea(rowsOf([0, 10, 50, 10, 0, 30]), 2, 0.6)).toEqual({ vaFrom: 2, vaTo: 3 });
     // Target 90 of 100, POC 50 at row 3: up 12, up 11, then 10 above (three rows away) ties
-    // 10 below (one row away): the closer one below is added; then the 10 above no longer fits.
+    // 10 below (one row away): the closer one below is added (83); then 10 above reaches 93.
     const rows = rowsOf([0, 0, 10, 50, 12, 11, 10, 7]);
-    expect(valueArea(rows, 3, 0.9)).toEqual({ vaFrom: 2, vaTo: 5 });
+    expect(valueArea(rows, 3, 0.9)).toEqual({ vaFrom: 2, vaTo: 6 });
   });
 
   it("a profile whose POC alone reaches the target is just the POC", () => {
     expect(valueArea(rowsOf([1, 90, 1]), 1, 0.7)).toEqual({ vaFrom: 1, vaTo: 1 });
+  });
+
+  it("on any profile, holds its share and would not without its last row", () => {
+    let seed = 7;
+    const random = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    for (let run = 0; run < 500; run += 1) {
+      const rows = rowsOf(Array.from({ length: 5 + (run % 40) }, () => Math.floor(random() * 100)));
+      const sum = rows.reduce((s, r) => s + r.up, 0);
+      if (!sum) continue;
+      const poc = rows.reduce((best, r, k) => (r.up > rows[best]!.up ? k : best), 0);
+      const share = 0.5 + random() * 0.45;
+      const { vaFrom, vaTo } = valueArea(rows, poc, share);
+      const held = rows.slice(vaFrom, vaTo + 1).reduce((s, r) => s + r.up, 0);
+      expect(held).toBeGreaterThanOrEqual(sum * share - 1e-9);
+      if (vaFrom === vaTo) continue;
+      // Dropping whichever edge row went in last leaves it short.
+      const withoutTop = held - rows[vaTo]!.up;
+      const withoutBottom = held - rows[vaFrom]!.up;
+      expect(Math.min(withoutTop, withoutBottom)).toBeLessThan(sum * share);
+    }
   });
 });
 

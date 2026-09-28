@@ -10,9 +10,10 @@
  *   minutes and 1 day that fits the range in fewer than 5000 candles.
  * - The value area starts at the point of control (the row with the most volume) and grows
  *   one row at a time: of the next row above and the next row below, the one with more
- *   volume (on a tie, the one closer to the point of control, then the one above) is added
- *   unless it would take the value area past its target share of the volume. The first row
- *   that would not fit ends it.
+ *   volume is added (on a tie, the one closer to the point of control, then the one above),
+ *   until the value area holds at least its share of the volume (70% by default). The row
+ *   that reaches the share is included, so VAL to VAH always holds 70% or more, as when
+ *   you count it off the histogram.
  */
 
 export interface ProfileBar {
@@ -107,12 +108,16 @@ export function pointOfControl(rows: readonly ProfileRow[]): number | null {
   return bestVolume > 0 ? best : null;
 }
 
-/** TradingView's value area around `poc`: the rows from `vaFrom` to `vaTo`, inclusive. */
+/**
+ * The value area around `poc`: the rows from `vaFrom` to `vaTo`, inclusive, holding at least
+ * `share` of the volume.
+ */
 export function valueArea(rows: readonly ProfileRow[], poc: number, share: number) {
   const n = rows.length;
   let sum = 0;
   for (const row of rows) sum += total(row);
-  let remaining = sum * Math.min(1, Math.max(0, share)) - total(rows[poc]!);
+  // A hair under the target, so float noise never adds a row to an exact 70%.
+  let remaining = sum * Math.min(1, Math.max(0, share)) * (1 - 1e-12) - total(rows[poc]!);
   let vaFrom = poc;
   let vaTo = poc;
   while (remaining > 0 && (vaFrom > 0 || vaTo < n - 1)) {
@@ -126,9 +131,7 @@ export function valueArea(rows: readonly ProfileRow[], poc: number, share: numbe
       const downDistance = poc - (vaFrom - 1);
       goUp = upDistance <= downDistance;
     }
-    const volume = goUp ? above : below;
-    if (volume > remaining) break;
-    remaining -= volume;
+    remaining -= goUp ? above : below;
     if (goUp) vaTo += 1;
     else vaFrom -= 1;
   }
