@@ -196,7 +196,8 @@ describe("the visible range volume profile", () => {
     const layer = { ctx, canvas: { width: 100, height: 100 }, render: (_args: unknown) => {} };
     const seriesInRange = vi.fn(() => ({ state: "ready", bars: oneMinute }));
     const renderer = { vpvrRenderer: layer, userDrawings: { seriesGateway: { seriesInRange } } };
-    expect(patchVisibleRangeProfile(renderer)).toBe(true);
+    // The chart hands out a control wrapping the renderer, as `chart.renderer`.
+    expect(patchVisibleRangeProfile({ renderer })).toBe(true);
     layer.render({
       bars: quarter,
       data: {

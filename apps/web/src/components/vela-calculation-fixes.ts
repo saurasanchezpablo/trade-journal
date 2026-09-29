@@ -540,6 +540,8 @@ interface VpvrRendererLike {
 interface RendererLike {
   vpvrRenderer?: VpvrRendererLike;
   userDrawings?: { seriesGateway?: { seriesInRange: Projector["seriesInRange"] } };
+  /** `chart.renderer` is a control wrapping the active renderer. */
+  renderer?: RendererLike;
 }
 
 const VA_ALPHA = 0.62;
@@ -589,7 +591,8 @@ function paintProfile(
  * chart keeps Vela's own.
  */
 export function patchVisibleRangeProfile(renderer: unknown): boolean {
-  const r = renderer as RendererLike | null;
+  const control = renderer as RendererLike | null;
+  const r = control?.vpvrRenderer ? control : control?.renderer;
   const layer = r?.vpvrRenderer;
   if (!layer || typeof layer.render !== "function" || !("ctx" in layer)) return false;
   let memoKey = "";
