@@ -76,9 +76,12 @@ export function aiFailure(error: unknown): Error {
   return new Error("AI request failed. Check your provider settings or try again shortly.");
 }
 
+/** A picture for the model: a PNG buffer, or any supported image with its media type. */
+export type AiImage = Buffer | { data: Buffer; mediaType: string };
+
 export const withImages = (
   prompt: string,
-  images: Buffer[],
+  images: AiImage[],
 ): { prompt: string } | { messages: ModelMessage[] } =>
   images.length
     ? {
@@ -89,8 +92,8 @@ export const withImages = (
               { type: "text", text: prompt },
               ...images.map((image) => ({
                 type: "image" as const,
-                image,
-                mediaType: "image/png",
+                image: Buffer.isBuffer(image) ? image : image.data,
+                mediaType: Buffer.isBuffer(image) ? "image/png" : image.mediaType,
               })),
             ],
           },

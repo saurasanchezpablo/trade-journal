@@ -167,6 +167,8 @@ export interface AnalysisChartHandle {
   sendToBack(ids: string[]): void;
   /** Open a drawing's own settings popup on the chart. */
   editDrawing(id: string): void;
+  /** Add horizontal lines at these prices (one undo step each); returns their ids. */
+  addLines(lines: { price: number; label: string }[]): string[];
   selectMany(ids: string[]): void;
 }
 
@@ -448,6 +450,26 @@ export function AnalysisChart({
         );
       });
       edited.current();
+    },
+    addLines: (lines) => {
+      const instance = chart.current;
+      if (!instance || !lines.length) return [];
+      // Anchored at the newest candle, like a line drawn on today's chart.
+      const time = history.current.newest ?? Date.now();
+      const ids = hostWrite(() =>
+        lines
+          .map(
+            (line) =>
+              instance.drawings.add("hline", {
+                paneId: "price",
+                anchors: [{ time, price: line.price }],
+                ...(line.label ? { text: { value: line.label } as SerializedDrawing["text"] } : {}),
+              })?.id ?? null,
+          )
+          .filter((id): id is string => id !== null),
+      );
+      edited.current();
+      return ids;
     },
     duplicate: (ids) => {
       const instance = chart.current;

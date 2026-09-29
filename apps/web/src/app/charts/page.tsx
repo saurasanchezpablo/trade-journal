@@ -48,6 +48,7 @@ import { IndicatorsPanel } from "@/components/indicators-panel";
 import { PineEditor, type EditorDraft } from "@/components/pine-editor";
 import { PlanEditor } from "@/components/plan-editor";
 import { PlanDraft } from "@/components/plan-draft";
+import { ScreenshotLevels } from "@/components/screenshot-levels";
 import { EMPTY_PLAN, isPlanEmpty, type AnalysisPlan } from "@/lib/analysis-plan";
 import type { ChartIndicator, IndicatorAlert } from "@/components/chart-indicators-bridge";
 import {
@@ -2430,6 +2431,30 @@ const ChartBoard = memo(function ChartBoard({
                 onCancel={cancelCapture}
                 onChange={changeZones}
                 onReveal={(zone) => chart.current?.showTime(zone.start)}
+              />
+              <ScreenshotLevels
+                symbol={board?.symbol ?? ""}
+                disabled={!board || Boolean(viewing)}
+                lastPrice={() => lastClose.current?.close ?? null}
+                onAdd={(lines, read) => {
+                  chart.current?.addLines(lines);
+                  if (read.length) {
+                    // Zones count touches from the start of the view, as if drawn on it.
+                    const start = chart.current?.visibleRange()?.from ?? Date.now();
+                    changeZones([
+                      ...state.current.zones,
+                      ...read.map((z) => ({
+                        id: newZoneId(),
+                        low: z.low,
+                        high: z.high,
+                        kind: z.role ?? ("auto" as const),
+                        label: z.label.slice(0, 60),
+                        start,
+                        visible: true,
+                      })),
+                    ]);
+                  }
+                }}
               />
             </SectionCard>
 

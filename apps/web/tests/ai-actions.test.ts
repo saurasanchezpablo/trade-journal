@@ -28,6 +28,8 @@ const { listMessages } = await import("../src/server/ai-agent/store");
 const planDraft = await import("../src/app/api/ai/plan-draft/route");
 const analysesRoute = await import("../src/app/api/analyses/route");
 const { importCsvDataset } = await import("../src/server/market-data/csv");
+const chartLevels = await import("../src/app/api/ai/chart-levels/route");
+const { decodeImageDataUrl } = await import("../src/server/ai-images");
 const playbookCheck = await import("../src/app/api/ai/playbook-check/route");
 
 const post = (route: { POST: (r: Request) => Promise<Response> }, body: unknown) =>
@@ -471,5 +473,91 @@ describe("a pre-market plan draft", () => {
     const asked = JSON.stringify(provider.body(0));
     expect(asked).toContain("Previous session: open 104, high 109, low 102, close 106");
     expect(asked).toMatch(/: 110\\n/);
+  });
+});
+
+describe("levels read from a chart screenshot", () => {
+  const jpeg = `data:image/jpeg;base64,${Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]).toString("base64")}`;
+
+  it("accept real PNG, JPEG and WebP pictures only", () => {
+    expect(decodeImageDataUrl(jpeg)).toMatchObject({ mediaType: "image/jpeg" });
+    // A PNG label on JPEG bytes is refused.
+    expect(decodeImageDataUrl(jpeg.replace("image/jpeg", "image/png"))).toBeNull();
+    expect(decodeImageDataUrl("data:image/gif;base64,R0lGODlh")).toBeNull();
+  });
+
+  it("send the picture, and set aside levels that don't fit the chart", async () => {
+    const provider = script(() =>
+      anthropicMessage(
+        JSON.stringify({
+          symbolShown: "ES1!",
+          axis: { low: 4900, high: 5100 },
+          levels: [
+            {
+              kind: "line",
+              price: 5050,
+              low: null,
+              high: null,
+              label: "PDH",
+              role: "resistance",
+              confidence: "high",
+            },
+            {
+              kind: "zone",
+              price: null,
+              low: 4960,
+              high: 4940,
+              label: "demand",
+              role: "support",
+              confidence: "medium",
+            },
+            {
+              kind: "line",
+              price: 50.5,
+              low: null,
+              high: null,
+              label: "misread",
+              role: null,
+              confidence: "low",
+            },
+          ],
+        }),
+      ),
+    );
+    const response = await post(chartLevels, { image: jpeg, symbol: "ES", lastPrice: 5000 });
+    const body = await response.json();
+    expect(body.levels).toEqual([
+      {
+        kind: "line",
+        low: 5050,
+        high: 5050,
+        label: "PDH",
+        role: "resistance",
+        confidence: "high",
+        doubt: null,
+      },
+      {
+        kind: "zone",
+        low: 4940,
+        high: 4960,
+        label: "demand",
+        role: "support",
+        confidence: "medium",
+        doubt: null,
+      },
+      {
+        kind: "line",
+        low: 50.5,
+        high: 50.5,
+        label: "misread",
+        role: null,
+        confidence: "low",
+        doubt: "outside the chart's price axis; far from the current price (5000)",
+      },
+    ]);
+    const sent = JSON.stringify(provider.body(0));
+    expect(sent).toContain('"media_type":"image/jpeg"');
+    expect(sent).toContain("should be ES");
+    expect((await post(chartLevels, { image: "data:text/plain;base64,aGk=" })).status).toBe(400);
   });
 });
