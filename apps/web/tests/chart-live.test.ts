@@ -288,7 +288,7 @@ describe("live charts ask for the latest candles without dates", () => {
     expect(historyWindow({ limit: 500 }, now)).toEqual({ to: now, limit: 500 });
     expect(historyWindow({ to: now - 1000, limit: 50_000 }, now)).toEqual({
       to: now - 1000,
-      limit: 5000,
+      limit: 20_000,
     });
   });
 

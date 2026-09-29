@@ -122,7 +122,8 @@ export function historyWindow(range: BarRange, now = Date.now()): HistoryWindow 
   // (drawings reading finer candles), and the history API takes integer times.
   const to = Math.ceil(Math.min(range.to ?? now, now));
   if (range.from != null) return { from: Math.floor(Math.min(range.from, to - 1)), to };
-  return { to, limit: Math.max(1, Math.min(range.limit ?? INITIAL_BARS, MAX_REQUEST_BARS)) };
+  // Up to the chart's depth; the provider pages anything over one request (MAX_REQUEST_BARS).
+  return { to, limit: Math.max(1, Math.min(range.limit ?? INITIAL_BARS, MAX_CHART_BARS)) };
 }
 
 /** The newest candle and the close before it (for the price header and line alerts). */
@@ -230,6 +231,36 @@ export class JournalMarketProvider implements DataProvider {
     return body.bars as OHLCV[];
   }
 
+  /**
+   * The candles of a window. "The latest N" beyond one request is fetched in pages, newest
+   * first, each ending just before the oldest candle so far: a chart opened on a long saved
+   * view (5800 hourly candles) gets all of them, not the newest 5000 while the rest of its
+   * view, and any volume profile over it, stays empty.
+   */
+  private async load(ticker: string, resolution: Resolution, window: HistoryWindow) {
+    if ("from" in window || window.limit <= MAX_REQUEST_BARS)
+      return retry(() => this.request(ticker, resolution, window));
+    const byTime = new Map<number, OHLCV>();
+    let to = window.to;
+    while (byTime.size < window.limit) {
+      const want = Math.min(MAX_REQUEST_BARS, window.limit - byTime.size);
+      const page = await retry(() => this.request(ticker, resolution, { to, limit: want }));
+      let added = 0;
+      let oldest = Infinity;
+      for (const bar of page) {
+        if (bar.time < oldest) oldest = bar.time;
+        if (bar.time <= to && !byTime.has(bar.time)) {
+          byTime.set(bar.time, bar);
+          added += 1;
+        }
+      }
+      // A short page is the start of the source's history.
+      if (added === 0 || page.length < want || !Number.isFinite(oldest)) break;
+      to = oldest - 1;
+    }
+    return [...byTime.values()].sort((a, b) => a.time - b.time).slice(-window.limit);
+  }
+
   async getBars(ticker: string, timeframe: string, range: BarRange): Promise<OHLCV[]> {
     const resolution = resolutionForTimeframe(timeframe);
     if (!resolution) throw new Error(`Unsupported timeframe ${timeframe}.`);
@@ -239,7 +270,7 @@ export class JournalMarketProvider implements DataProvider {
     try {
       // Vela treats a failed load as "no candles" and would leave the chart blank, so a
       // brief upstream hiccup is retried before it is reported.
-      const bars = await retry(() => this.request(ticker, resolution, historyWindow(range)));
+      const bars = await this.load(ticker, resolution, historyWindow(range));
       if (range.to == null) this.latest(bars, timeframe);
       this.onStatus({ state: this.paused ? "paused" : "live", updatedAt: Date.now() });
       return bars;

@@ -63,6 +63,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Fixed
 
+- A chart opened on a long saved view loads all of its candles (up to 20,000): it stopped at the newest 5000, so on 1h and shorter charts the start of the view stayed empty and a volume profile over it counted only the recent part, which moved its POC and value area towards recent prices
 - The volume profiles' value area holds at least its 70%: it stopped before the row that would take it past the share, so VAL to VAH could hold less (69.6% on a BTC test range, with a heavy row just above VAH left out)
 - Built-in Historical volatility is TradingView's HV (length 10, annualised by weeks on weekly candles and above; it was 2.6 times too high on weekly charts), and new SMA, EMA, WMA, Hull and ALMA indicators start at TradingView's length of 9 and the Stochastic at its %K smoothing of 1. Indicators already on a chart keep their settings
 - Fibonacci and position tool labels show prices with the instrument's decimals; they were rounded to 2, so every level of a EUR/USD retracement read "(1.08)"
