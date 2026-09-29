@@ -14,6 +14,7 @@ import { FilterBar, useFilters } from "@/components/filter-bar";
 import { FilterFields, Field, fieldClass } from "@/components/filter-fields";
 import { ReviewExport } from "@/components/review-export";
 import { AskJournalChat } from "@/components/ask-journal-chat";
+import { BehaviourPatterns } from "@/components/behaviour-patterns";
 import { ReportOverview } from "@/components/report-overview";
 import { MonetaryValue, usePrivacy } from "@/components/privacy";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -266,7 +267,7 @@ export default function ReportsPage() {
 function Reports() {
   const { query, values } = useFilters();
   const [mode, setMode] = useState<
-      "overview" | "trends" | "explorer" | "breakdown" | "cross" | "compare"
+      "overview" | "trends" | "explorer" | "breakdown" | "cross" | "compare" | "habits"
     >("overview"),
     [primary, setPrimary] = useState<Dimension>("symbol"),
     [secondary, setSecondary] = useState<Dimension>("weekday");
@@ -290,6 +291,7 @@ function Reports() {
               ["breakdown", "Breakdowns"],
               ["cross", "Cross-analysis"],
               ["compare", "Compare groups"],
+              ["habits", "Habits"],
             ] as const
           ).map(([key, name]) => (
             <Button
@@ -310,6 +312,8 @@ function Reports() {
             <PerformanceTrendsReport key={query} query={query} />
           ) : mode === "explorer" ? (
             <TradeExplorer key={query} query={query} />
+          ) : mode === "habits" ? (
+            <BehaviourPatterns key={query} query={query} />
           ) : mode === "compare" ? (
             <Comparison key={query} initial={values} />
           ) : (

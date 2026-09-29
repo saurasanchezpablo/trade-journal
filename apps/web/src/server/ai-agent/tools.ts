@@ -5,6 +5,7 @@ import {
   analyzeGroups,
   computeMetrics,
   dayKeyOf,
+  detectBehaviours,
   matchesFilters,
   plannedR,
   tradeR,
@@ -450,6 +451,55 @@ export function journalTools({ scope, signal }: ToolContext): ToolSet {
       ),
     }),
 
+    behaviour_patterns: tool({
+      description:
+        "Habits in the trades in scope, each measured against the rest: revenge trades (opened soon after a loss), trading on after two losses in a row that day, sizing up after a loss, size creeping up per symbol, and results fading later in the day. `flagged` means enough trades on both sides and a worse result; `cost` is what the habit lost against the usual result.",
+      inputSchema: jsonSchema<{ filters?: Record<string, string>; revengeMinutes?: number }>({
+        type: "object",
+        properties: {
+          filters: filtersSchema,
+          revengeMinutes: {
+            type: "integer",
+            minimum: 1,
+            maximum: 240,
+            description: "Minutes after a loss that count as revenge. Default 15.",
+          },
+        },
+        additionalProperties: false,
+      }),
+      execute: safe((input: { filters?: unknown; revengeMinutes?: unknown }) => {
+        const trades = narrowed(input.filters);
+        const report = detectBehaviours(trades, {
+          timeZone: tz,
+          revengeMinutes: integer(input.revengeMinutes, 15, 1, 240),
+        });
+        const byKey = new Map(trades.map((t) => [t.key, t]));
+        const side = (s: (typeof report.patterns)[number]["baseline"]) => ({
+          trades: s.trades,
+          netPnl: round(s.netPnl),
+          avgPnl: round(s.avgPnl),
+          winRatePct: s.winRate === null ? null : round(s.winRate * 100, 1),
+        });
+        return {
+          closedTrades: report.trades,
+          patterns: report.patterns.map((p) => ({
+            habit: p.title,
+            flagged: p.flagged,
+            summary: p.summary,
+            theseTrades: side(p.flaggedSide),
+            theRest: side(p.baseline),
+            cost: round(p.cost),
+            ...(p.detail?.length ? { bySymbol: p.detail } : {}),
+            examples: p.examples
+              .slice(0, 3)
+              .map((key) => byKey.get(key))
+              .filter((t) => t !== undefined)
+              .map((t) => compactTrade(t, data(), tz)),
+          })),
+        };
+      }),
+    }),
+
     group_stats: tool({
       description:
         "Closed trades in scope grouped by one dimension (optionally split by a second): trades, net P&L, win rate, profit factor, average R and holding time per group, best group first.",
@@ -760,6 +810,8 @@ export function toolLabel(name: string, input: unknown): string {
       const then = DIMENSIONS[record.thenBy as Dimension];
       return `Grouped trades by ${by.toLowerCase()}${then ? ` and ${then.toLowerCase()}` : ""}${filtered}`;
     }
+    case "behaviour_patterns":
+      return `Checked your habits${filtered}`;
     case "get_trade":
       return "Read a trade's fills and notes";
     case "get_candles":

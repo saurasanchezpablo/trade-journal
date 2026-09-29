@@ -431,6 +431,20 @@ describe("journal tools", () => {
     expect(one.trades).toHaveLength(1);
   });
 
+  it("report habits from the journal's own numbers, within the scope", async () => {
+    const all = await run(scopeFor({}), "behaviour_patterns", {});
+    expect(all.closedTrades).toBe(3);
+    expect((all.patterns as { habit: string }[]).map((p) => p.habit)).toEqual([
+      "Revenge trades",
+      "Trading on after losses",
+      "Sizing up after a loss",
+      "Size creeping up",
+      "Results fading later in the day",
+    ]);
+    const onlyA = await run(scopeFor({ accounts: "a" }), "behaviour_patterns", {});
+    expect(onlyA.closedTrades).toBe(2);
+  });
+
   it("sort and page trade lists", async () => {
     const listed = await run(scopeFor({}), "find_trades", {
       sort: "netPnl",
