@@ -1,6 +1,7 @@
 "use client";
 import { AiRecap } from "@/components/ai-recap";
 import { JournalChat } from "@/components/journal-chat";
+import { VoiceMemo } from "@/components/voice-memo";
 import { analysesUsedMarkdown } from "@/components/ai-charts-option";
 import { DayAnalyses } from "@/components/day-analyses";
 import { dayKeyOf } from "@luxalgo/journal-core";
@@ -227,6 +228,16 @@ function JournalDay({ date }: { date: string }) {
               labeled section. Shared notes are excluded from filtered AI context. This day's chart
               analyses are sent as they were that day.
             </p>
+            <div className="mb-3">
+              <VoiceMemo
+                kind="day"
+                onInsert={(markdown) =>
+                  scheduleSave(
+                    latestNote.current ? `${latestNote.current}\n\n${markdown}` : markdown,
+                  )
+                }
+              />
+            </div>
             <div className="mb-3">
               <AiRecap
                 key={`${date}:${timeZone}:${query}`}

@@ -16,10 +16,11 @@ const { eq } = await import("drizzle-orm");
 const { insertExecutions } = await import("../src/server/executions");
 const { setSetting } = await import("../src/server/settings");
 const { queryTrades } = await import("../src/server/trades-query");
-const { anthropicMessage, openaiMessage, geminiMessage, script } =
+const { anthropic, anthropicMessage, openaiMessage, geminiMessage, script } =
   await import("./ai-provider-fixtures");
 const suggestLabels = await import("../src/app/api/ai/suggest-labels/route");
 const suggestMapping = await import("../src/app/api/ai/suggest-mapping/route");
+const structureNote = await import("../src/app/api/ai/structure-note/route");
 const playbookCheck = await import("../src/app/api/ai/playbook-check/route");
 
 const post = (route: { POST: (r: Request) => Promise<Response> }, body: unknown) =>
@@ -253,5 +254,34 @@ describe("column mapping help", () => {
     const asked = JSON.stringify(provider.body(0));
     expect(asked).toContain("Fill Px");
     expect((asked.match(/U1234567/g) ?? []).length).toBe(5);
+  });
+});
+
+describe("a voice memo made into a note", () => {
+  it("streams a note from the memo, asking to keep the trader's facts and Keep/Fix lists", async () => {
+    const provider = script(() =>
+      anthropic.text("**What happened**\nI waited.\n\n**Keep**\n- ", "Waiting for the retest\n"),
+    );
+    const response = await post(structureNote, {
+      text: "so today I waited for the retest and my stop lost was fine",
+      kind: "day",
+      stream: true,
+    });
+    const events = (await response.text())
+      .trim()
+      .split("\n")
+      .map((l) => JSON.parse(l));
+    expect(events.at(-1)).toEqual({
+      type: "done",
+      note: "**What happened**\nI waited.\n\n**Keep**\n- Waiting for the retest",
+    });
+    const asked = JSON.stringify(provider.body(0));
+    expect(asked).toContain("add nothing they did not");
+    expect(asked).toContain("my stop lost was fine");
+  });
+
+  it("needs a memo and a kind", async () => {
+    for (const body of [{ text: "", kind: "day" }, { text: "hi", kind: "week" }, { text: "hi" }])
+      expect((await post(structureNote, body)).status).toBe(400);
   });
 });

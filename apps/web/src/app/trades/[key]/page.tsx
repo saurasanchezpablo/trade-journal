@@ -2,6 +2,7 @@
 import { JournalChat } from "@/components/journal-chat";
 import { postAiStream } from "@/lib/ai-stream";
 import { TradeLabelSuggestions } from "@/components/label-suggestions";
+import { VoiceMemo } from "@/components/voice-memo";
 import { tradeSnapshot } from "@/lib/trade-snapshot";
 import { AiNotice } from "@/components/ai-notice";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -514,6 +515,16 @@ function AnnotationsCard({
               onPrepare={() => noteEditor.current?.focus()}
               onText={(text) => {
                 const next = notes ? `${notes} ${text}` : text;
+                setNotes(next);
+                debounced({ notes: next });
+              }}
+            />
+          </div>
+          <div className="mb-2">
+            <VoiceMemo
+              kind="trade"
+              onInsert={(markdown) => {
+                const next = notes ? `${notes}\n\n${markdown}` : markdown;
                 setNotes(next);
                 debounced({ notes: next });
               }}
