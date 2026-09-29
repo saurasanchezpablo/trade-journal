@@ -67,6 +67,7 @@ export function JournalChat({
   placeholder = "Ask a question about your trades",
   intro,
   openId,
+  starter,
 }: {
   target: ChatTarget;
   suggestions?: string[];
@@ -75,6 +76,8 @@ export function JournalChat({
   intro?: string;
   /** A saved conversation to open at once, such as a digest's from its notification. */
   openId?: string | null;
+  /** A first turn another route writes (such as a period review), shown as a button. */
+  starter?: { label: string; display: string; url: string; body: Record<string, unknown> } | null;
 }) {
   const privateMode = usePrivacy();
   const history = useApi<{ conversations: Conversation[] }>(listUrl(target));
@@ -152,7 +155,7 @@ export function JournalChat({
     history.refresh();
   };
 
-  const send = async (raw: string) => {
+  const send = async (raw: string, override?: { url: string; body: Record<string, unknown> }) => {
     const question = raw.trim();
     if (busy || !question) return;
     const controller = new AbortController();
@@ -190,9 +193,13 @@ export function JournalChat({
             timeZone: target.timeZone,
             ...(target.kind === "day" ? { kind: "day", anchor: target.date } : {}),
           };
-    const withSeed = startsNew && seed?.trim() ? { ...body, seed: seed.trim() } : body;
+    const withSeed = override
+      ? override.body
+      : startsNew && seed?.trim()
+        ? { ...body, seed: seed.trim() }
+        : body;
     try {
-      const response = await fetch("/api/ai/chat", {
+      const response = await fetch(override?.url ?? "/api/ai/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(withSeed),
@@ -395,6 +402,19 @@ export function JournalChat({
           </Button>
         )}
       </form>
+
+      {!active && !messages.length && starter && (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={busy}
+          onClick={() => void send(starter.display, { url: starter.url, body: starter.body })}
+        >
+          <Sparkles />
+          {starter.label}
+        </Button>
+      )}
 
       {!active && !messages.length && suggestions.length > 0 && (
         <div className="flex flex-wrap gap-1.5">

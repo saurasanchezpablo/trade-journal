@@ -21,6 +21,10 @@ const { anthropic, anthropicMessage, openaiMessage, geminiMessage, script } =
 const suggestLabels = await import("../src/app/api/ai/suggest-labels/route");
 const suggestMapping = await import("../src/app/api/ai/suggest-mapping/route");
 const structureNote = await import("../src/app/api/ai/structure-note/route");
+const goalsRoute = await import("../src/app/api/goals/route");
+const periodReview = await import("../src/app/api/ai/period-review/route");
+const suggestGoals = await import("../src/app/api/ai/suggest-goals/route");
+const { listMessages } = await import("../src/server/ai-agent/store");
 const playbookCheck = await import("../src/app/api/ai/playbook-check/route");
 
 const post = (route: { POST: (r: Request) => Promise<Response> }, body: unknown) =>
@@ -283,5 +287,105 @@ describe("a voice memo made into a note", () => {
   it("needs a memo and a kind", async () => {
     for (const body of [{ text: "", kind: "day" }, { text: "hi", kind: "week" }, { text: "hi" }])
       expect((await post(structureNote, body)).status).toBe(400);
+  });
+});
+
+describe("monthly and quarterly reviews", () => {
+  const goals = (body: unknown) =>
+    goalsRoute.POST(
+      new Request("http://localhost/api/goals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      }),
+    );
+
+  it("measure each goal, and the review is written from them as a chat", async () => {
+    let state = await (
+      await goals({
+        kind: "month",
+        period: "2026-09",
+        metric: "winRate",
+        comparator: "atLeast",
+        target: 0.5,
+      })
+    ).json();
+    state = await (
+      await goals({ kind: "month", period: "2026-09", text: "No trades before 9:45" })
+    ).json();
+    expect(state.goals.map((g: { status: string }) => g.status)).toEqual(["missed", "unknown"]);
+    expect(state.measures.netPnl).toBe(-22);
+
+    const provider = script(() => anthropic.text("**Goals**\n- Win rate missed."));
+    const response = await post(periodReview, {
+      kind: "month",
+      period: "2026-09",
+      timeZone: "UTC",
+    });
+    const events = (await response.text())
+      .trim()
+      .split("\n")
+      .map((l) => JSON.parse(l));
+    expect(events[0]).toMatchObject({
+      type: "conversation",
+      conversation: {
+        title: "Monthly review · September 2026",
+        filters: { from: "2026-09-01", to: "2026-09-30" },
+      },
+    });
+    expect(events.at(-1)).toMatchObject({ type: "done" });
+    const asked = JSON.stringify(provider.body(0));
+    expect(asked).toContain("Win rate at least 50%: 0% (missed)");
+    expect(asked).toContain("Written goal: No trades before 9:45");
+    expect(asked).toContain("Net P&L: -22.00 (August 2026: n/a)");
+    expect(listMessages(events[0].conversation.id)[0]!.content).toBe(
+      "Monthly review for September 2026",
+    );
+  });
+
+  it("refuse malformed goals and empty periods", async () => {
+    for (const body of [
+      { kind: "month", period: "2026-9", text: "x" },
+      { kind: "month", period: "2026-09", metric: "luck", comparator: "atLeast", target: 1 },
+      { kind: "month", period: "2026-09", metric: "winRate", comparator: "atLeast" },
+      { kind: "month", period: "2026-09" },
+    ])
+      expect((await goals(body)).status).toBe(400);
+    const provider = script();
+    expect((await post(periodReview, { kind: "month", period: "2026-03" })).status).toBe(400);
+    expect(provider.fetcher).not.toHaveBeenCalled();
+  });
+
+  it("suggest the next period's goals, checked against the metrics", async () => {
+    script(() =>
+      anthropicMessage(
+        JSON.stringify({
+          goals: [
+            {
+              metric: "stopShare",
+              comparator: "atLeast",
+              target: 0.9,
+              text: "",
+              reason: "No stops in September.",
+            },
+            { metric: "luck", comparator: "atLeast", target: 1, text: "Be lucky", reason: "?" },
+          ],
+        }),
+      ),
+    );
+    const response = await post(suggestGoals, { kind: "month", period: "2026-10" });
+    expect(await response.json()).toMatchObject({
+      basedOn: { id: "2026-09" },
+      goals: [
+        {
+          metric: "stopShare",
+          comparator: "atLeast",
+          target: 0.9,
+          reason: "No stops in September.",
+        },
+        // An unknown metric falls back to the written goal.
+        { metric: null, comparator: null, target: null, text: "Be lucky" },
+      ],
+    });
   });
 });

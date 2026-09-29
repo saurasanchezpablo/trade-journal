@@ -10,6 +10,7 @@ import { DayTypeStats } from "@/components/day-type-stats";
 import { WeeklyReview } from "@/components/weekly-review";
 import { AiDigests } from "@/components/ai-digests";
 import { RecurringLessons } from "@/components/recurring-lessons";
+import { PeriodReviews } from "@/components/period-reviews";
 import { Pnl } from "@/components/pnl";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -63,6 +64,7 @@ function Journal() {
       />
       <div className="space-y-2 p-4">
         <WeeklyReview timeZone={timeZone} />
+        <PeriodReviews timeZone={timeZone} />
         <RecurringLessons />
         <AiDigests timeZone={timeZone} />
         <DayTypeStats />
