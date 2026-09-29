@@ -211,9 +211,13 @@ export function describeAnalysis(analysis: ChartAnalysis, day: string | null = n
 }
 
 /** The prompt section for linked analyses, numbering images in the order they are sent. */
-export function analysesPrompt(linked: LinkedAnalysis[]): string {
+export function analysesPrompt(
+  linked: LinkedAnalysis[],
+  /** Images sent before the analyses' own (such as the trade's chart). */
+  imagesBefore = 0,
+): string {
   if (!linked.length) return "";
-  let image = 0;
+  let image = imagesBefore;
   const parts = linked.map((analysis, index) => {
     const attached = analysis.image ? `image ${(image += 1)} attached` : "described as text only";
     return `Chart analysis ${index + 1} (${attached}):\n${analysis.context}`;

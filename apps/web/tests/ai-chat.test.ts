@@ -18,6 +18,8 @@ const { POST: recap } = await import("../src/app/api/ai/recap/route");
 const { POST: critique } = await import("../src/app/api/ai/critique/route");
 const { POST: weekly } = await import("../src/app/api/ai/weekly/route");
 const { postAiStream } = await import("../src/lib/ai-stream");
+const { importCsvDataset } = await import("../src/server/market-data/csv");
+const analysesRoute = await import("../src/app/api/analyses/route");
 const { listMessages, listConversations } = await import("../src/server/ai-agent/store");
 
 /** Tool calls that fetch candles would reach the network; these tests never make them. */
@@ -545,6 +547,58 @@ describe("recaps, critiques and weekly reviews", () => {
       review: "A red week.",
       to: "2026-09-16",
     });
+  });
+
+  it("critique a trade with the market around it and the chart shown on the page", async () => {
+    // One-minute candles for ONLY_A from 08:00: a slow rise from 98 to 115.
+    const start = Date.parse("2026-09-15T08:00:00Z");
+    importCsvDataset({
+      name: "ONLY_A candles",
+      symbol: "ONLY_A",
+      resolution: "1m",
+      currency: "USD",
+      priceBasis: "raw",
+      content: ["time,open,high,low,close,volume"]
+        .concat(
+          Array.from({ length: 180 }, (_, i) => {
+            const p = 98 + (i * 17) / 180;
+            return `${new Date(start + i * 60_000).toISOString()},${p},${p + 0.5},${p - 0.5},${p},10`;
+          }),
+        )
+        .join("\n"),
+    });
+    // A chart of the symbol tells the journal where its candles come from.
+    const saved = await analysesRoute.POST(
+      new Request("http://localhost/api/analyses", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          symbol: "ONLY_A",
+          provider: "market-csv",
+          resolution: "1m",
+          rangeFrom: start,
+          rangeTo: start + 3 * 3_600_000,
+          drawings: { version: 1, drawings: [] },
+        }),
+      }),
+    );
+    expect(saved.status, await saved.clone().text()).toBe(200);
+    const png = `data:image/png;base64,${Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2]).toString("base64")}`;
+    const key = queryTrades({ accounts: "a" }).trades[0]!.key;
+    const provider = script(() => anthropic.text("Entered late."));
+    const done = await events(
+      await call(critique, { key, stream: true, includeAnalyses: false, chartImage: png }),
+    );
+    expect(done.at(-1)).toMatchObject({ type: "done", critique: "Entered late." });
+    const sent = JSON.stringify(provider.body(0));
+    expect(sent).toContain("Market around the trade (ONLY_A from Market data CSV, 1m candles)");
+    expect(sent).toMatch(/Entry 100 at \d+% of the day's range so far/);
+    expect(sent).toContain("Day VWAP at entry");
+    expect(sent).toContain("The first image is the trade's candle chart");
+    expect(sent).toContain('"type":"image"');
+
+    const refused = await call(critique, { key, chartImage: "data:image/jpeg;base64,AAAA" });
+    expect(refused.status).toBe(400);
   });
 
   it("stream a provider failure as a safe message", async () => {

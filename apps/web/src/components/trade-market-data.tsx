@@ -16,6 +16,7 @@ import { VELA_TIMEFRAME } from "@/lib/chart-analysis";
 import { useApi } from "@/lib/use-api";
 import { fmtMoney } from "@/lib/utils";
 import { TradeChart, type ChartExecution, type ChartTrade } from "./trade-chart";
+import { registerTradeSnapshot } from "@/lib/trade-snapshot";
 import { usePrivacy } from "./privacy";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
@@ -405,7 +406,7 @@ function HistoricalReplay({
                 prices; fill labels and MAE/MFE estimates are withheld. See the data limits below.
               </p>
             )}
-            <ReplayChart history={history} nextFrame={frame} />
+            <ReplayChart history={history} nextFrame={frame} tradeKey={trade.key} />
             <div className="flex flex-wrap items-center gap-2">
               <Button
                 variant="outline"
@@ -515,9 +516,12 @@ function HistoricalReplay({
 function ReplayChart({
   history,
   nextFrame,
+  tradeKey,
 }: {
   history: TradeMarketResult;
   nextFrame: ReturnType<typeof replayFrame<ChartExecution>>;
+  /** The chart's picture goes with an AI critique of this trade while it is shown. */
+  tradeKey: string;
 }) {
   const host = useRef<HTMLDivElement>(null);
   const chart = useRef<Vela | null>(null);
@@ -585,6 +589,7 @@ function ReplayChart({
         drawings: false,
       });
       chart.current = instance;
+      const unregister = registerTradeSnapshot(tradeKey, () => instance.renderer.screenshot());
       frame.current = latest.current;
       instance.addNativeIndicator(type);
       let updating = false;
@@ -610,6 +615,7 @@ function ReplayChart({
       observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
       cleanup = () => {
         update.current = null;
+        unregister();
         observer.disconnect();
         instance.destroy();
         unregisterNativeIndicator(type);

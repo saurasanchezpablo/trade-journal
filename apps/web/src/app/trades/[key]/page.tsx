@@ -1,6 +1,7 @@
 "use client";
 import { JournalChat } from "@/components/journal-chat";
 import { postAiStream } from "@/lib/ai-stream";
+import { tradeSnapshot } from "@/lib/trade-snapshot";
 import { AiNotice } from "@/components/ai-notice";
 import { Checkbox } from "@/components/ui/checkbox";
 
@@ -158,9 +159,15 @@ function TradeView({ tradeKey }: { tradeKey: string }) {
     try {
       setCritique(null);
       setCritiqueCharts([]);
+      const chartImage = aiCharts ? tradeSnapshot(tradeKey) : null;
       const result = await postAiStream<{ critique: string; analyses?: AiAnalysisUsed[] }>(
         "/api/ai/critique",
-        { key: tradeKey, ...(aiCharts ? {} : { includeAnalyses: false }) },
+        {
+          key: tradeKey,
+          ...(aiCharts ? {} : { includeAnalyses: false }),
+          // The market replay chart's picture, when it is on screen.
+          ...(chartImage ? { chartImage } : {}),
+        },
         setCritique,
       );
       setCritique(result.critique);

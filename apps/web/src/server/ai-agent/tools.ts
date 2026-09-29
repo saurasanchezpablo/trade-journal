@@ -25,6 +25,7 @@ import { getAnalysis, listAnalyses } from "../chart-analyses";
 import { listExecutions } from "../executions";
 import { connectionKey, providerFor } from "../market-data/connections";
 import { queryTrades, type TradeRow } from "../trades-query";
+import { candleSource, tradeMarketContext } from "../trade-context";
 import { lessonHistory } from "../lessons";
 import { describeLesson } from "@/lib/lesson-tracking";
 
@@ -257,35 +258,6 @@ const integer = (value: unknown, fallback: number, min: number, max: number) =>
     : fallback;
 
 // ── Candles ──
-
-/** Where to fetch a trade's candles: a chart analysis of its symbol, or its market replay. */
-function candleSource(trade: AnnotatedTrade) {
-  const key = symbolKey(trade.symbol);
-  const analysis = listAnalyses({ limit: 200 }).find((a) => matchKeys(a.symbol).has(key));
-  if (analysis)
-    return { provider: analysis.provider, symbol: analysis.symbol, dataset: analysis.dataset };
-  const replay = db
-    .select()
-    .from(tradeExcursions)
-    .where(eq(tradeExcursions.tradeKey, trade.key))
-    .get();
-  if (replay) {
-    let datasetId: string | null = null;
-    try {
-      datasetId = (JSON.parse(replay.estimateJson) as { datasetId?: string }).datasetId ?? null;
-    } catch {
-      datasetId = null;
-    }
-    return {
-      provider: replay.provider,
-      symbol: replay.symbol,
-      dataset:
-        datasetId ??
-        (replay.provider === "alpaca" && trade.assetClass === "crypto" ? "crypto" : null),
-    };
-  }
-  return null;
-}
 
 /** A candle size that shows the trade in roughly 40 candles. */
 export function candleSizeFor(spanMs: number): Resolution {
@@ -661,8 +633,10 @@ export function journalTools({ scope, signal }: ToolContext): ToolSet {
             },
             connectionKey(provider.id),
           );
+          const market = await tradeMarketContext(trade, tz, signal);
           return {
             source: `${source.symbol} from ${provider.name}`,
+            ...(market.ok ? { marketContext: market.text } : {}),
             ...(history.quoteCurrency ? { quoteCurrency: history.quoteCurrency } : {}),
             entry: { at: trade.openedAt, price: trade.avgEntry },
             exit: trade.closedAt ? { at: trade.closedAt, price: trade.avgExit ?? null } : null,

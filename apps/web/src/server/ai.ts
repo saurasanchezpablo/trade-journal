@@ -76,7 +76,7 @@ export function aiFailure(error: unknown): Error {
   return new Error("AI request failed. Check your provider settings or try again shortly.");
 }
 
-const withImages = (
+export const withImages = (
   prompt: string,
   images: Buffer[],
 ): { prompt: string } | { messages: ModelMessage[] } =>
