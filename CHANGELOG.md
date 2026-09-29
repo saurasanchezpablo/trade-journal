@@ -6,6 +6,17 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
+- Habits on Reports: revenge trades, trading on after losses, sizing up after a loss, size creeping up and results fading later in the day, each against the rest of your trades with what it cost; the AI chat reads the same numbers (see [docs/ai-coaching.md](docs/ai-coaching.md))
+- Lessons that keep coming back: Keep and Fix items from your day notes grouped when they say the same thing, with weeks in a row, on the Daily journal and in recaps, weekly reviews and the AI chat
+- Trade critiques read the market around the trade (where the entry sat in the day's range and against VWAP, how far price went for and against it, how much the exit kept, what happened after) and the replay chart's picture
+- Playbook check: the AI judges a trade against each written rule of its playbook, with evidence, and you apply the verdicts to the rule review
+- Draft the day's plan: the AI proposes a bias and scenarios from the chart's levels and the previous session, and you add the ones you agree with
+- Levels from a screenshot: the AI reads the horizontal levels and zones of a chart picture, and the ones you tick are drawn on the chart
+- Monthly and quarterly reviews tied to goals: measurable or written goals per period, measured live, suggested goals for the next period, and a review written as a chat
+- Search your notes by meaning (with OpenAI or Gemini embeddings; by words otherwise), and find similar past days and trades
+- Suggested tags, mistakes and ratings for a trade or up to 20 selected trades, applied with a click
+- Import: the AI suggests the column mapping for an unrecognised statement, which you check and preview as before
+- Voice memo to note: dictate freely and the AI sorts it into a note with Keep and Fix lists, which you check before adding
 - Scheduled AI digests: a session recap after the close and a weekly review, written by the AI chat on the days and times you choose and sent as push notifications or to your webhook (such as ntfy); tap one to open it as a chat and ask follow-ups. Off until switched on under **Daily journal → Scheduled digests**; amounts stay out of notifications unless you choose otherwise
 - Chart alerts explain themselves: each notification says what the level is to the analysis's plan (it sets off a scenario, with its target and stop, reaches a target or invalidates a scenario), or whether the move is with or against your bias
 - AI chat: **Ask your journal** (Reports), **Ask about this day** and a chat under each trade's AI review. The AI looks things up itself with read-only journal tools (totals, trade search, stats grouped by any Reports dimension, a trade's fills and notes, the candles around a trade, a day's note and plans, chart analyses), always within the conversation's accounts and filters. Follow-up questions continue the conversation, which is saved and can be reopened or deleted; a chat can start from a recap or critique. See [docs/ai-chat.md](docs/ai-chat.md)

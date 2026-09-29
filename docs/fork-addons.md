@@ -24,6 +24,17 @@ touches as little as possible.
 | `apps/web/src/app/reports/page.tsx`                                                      | `<AskJournalChat />` in place of `<AskJournal />` (the component is kept).                                                                                        | Swap the element and import back.                                           |
 | `apps/web/src/app/trades/[key]/page.tsx`, `app/journal/[date]/page.tsx`                  | A `<JournalChat>` in the AI review card and an "Ask about this day" card; the day page keeps the last recap to seed it and opens `?chat=` (a digest) in it.       | Re-add the imports and the elements.                                        |
 | `apps/web/tests/ai-ui.test.ts`                                                           | Mocks for `journal-chat` and `ai-stream`.                                                                                                                         | Re-add the two mocks.                                                       |
+| `apps/web/src/app/reports/page.tsx` (coaching)                                           | A "Habits" tab rendering `<BehaviourPatterns>`.                                                                                                                   | Re-add the tab entry and its branch.                                        |
+| `apps/web/src/app/trades/page.tsx`                                                       | `<BulkLabelSuggestions>` in the selection bar.                                                                                                                    | Re-add the import and the element.                                          |
+| `apps/web/src/app/trades/[key]/page.tsx` (coaching)                                      | `<TradeLabelSuggestions>`, `<VoiceMemo>`, `<SimilarPast>`, and the replay chart's picture with the critique.                                                      | Re-add the imports and elements.                                            |
+| `apps/web/src/app/journal/[date]/page.tsx` (coaching)                                    | `<VoiceMemo>` above the recap and `<SimilarPast>` in the chat card.                                                                                               | Re-add the imports and elements.                                            |
+| `apps/web/src/app/import/page.tsx`                                                       | **Suggest with AI** in the column mapper (`suggestMapping`, `mappingNote`).                                                                                       | Re-add the button, note and handler.                                        |
+| `apps/web/src/components/rule-checklist.tsx`                                             | **Check with AI** and per-rule suggestions; the select saves through `save()`.                                                                                    | Re-add the AI block.                                                        |
+| `apps/web/src/components/trade-market-data.tsx`                                          | The replay chart registers its screenshot (`registerTradeSnapshot`).                                                                                              | Re-add the registration and cleanup.                                        |
+| `apps/web/src/app/api/ai/critique/route.ts` (coaching)                                   | Market context from `tradeMarketContext`, and `chartImage`.                                                                                                       | Re-add the context block and image.                                         |
+| `apps/web/src/app/api/ai/recap/route.ts`, `.../weekly/route.ts`                          | `recurringLessonsText(...)` appended to the prompt.                                                                                                               | Re-add the line.                                                            |
+| `apps/web/src/server/ai.ts` (coaching)                                                   | `withImages` exported and taking `AiImage` (a buffer or `{ data, mediaType }`).                                                                                   | Re-add the export and type.                                                 |
+| `packages/core/src/index.ts`                                                             | `export * from "./behaviour";`                                                                                                                                    | Re-add the export.                                                          |
 
 Nothing else upstream owns is changed: no database schema, bootstrap or upgrade edits (the
 add-ons create their own tables), no `next.config.ts` or `layout.tsx` edits. The only
@@ -47,6 +58,13 @@ dependencies added are single sign-on's (push uses Node's crypto).
   `components/ai-digests.tsx`, tests `ai-digests.test.ts` and `ai-provider-fixtures.ts`; the
   scheduler starts from `instrumentation-node.ts`.
 - Explained alerts: `lib/alert-explain.ts`, test `alert-explain.test.ts`.
+- AI coaching (docs/ai-coaching.md): `packages/core/src/behaviour.ts`; `lib/{lesson-tracking,trade-context,goals,plan-draft,note-search,trade-snapshot}.ts`;
+  `server/{ai-structured,ai-images,lessons,trade-context,goals,note-search}.ts` (goals and note passages in their own
+  tables); `app/api/{behaviour,lessons,goals,notes-search}/**` and
+  `app/api/ai/{playbook-check,suggest-labels,suggest-mapping,structure-note,plan-draft,chart-levels,suggest-goals,period-review}/**`;
+  components `behaviour-patterns`, `recurring-lessons`, `period-reviews`, `note-search`, `label-suggestions`, `voice-memo`,
+  `plan-draft`, `screenshot-levels`; tests `behaviour`, `lesson-tracking`, `trade-context`, `goals`, `plan-draft`,
+  `note-search`, `ai-actions`.
 - Fork code they plug into (the chart section, not upstream): one `<BackgroundAlerts>` element in
   `app/charts/page.tsx`, and the process-wide feed map in `server/market-data/live.ts`.
 
