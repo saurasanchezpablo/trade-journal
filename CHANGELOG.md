@@ -80,6 +80,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Fixed
 
+- A trade's MAE and MFE are worked out whenever its candles load, without ticking the confirmation (which now only saves them for Reports): USDT or USDC candles count as dollars for a USD account, a manual crypto trade no longer needs a contract multiplier, and the price move against and in favour of the entry is shown even when the currencies differ; **Show fills only** / **Show candles** switch the chart without discarding the candles, and the fills-only chart draws a single-fill open trade instead of an empty box
 - A crypto trade's page shows its candles by itself when Binance, Bybit or Coinbase is enabled, however the symbol was written (BTC, BTCUSD, XBTUSD, BTC/USDT, BTCUSDT.P); candles now include the market before the entry and after the exit, open trades show candles up to now, and a coin booked as a CFD (a broker's BTCUSD) is no longer refused
 - Charts load faster: candle pages are fetched several at a time on a fixed grid (so older pages come from the server's cache when a chart is reopened), public exchanges are no longer throttled like keyed brokers, Binance symbol details are cached, the chart engine downloads while the page loads, and the symbol search no longer downloads an exchange's whole listing before you use it
 - Charts pan and zoom smoothly with drawings on them: drawings sit over the candles instead of being re-uploaded to the graphics card on every frame (a drawing sent to the back still goes under)

@@ -17,11 +17,19 @@ by default. No API key or provider history is shipped with the project.
    allowance. Candles start well before the entry and run past the exit (at least 30
    candles, or a quarter of the trade's length, either side); an open trade's run up to
    now. Replay supports restart, play/pause, step, speed and scrubbing.
-4. To enable monetary excursion estimates, first verify that the provider's
-   instrument, price adjustment basis and quote currency match the executions and
-   account currency. Derivatives also require a contract multiplier in Settings.
+4. MAE and MFE are worked out whenever candles load: in money when the candles' quote
+   currency is the account's (for a USD account, USDT, USDC and other dollar stablecoins
+   count as dollars, with a note), and always as the price move against and in favour of the
+   average entry, as a distance and a share of the entry. A coin on Binance, Bybit or
+   Coinbase counts one unit as one coin, so a manual trade without an asset class gets money
+   amounts too; derivatives still need a contract multiplier in Settings. To save the
+   estimate for Reports, confirm that the instrument, price adjustment basis and quote
+   currency match the executions and account, and load again; without the confirmation it
+   is shown, not saved. Fills more than 20% away from the candles withhold both.
 
 Before candles load, Vela displays a price path from recorded fills for every asset class.
+Once candles are loaded, **Show fills only** switches to that path and **Show candles** back,
+without loading again. An open trade with a single fill draws a line to now.
 
 ### Candles chosen for a trade
 
