@@ -12,7 +12,7 @@ import { AI_PROVIDER_NAMES } from "@/lib/ai-settings";
  */
 export const aiConfigured = (): boolean => getAiKey(getAiProvider()) !== null;
 
-const SYSTEM = `You are the reflection layer of a trader's journal.
+export const AI_SYSTEM = `You are the reflection layer of a trader's journal.
 You see only the trader's own recorded data — trades, stats, notes, and chart analyses they
 drew (sometimes as images). Ground every
 statement in those numbers; never invent trades, prices, or market context you weren't given.
@@ -20,12 +20,8 @@ Be direct and specific like a good trading coach: name the behavior, cite the nu
 say what to keep and what to fix. No platitudes, no disclaimers about trading being risky —
 the trader knows. Keep it tight.`;
 
-/** `images` are PNGs sent after the prompt, in order; the prompt should refer to them. */
-export const runAi = async (
-  prompt: string,
-  maxOutputTokens = 1200,
-  images: Buffer[] = [],
-): Promise<string> => {
+/** The configured provider's model and request options; throws when no key is set. */
+export const aiModel = () => {
   const provider = getAiProvider();
   const apiKey = getAiKey(provider);
   if (!apiKey) {
@@ -34,17 +30,64 @@ export const runAi = async (
     );
   }
   const model = getAiModel(provider);
+  return {
+    model:
+      provider === "openai"
+        ? createOpenAI({ apiKey }).responses(model)
+        : provider === "google"
+          ? createGoogleGenerativeAI({ apiKey })(model)
+          : createAnthropic({ apiKey })(model),
+    ...(provider === "openai" ? { providerOptions: { openai: { store: false } } } : {}),
+  };
+};
+
+/**
+ * A provider failure as a message safe to show. Provider error messages can contain key
+ * fragments or request data, so they are never relayed.
+ */
+export function aiFailure(error: unknown): Error {
+  if (RetryError.isInstance(error)) error = error.lastError;
+  if (APICallError.isInstance(error)) {
+    // Gemini answers a wrong key with 400 "API key not valid" rather than 401.
+    if (
+      error.statusCode === 401 ||
+      error.statusCode === 403 ||
+      /API key not valid|API_KEY_INVALID/i.test(error.message)
+    )
+      return new Error(
+        "AI authentication_error: check your provider key and permissions in Settings.",
+      );
+    if (
+      /credit balance|billing|insufficient_quota|exceeded your current quota|billing account/i.test(
+        error.message,
+      )
+    )
+      return new Error("AI billing: check your provider account's credits and quota.");
+    if (error.statusCode === 429 || error.statusCode === 529)
+      return new Error("AI rate limit: please try again shortly.");
+    if (
+      error.statusCode === 404 ||
+      /model.*(?:not found|does not exist|access)/i.test(error.message)
+    )
+      return new Error(
+        "AI model unavailable: check the model ID and your provider access in Settings.",
+      );
+  }
+  return new Error("AI request failed. Check your provider settings or try again shortly.");
+}
+
+/** `images` are PNGs sent after the prompt, in order; the prompt should refer to them. */
+export const runAi = async (
+  prompt: string,
+  maxOutputTokens = 1200,
+  images: Buffer[] = [],
+): Promise<string> => {
+  const model = aiModel();
   let result: Awaited<ReturnType<typeof generateText>>;
   try {
     result = await generateText({
-      model:
-        provider === "openai"
-          ? createOpenAI({ apiKey }).responses(model)
-          : provider === "google"
-            ? createGoogleGenerativeAI({ apiKey })(model)
-            : createAnthropic({ apiKey })(model),
-      ...(provider === "openai" ? { providerOptions: { openai: { store: false } } } : {}),
-      system: SYSTEM,
+      ...model,
+      system: AI_SYSTEM,
       ...(images.length
         ? {
             messages: [
@@ -65,35 +108,7 @@ export const runAi = async (
       maxOutputTokens,
     });
   } catch (error) {
-    if (RetryError.isInstance(error)) error = error.lastError;
-    // Provider error messages can contain key fragments or request data. Never relay them.
-    if (APICallError.isInstance(error)) {
-      // Gemini answers a wrong key with 400 "API key not valid" rather than 401.
-      if (
-        error.statusCode === 401 ||
-        error.statusCode === 403 ||
-        /API key not valid|API_KEY_INVALID/i.test(error.message)
-      )
-        throw new Error(
-          "AI authentication_error: check your provider key and permissions in Settings.",
-        );
-      if (
-        /credit balance|billing|insufficient_quota|exceeded your current quota|billing account/i.test(
-          error.message,
-        )
-      )
-        throw new Error("AI billing: check your provider account's credits and quota.");
-      if (error.statusCode === 429 || error.statusCode === 529)
-        throw new Error("AI rate limit: please try again shortly.");
-      if (
-        error.statusCode === 404 ||
-        /model.*(?:not found|does not exist|access)/i.test(error.message)
-      )
-        throw new Error(
-          "AI model unavailable: check the model ID and your provider access in Settings.",
-        );
-    }
-    throw new Error("AI request failed. Check your provider settings or try again shortly.");
+    throw aiFailure(error);
   }
   // Checked outside the request's error handling, so its own message reaches the user.
   if (!result.text.trim())

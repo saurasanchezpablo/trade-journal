@@ -18,24 +18,14 @@ export function isDay(value: unknown): value is string {
   );
 }
 
-/** Require an explicit filter snapshot; malformed scopes must never fall back to all trades. */
-export function readAiRequest(value: unknown, field: "question" | "date") {
-  requireValue(value && typeof value === "object" && !Array.isArray(value), "Invalid AI request");
-  const body = value as Record<string, unknown>;
-  requireValue(
-    Object.keys(body).every((key) =>
-      [field, "filters", "timeZone", ...(field === "date" ? ["includeAnalyses"] : [])].includes(
-        key,
-      ),
-    ),
-    "Unknown AI request field",
-  );
-  requireValue(
-    body.filters && typeof body.filters === "object" && !Array.isArray(body.filters),
-    "filters is required (use {} for all trades)",
-  );
+/**
+ * Journal filters from a request or an AI tool call, validated: unknown keys, malformed
+ * values and reversed ranges are rejected, never ignored.
+ */
+export function parseAiFilters(value: unknown): AnalysisFilters {
+  requireValue(value && typeof value === "object" && !Array.isArray(value), "Invalid filters");
   const filters: AnalysisFilters = {};
-  for (const [key, raw] of Object.entries(body.filters)) {
+  for (const [key, raw] of Object.entries(value)) {
     requireValue(
       FILTER_KEYS.includes(key as (typeof FILTER_KEYS)[number]),
       "Unknown journal filter",
@@ -84,6 +74,26 @@ export function readAiRequest(value: unknown, field: "question" | "date") {
       `Invalid ${key} range`,
     );
   }
+  return filters;
+}
+
+/** Require an explicit filter snapshot; malformed scopes must never fall back to all trades. */
+export function readAiRequest(value: unknown, field: "question" | "date") {
+  requireValue(value && typeof value === "object" && !Array.isArray(value), "Invalid AI request");
+  const body = value as Record<string, unknown>;
+  requireValue(
+    Object.keys(body).every((key) =>
+      [field, "filters", "timeZone", ...(field === "date" ? ["includeAnalyses"] : [])].includes(
+        key,
+      ),
+    ),
+    "Unknown AI request field",
+  );
+  requireValue(
+    body.filters && typeof body.filters === "object" && !Array.isArray(body.filters),
+    "filters is required (use {} for all trades)",
+  );
+  const filters = parseAiFilters(body.filters);
   const timeZone = getTimeZone();
   requireValue(
     body.timeZone === undefined || body.timeZone === timeZone,
