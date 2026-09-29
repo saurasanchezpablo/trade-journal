@@ -15,6 +15,8 @@ export async function runAiObject<T>(options: {
   read: (value: unknown) => T;
   maxOutputTokens?: number;
   images?: AiImage[];
+  /** A video the provider watches itself (Gemini reads public YouTube links). */
+  videoUrl?: string;
 }): Promise<T> {
   const model = aiModel();
   let value: unknown;
@@ -22,7 +24,23 @@ export async function runAiObject<T>(options: {
     const result = await generateText({
       ...model,
       system: AI_SYSTEM,
-      ...withImages(options.prompt, options.images ?? []),
+      ...(options.videoUrl
+        ? {
+            messages: [
+              {
+                role: "user" as const,
+                content: [
+                  { type: "text" as const, text: options.prompt },
+                  {
+                    type: "file" as const,
+                    data: new URL(options.videoUrl),
+                    mediaType: "video/mp4",
+                  },
+                ],
+              },
+            ],
+          }
+        : withImages(options.prompt, options.images ?? [])),
       output: Output.object({ schema: jsonSchema(options.schema), name: options.name }),
       maxOutputTokens: options.maxOutputTokens ?? 1500,
     });
