@@ -11,6 +11,7 @@ import { WeeklyReview } from "@/components/weekly-review";
 import { AiDigests } from "@/components/ai-digests";
 import { RecurringLessons } from "@/components/recurring-lessons";
 import { PeriodReviews } from "@/components/period-reviews";
+import { NoteSearch } from "@/components/note-search";
 import { Pnl } from "@/components/pnl";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -66,6 +67,7 @@ function Journal() {
         <WeeklyReview timeZone={timeZone} />
         <PeriodReviews timeZone={timeZone} />
         <RecurringLessons />
+        <NoteSearch />
         <AiDigests timeZone={timeZone} />
         <DayTypeStats />
         {error ? (

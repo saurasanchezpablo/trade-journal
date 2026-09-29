@@ -3,6 +3,7 @@ import { JournalChat } from "@/components/journal-chat";
 import { postAiStream } from "@/lib/ai-stream";
 import { TradeLabelSuggestions } from "@/components/label-suggestions";
 import { VoiceMemo } from "@/components/voice-memo";
+import { SimilarPast } from "@/components/note-search";
 import { tradeSnapshot } from "@/lib/trade-snapshot";
 import { AiNotice } from "@/components/ai-notice";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -326,6 +327,9 @@ function TradeView({ tradeKey }: { tradeKey: string }) {
                 <AiChartsUsed analyses={critiqueCharts} />
               </CardContent>
             )}
+            <CardContent>
+              <SimilarPast similarTo={{ tradeKey: trade.key }} label="Find similar past trades" />
+            </CardContent>
             <CardContent>
               <JournalChat
                 key={`${trade.key}:${timeZone}`}

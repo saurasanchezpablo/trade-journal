@@ -2,6 +2,7 @@
 import { AiRecap } from "@/components/ai-recap";
 import { JournalChat } from "@/components/journal-chat";
 import { VoiceMemo } from "@/components/voice-memo";
+import { SimilarPast } from "@/components/note-search";
 import { analysesUsedMarkdown } from "@/components/ai-charts-option";
 import { DayAnalyses } from "@/components/day-analyses";
 import { dayKeyOf } from "@luxalgo/journal-core";
@@ -295,6 +296,9 @@ function JournalDay({ date }: { date: string }) {
             <CardTitle>Ask about this day</CardTitle>
           </CardHeader>
           <CardContent>
+            <div className="mb-3">
+              <SimilarPast similarTo={{ date }} label="Find similar past days" />
+            </div>
             <JournalChat
               key={`${date}:${timeZone}:${query}`}
               target={{ kind: "day", date, filters, timeZone }}

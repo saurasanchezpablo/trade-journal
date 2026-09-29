@@ -30,6 +30,7 @@ const analysesRoute = await import("../src/app/api/analyses/route");
 const { importCsvDataset } = await import("../src/server/market-data/csv");
 const chartLevels = await import("../src/app/api/ai/chart-levels/route");
 const { decodeImageDataUrl } = await import("../src/server/ai-images");
+const notesSearch = await import("../src/app/api/notes-search/route");
 const playbookCheck = await import("../src/app/api/ai/playbook-check/route");
 
 const post = (route: { POST: (r: Request) => Promise<Response> }, body: unknown) =>
@@ -559,5 +560,75 @@ describe("levels read from a chart screenshot", () => {
     expect(sent).toContain('"media_type":"image/jpeg"');
     expect(sent).toContain("should be ES");
     expect((await post(chartLevels, { image: "data:text/plain;base64,aGk=" })).status).toBe(400);
+  });
+});
+
+describe("searching notes", () => {
+  const notesFor = () => {
+    db.insert(journalDays)
+      .values([
+        {
+          date: "2026-09-01",
+          note: "I hesitated and could not pull the trigger after the stop-out.",
+          updatedAt: "x",
+        },
+        {
+          date: "2026-09-02",
+          note: "Clean breakout, sized right, followed the plan.",
+          updatedAt: "x",
+        },
+        { date: "2026-09-15", note: "Froze again after a loss today.", updatedAt: "x" },
+      ])
+      .run();
+  };
+  /** OpenAI embeddings that put hesitation near freezing, and everything else apart. */
+  const embeddings = () => {
+    const calls: string[][] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init: RequestInit) => {
+        const input = (JSON.parse(String(init.body)) as { input: string[] }).input;
+        calls.push(input);
+        return Response.json({
+          object: "list",
+          model: "text-embedding-3-small",
+          data: input.map((text, index) => ({
+            object: "embedding",
+            index,
+            embedding: /froze|hesitat|trigger/i.test(text) ? [1, 0.1, 0] : [0, 1, 0.2],
+          })),
+          usage: { prompt_tokens: 1, total_tokens: 1 },
+        });
+      }),
+    );
+    return calls;
+  };
+  const search = async (body: unknown) => (await post(notesSearch, body)).json();
+
+  it("find a past day by meaning, and embed each passage once", async () => {
+    notesFor();
+    setSetting("aiProvider", "openai");
+    vi.stubEnv("OPENAI_API_KEY", "fixture-openai-key");
+    const calls = embeddings();
+    const found = await search({ query: "freezing up" });
+    expect(found.mode).toBe("meaning");
+    const indexed = calls.flat().length;
+    // Three day notes and the question.
+    expect(indexed).toBe(4);
+    const similar = await search({ similarTo: { date: "2026-09-15" } });
+    // The day itself is left out; the hesitation day is the match.
+    expect(similar.results.map((r: { id: string }) => r.id)).toEqual(["2026-09-01"]);
+    // Only the question was embedded the second time.
+    expect(calls.flat().length).toBe(indexed + 1);
+  });
+
+  it("search by words, on this server, when the provider has no embeddings", async () => {
+    notesFor();
+    const provider = script();
+    const result = await search({ query: "breakout plan" });
+    expect(result.mode).toBe("words");
+    expect(result.note).toMatch(/Anthropic has no embeddings/);
+    expect(result.results[0].id).toBe("2026-09-02");
+    expect(provider.fetcher).not.toHaveBeenCalled();
   });
 });

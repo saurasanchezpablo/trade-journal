@@ -27,6 +27,7 @@ import { connectionKey, providerFor } from "../market-data/connections";
 import { queryTrades, type TradeRow } from "../trades-query";
 import { candleSource, tradeMarketContext } from "../trade-context";
 import { lessonHistory } from "../lessons";
+import { searchNotes } from "../note-search";
 import { describeLesson } from "@/lib/lesson-tracking";
 
 /**
@@ -747,6 +748,41 @@ export function journalTools({ scope, signal }: ToolContext): ToolSet {
       }),
     }),
 
+    search_notes: tool({
+      description:
+        "Search the trader's own notes (day notes, trade notes, notebook) by meaning, for past situations like the one asked about. Returns the best passages with where they come from. A filtered conversation searches only the notes of trades in scope.",
+      inputSchema: jsonSchema<{ query: string; limit?: number }>({
+        type: "object",
+        properties: {
+          query: { type: "string", description: "What to look for, in plain words." },
+          limit: { type: "integer", minimum: 1, maximum: 10 },
+        },
+        required: ["query"],
+        additionalProperties: false,
+      }),
+      execute: safe(async (input: { query?: unknown; limit?: unknown }) => {
+        if (typeof input.query !== "string" || !input.query.trim())
+          throw new RequestError("query is required");
+        const shared = sharedScope(scope);
+        const found = await searchNotes(input.query.slice(0, 2000), {
+          limit: integer(input.limit, 6, 1, 10),
+          withShared: shared,
+          tradeKeys: shared ? undefined : new Set(data().trades.map((t) => t.key)),
+          signal,
+        });
+        return {
+          searchedBy: found.mode,
+          ...(found.note ? { note: found.note } : {}),
+          results: found.results.map((r) => ({
+            from: r.kind === "day" ? "day note" : r.kind === "trade" ? "trade note" : "notebook",
+            title: r.title,
+            date: r.date,
+            passage: r.snippet,
+          })),
+        };
+      }),
+    }),
+
     list_chart_analyses: tool({
       description:
         "The trader's saved chart analyses (drawings, zones, plans), newest first, optionally for one symbol or journal day. Use get_chart_analysis for one in full.",
@@ -850,6 +886,8 @@ export function toolLabel(name: string, input: unknown): string {
       return `Read the journal day ${typeof record.date === "string" ? record.date : ""}`.trim();
     case "recurring_lessons":
       return "Read your recurring lessons";
+    case "search_notes":
+      return "Searched your notes";
     case "list_chart_analyses":
       return "Listed chart analyses";
     case "get_chart_analysis":
