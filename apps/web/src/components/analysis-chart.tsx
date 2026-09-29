@@ -43,6 +43,7 @@ import { markLegacyPatterns } from "@/lib/pattern-fixes";
 import { markLegacyFibs } from "@/lib/fib-direction";
 import { liftDrawingDepth } from "@/lib/drawing-depth";
 import { keepDrawingsOverSeries } from "./vela-depth-fix";
+import { clipOffscreenDashes } from "./vela-dash-fix";
 import {
   isColor,
   mergeStyle,
@@ -584,6 +585,8 @@ export function AnalysisChart({
       instance.data.registerProvider(name, feed);
       // Drawings over the candles: under them, every frame re-uploads a full-chart texture.
       keepDrawingsOverSeries(instance);
+      // Zoomed in, dashed lines with far-off ends drew millions of dashes a frame.
+      clipOffscreenDashes(instance.renderer);
       patchVisibleRangeProfile(instance.renderer);
       // Vela registers its native indicators on construction: give the VWAP its sessions again.
       patchNativeVwap(vela);

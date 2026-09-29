@@ -18,6 +18,7 @@ import { fmtMoney, fmtNumber, fmtPercent } from "@/lib/utils";
 import { TradeChart, type ChartExecution, type ChartTrade } from "./trade-chart";
 import { registerTradeSnapshot } from "@/lib/trade-snapshot";
 import { usePrivacy } from "./privacy";
+import { clipOffscreenDashes } from "./vela-dash-fix";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Input } from "./ui/input";
@@ -758,6 +759,7 @@ function ReplayChart({
         drawings: false,
       });
       chart.current = instance;
+      clipOffscreenDashes(instance.renderer);
       const unregister = registerTradeSnapshot(tradeKey, () => instance.renderer.screenshot());
       frame.current = latest.current;
       instance.addNativeIndicator(type);

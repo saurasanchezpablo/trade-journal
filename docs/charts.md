@@ -147,6 +147,13 @@ every frame (each pan, zoom and live tick), which with a few drawings cost about
 the frame rate. Analyses saved with Vela's old default (just under the candles) open with
 their drawings over the candles, in the same order among themselves.
 
+Dashed and dotted lines (drawings, and indicator lines such as a trade's entry-to-exit line)
+are stroked only where they are on screen. The browser draws every dash of a line, even off
+screen, and zoomed in a trend line between distant candles or a steep ray runs for millions
+of pixels: panning dropped from 60 to about 17 frames a second. The visible part is drawn
+with the dash moved by the length cut off, so the dashes sit exactly where they did
+(`lib/dash-clip.ts`, applied to Vela's painters by `components/vela-dash-fix.ts`).
+
 ## Layers and folders
 
 Folders hold layers, and layers hold drawings. The **Layers** panel is docked beside the chart

@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { fmtMoney } from "@/lib/utils";
 import { usePrivacy } from "./privacy";
 import { EquityArea } from "./charts/equity-area";
+import { clipOffscreenDashes } from "./vela-dash-fix";
 
 export interface ChartExecution {
   side: "buy" | "sell";
@@ -232,6 +233,7 @@ function PriceChart({
         priceStyle: "line",
         data: pathPoints(sorted, closeMs),
       });
+      clipOffscreenDashes(chart.renderer);
       let indicator = chart.addNativeIndicator(type);
       const themeObserver = new MutationObserver(() => {
         const nextDark = document.documentElement.classList.contains("dark");
