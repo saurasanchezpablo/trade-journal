@@ -24,6 +24,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   X,
+  MonitorPlay,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { LuxAlgoMark } from "@/components/luxalgo-mark";
@@ -39,6 +40,7 @@ const NAV = [
   { href: "/calendar", label: "Calendar", icon: CalendarDays },
   { href: "/journal", label: "Daily journal", icon: NotebookPen },
   { href: "/charts", label: "Charts", icon: CandlestickChart },
+  { href: "/external", label: "External analysis", icon: MonitorPlay },
   { href: "/trades", label: "Trades", icon: ListOrdered },
   { href: "/reports", label: "Reports", icon: BarChart3 },
   { href: "/prop-firms", label: "Prop firms", icon: Landmark },

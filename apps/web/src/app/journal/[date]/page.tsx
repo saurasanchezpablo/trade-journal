@@ -3,6 +3,7 @@ import { AiRecap } from "@/components/ai-recap";
 import { JournalChat } from "@/components/journal-chat";
 import { VoiceMemo } from "@/components/voice-memo";
 import { SimilarPast } from "@/components/note-search";
+import { ExternalOpinions } from "@/components/external-opinions";
 import { analysesUsedMarkdown } from "@/components/ai-charts-option";
 import { DayAnalyses } from "@/components/day-analyses";
 import { dayKeyOf } from "@luxalgo/journal-core";
@@ -291,6 +292,15 @@ function JournalDay({ date }: { date: string }) {
             <Attachments type="day" id={date} />
           </CardContent>
         </Card>
+        <ExternalOpinions
+          date={date}
+          note={noteValue}
+          onAdd={(markdown) =>
+            scheduleSave(
+              latestNote.current ? `${latestNote.current}\n\n---\n\n${markdown}` : markdown,
+            )
+          }
+        />
         <Card>
           <CardHeader>
             <CardTitle>Ask about this day</CardTitle>

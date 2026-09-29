@@ -6,7 +6,9 @@ import { join } from "node:path";
 const originalDir = process.env.JOURNAL_DATA_DIR;
 const scratch = mkdtempSync(join(tmpdir(), "journal-external-"));
 process.env.JOURNAL_DATA_DIR = scratch;
-const { db, settings } = await import("../src/db");
+const { db, settings, journalDays } = await import("../src/db");
+const { readAiRequest } = await import("../src/server/ai-scope");
+const { journalTools } = await import("../src/server/ai-agent/tools");
 const { setSetting } = await import("../src/server/settings");
 const { youtubeTransport } = await import("../src/server/external-analysis/youtube");
 const store = await import("../src/server/external-analysis/store");
@@ -56,6 +58,7 @@ beforeEach(async () => {
   vi.stubEnv("ANTHROPIC_API_KEY", "fixture-anthropic-key");
   store.client().exec("DELETE FROM external_videos; DELETE FROM external_channels;");
   db.delete(settings).run();
+  db.delete(journalDays).run();
   setSetting("timeZone", "UTC");
   requests.length = 0;
   videos = [
@@ -443,5 +446,76 @@ describe("settings", () => {
       { other: 1 },
     ])
       expect((await put(bad)).status, JSON.stringify(bad)).toBe(400);
+  });
+});
+
+describe("an external opinion in the journal", () => {
+  const summarised = async () => {
+    const channel = store.addChannel({ channelId: CHANNEL, title: "Crypto Banter", url: "x" });
+    store.markChannelChecked(channel.id, null);
+    videos = [videos[0]!];
+    script(() => anthropicMessage(JSON.stringify(summary)));
+    await runCheck({ deps });
+  };
+  const addToDay = (date: string) =>
+    videoRoute.POST(
+      new Request("http://localhost", {
+        method: "POST",
+        body: JSON.stringify({ action: "add-to-day", date }),
+      }),
+      { params: Promise.resolve({ id: "NEWEST00001" }) },
+    );
+
+  it("is added to a day's note once, after what is already there", async () => {
+    await summarised();
+    db.insert(journalDays)
+      .values({ date: "2026-09-29", note: "My own plan: wait for 64k.", updatedAt: "x" })
+      .run();
+    expect(await (await addToDay("2026-09-29")).json()).toEqual({
+      added: true,
+      date: "2026-09-29",
+    });
+    const note = db.select().from(journalDays).all()[0]!.note;
+    expect(
+      note.startsWith("My own plan: wait for 64k.\n\n---\n\n## External opinion: Crypto Banter"),
+    ).toBe(true);
+    expect(note).toContain("**Main scenario: Push to 70k** (long, BTC)");
+    expect(note).toContain("- BTC long from 63200, stop 61400, take profit 70000");
+    expect(await (await addToDay("2026-09-29")).json()).toMatchObject({ added: false });
+    // A day with no note yet gets the section alone.
+    await addToDay("2026-09-30");
+    expect(
+      db
+        .select()
+        .from(journalDays)
+        .all()
+        .find((d) => d.date === "2026-09-30")!
+        .note.startsWith("## External opinion"),
+    ).toBe(true);
+  });
+
+  it("is read by the AI chat as someone else's opinion", async () => {
+    await summarised();
+    vi.useFakeTimers({ now: NOW, toFake: ["Date"] });
+    try {
+      const scope = readAiRequest({ question: "q", filters: {}, timeZone: "UTC" }, "question");
+      const run = (input: unknown) =>
+        journalTools({ scope }).external_opinions!.execute!(
+          input as never,
+          { toolCallId: "t", messages: [] } as never,
+        ) as Promise<{
+          opinions: { channel: string; summary: { mainScenario: { title: string } } }[];
+        }>;
+      const all = await run({});
+      expect(all.opinions).toHaveLength(1);
+      expect(all.opinions[0]).toMatchObject({
+        channel: "Crypto Banter",
+        summary: { mainScenario: { title: "Push to 70k" } },
+      });
+      expect((await run({ instrument: "ETH" })).opinions).toEqual([]);
+      expect((await run({ instrument: "BTCUSDT" })).opinions).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

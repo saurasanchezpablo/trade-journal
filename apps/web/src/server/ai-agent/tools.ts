@@ -28,6 +28,8 @@ import { queryTrades, type TradeRow } from "../trades-query";
 import { candleSource, tradeMarketContext } from "../trade-context";
 import { lessonHistory } from "../lessons";
 import { searchNotes } from "../note-search";
+import { listVideos } from "../external-analysis/store";
+import { dayWindow } from "@/lib/day-window";
 import { describeLesson } from "@/lib/lesson-tracking";
 
 /**
@@ -783,6 +785,58 @@ export function journalTools({ scope, signal }: ToolContext): ToolSet {
       }),
     }),
 
+    external_opinions: tool({
+      description:
+        "Summaries of YouTube analyses from the channels the trader follows (External analysis): each video's bias, main and secondary scenario with reasons, the author's open trades, trade ideas with entry, stop and take profits, and key levels. These are other people's opinions, not the trader's.",
+      inputSchema: jsonSchema<{ from?: string; to?: string; instrument?: string }>({
+        type: "object",
+        properties: {
+          from: {
+            type: "string",
+            description: "First local day, YYYY-MM-DD. Default: 7 days before `to`.",
+          },
+          to: { type: "string", description: "Last local day, YYYY-MM-DD. Default: today." },
+          instrument: {
+            type: "string",
+            description: "Only summaries that discuss this (e.g. BTC).",
+          },
+        },
+        additionalProperties: false,
+      }),
+      execute: safe((input: { from?: unknown; to?: unknown; instrument?: unknown }) => {
+        const day = (v: unknown) =>
+          typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
+        const to = day(input.to) ?? dayKeyOf(new Date().toISOString(), tz);
+        const from =
+          day(input.from) ??
+          new Date(Date.parse(`${to}T12:00:00Z`) - 6 * 86_400_000).toISOString().slice(0, 10);
+        const want = typeof input.instrument === "string" ? symbolKey(input.instrument) : "";
+        const videos = listVideos({
+          from: new Date(dayWindow(from, tz).from).toISOString(),
+          to: new Date(dayWindow(to, tz).to).toISOString(),
+          statuses: ["summarized"],
+          limit: 30,
+        }).filter(
+          (v) =>
+            !want ||
+            (v.summary?.instruments ?? []).some(
+              (i) => symbolKey(i).includes(want) || want.includes(symbolKey(i)),
+            ),
+        );
+        return {
+          from,
+          to,
+          opinions: videos.map((v) => ({
+            channel: v.channelTitle,
+            title: v.title,
+            published: v.publishedAt,
+            day: dayKeyOf(v.publishedAt, tz),
+            summary: v.summary,
+          })),
+        };
+      }),
+    }),
+
     list_chart_analyses: tool({
       description:
         "The trader's saved chart analyses (drawings, zones, plans), newest first, optionally for one symbol or journal day. Use get_chart_analysis for one in full.",
@@ -888,6 +942,8 @@ export function toolLabel(name: string, input: unknown): string {
       return "Read your recurring lessons";
     case "search_notes":
       return "Searched your notes";
+    case "external_opinions":
+      return "Read the external analysis";
     case "list_chart_analyses":
       return "Listed chart analyses";
     case "get_chart_analysis":
