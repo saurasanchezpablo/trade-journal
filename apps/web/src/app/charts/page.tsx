@@ -23,6 +23,7 @@ import {
 import { dayKeyOf } from "@luxalgo/journal-core";
 import {
   AnalysisChart,
+  preloadChartEngine,
   type AnalysisChartHandle,
   type ChartDrawing,
 } from "@/components/analysis-chart";
@@ -141,6 +142,8 @@ import type { CalendarState } from "@/lib/economic-calendar";
 import { zoneEvents, zoneFromClicks, type SrZone, type ZoneStats } from "@/lib/sr-zones";
 
 export default function ChartsPage() {
+  // The chart engine downloads while the page's settings and analysis load.
+  useEffect(() => preloadChartEngine(), []);
   return (
     <Suspense>
       <ChartLab />

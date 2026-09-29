@@ -41,6 +41,8 @@ import { cn } from "@/lib/utils";
 import { TOOLBAR_SHOWN, toolbarPreference, type ToolbarHidden } from "@/lib/chart-toolbar";
 import { markLegacyPatterns } from "@/lib/pattern-fixes";
 import { markLegacyFibs } from "@/lib/fib-direction";
+import { liftDrawingDepth } from "@/lib/drawing-depth";
+import { keepDrawingsOverSeries } from "./vela-depth-fix";
 import {
   isColor,
   mergeStyle,
@@ -140,6 +142,16 @@ export type DrawingPatch = {
     style?: Record<string, unknown>;
   };
 };
+
+/**
+ * Start downloading the chart engine (Vela and the Pine indicator engine, about half a
+ * megabyte) before the chart is shown: call it when the Charts page mounts, while the saved
+ * analysis and settings load, instead of waiting for them. Loading twice is free.
+ */
+export function preloadChartEngine(): void {
+  void import("@luxalgo/vela").catch(() => {});
+  void import("@luxalgo/vela-pinets").catch(() => {});
+}
 
 export interface AnalysisChartHandle {
   drawings(): DrawingsDocument;
@@ -570,6 +582,8 @@ export function AnalysisChart({
         if (chart.current === instance) chart.current = null;
       });
       instance.data.registerProvider(name, feed);
+      // Drawings over the candles: under them, every frame re-uploads a full-chart texture.
+      keepDrawingsOverSeries(instance);
       patchVisibleRangeProfile(instance.renderer);
       // Vela registers its native indicators on construction: give the VWAP its sessions again.
       patchNativeVwap(vela);
@@ -590,7 +604,7 @@ export function AnalysisChart({
       instance.setTheme(theme);
       applyLook(instance);
       applyDrawingPrefs(instance, appearanceRef.current);
-      instance.drawings.fromJSON(markLegacyFibs(markLegacyPatterns(drawings)));
+      instance.drawings.fromJSON(liftDrawingDepth(markLegacyFibs(markLegacyPatterns(drawings))));
       applyLayers(instance, layersRef.current);
       publish(instance);
       const indicators = createIndicatorBridge(instance, {

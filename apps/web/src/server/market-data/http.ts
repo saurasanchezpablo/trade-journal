@@ -32,7 +32,7 @@ export async function readJson(
   url: string,
   headers: Record<string, string> = {},
   signal?: AbortSignal,
-  options: { cache?: boolean; timeoutMs?: number } = {},
+  options: { cache?: boolean; timeoutMs?: number; ttlMs?: number } = {},
 ): Promise<unknown> {
   try {
     return await marketTransport.read(url, headers, signal, options);
@@ -93,25 +93,47 @@ export function result(
   };
 }
 
-/** Fixed time windows below each API's candle cap, including empty sessions. */
+/** Pages of one history request fetched at once; the transport still paces each host. */
+export const PAGE_CONCURRENCY = 4;
+
+/**
+ * Fixed time windows below each API's candle cap, including empty sessions. Windows sit on
+ * a grid of whole pages from the epoch, not from the request's start, so the same page is
+ * the same URL from one request to the next and older pages come from the transport's cache
+ * (a chart reopened, or a timeframe switched back). Pages are fetched a few at a time.
+ */
 export async function windows(
   request: HistoryRequest,
   size: number,
   read: (from: number, to: number, signal: AbortSignal) => Promise<MarketBar[]>,
 ) {
   const step = RESOLUTIONS[request.resolution];
-  let cursor = Math.floor(request.from / step) * step;
+  const from = Math.floor(request.from / step) * step;
   const end = Math.ceil(request.to / step) * step;
-  const bars: MarketBar[] = [];
+  const page = size * step;
+  const first = Math.floor(from / page);
+  const last = Math.ceil(end / page) - 1;
+  const total = Math.max(0, last - first + 1);
+  // The newest pages matter most (a chart shows the end first): beyond the caps, the oldest go.
+  const count = Math.min(total, MAX_PAGES, Math.ceil(MAX_BARS / size) + 1);
+  const wanted: { from: number; to: number }[] = [];
+  for (let index = last - count + 1; index <= last; index += 1)
+    wanted.push({ from: Math.max(index * page, from), to: Math.min((index + 1) * page, end) });
   const signal = boundedSignal(request.signal);
-  let pages = 0;
-  while (cursor < end && pages++ < MAX_PAGES && bars.length < MAX_BARS) {
-    const to = Math.min(end, cursor + size * step);
-    const rows = await read(cursor, to, signal);
-    if (rows.some((bar) => bar.time % step !== 0))
-      throw new MarketDataError("Provider returned candles at an unexpected resolution.");
-    bars.push(...rows.filter((bar) => bar.time >= cursor && bar.time < to));
-    cursor = to;
-  }
-  return { bars, truncated: cursor < end };
+  const results: MarketBar[][] = new Array(wanted.length);
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(PAGE_CONCURRENCY, wanted.length) }, async () => {
+      while (next < wanted.length) {
+        const index = next++;
+        const span = wanted[index]!;
+        const rows = await read(span.from, span.to, signal);
+        if (rows.some((bar) => bar.time % step !== 0))
+          throw new MarketDataError("Provider returned candles at an unexpected resolution.");
+        results[index] = rows.filter((bar) => bar.time >= span.from && bar.time < span.to);
+      }
+    }),
+  );
+  const bars = results.flat().slice(-MAX_BARS);
+  return { bars, truncated: count < total || results.flat().length > MAX_BARS };
 }

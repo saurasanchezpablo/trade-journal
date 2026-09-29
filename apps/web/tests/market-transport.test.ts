@@ -61,6 +61,7 @@ describe("bounded market transport", () => {
       active++;
       peak = Math.max(peak, active);
       perHost.set(host, (perHost.get(host) ?? 0) + 1);
+      // Hosts without their own limit take two requests at a time.
       expect(perHost.get(host)).toBeLessThanOrEqual(2);
       await new Promise((resolve) => setTimeout(resolve, 5));
       active--;
@@ -77,7 +78,7 @@ describe("bounded market transport", () => {
     controller.abort();
     await cancelled;
     await Promise.all(work);
-    expect(peak).toBe(6);
+    expect(peak).toBe(8);
     expect(fetcher).toHaveBeenCalledTimes(20);
   });
   it("expires old and recent data and bypasses cache for connection tests", async () => {
@@ -88,7 +89,11 @@ describe("bounded market transport", () => {
     await transport.read(url);
     await transport.read(url, {}, undefined, { cache: false });
     expect(fetcher).toHaveBeenCalledTimes(2);
+    // Old candles never change: an hour later they are fetched again, not before.
     await vi.advanceTimersByTimeAsync(300_001);
+    await transport.read(url);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(3_300_000);
     await transport.read(url);
     expect(fetcher).toHaveBeenCalledTimes(3);
     const recent = "https://example.test/latest";
@@ -134,10 +139,40 @@ describe("bounded market transport", () => {
     const transport = createMarketTransport({ minIntervalMs: 0 });
     const fetcher = vi.fn(async () => Response.json({ ok: true }));
     vi.stubGlobal("fetch", fetcher);
-    for (let i = 0; i < 129; i++) await transport.read(`${url}&id=${i}`);
-    await transport.read(`${url}&id=128`);
-    expect(fetcher).toHaveBeenCalledTimes(129);
+    for (let i = 0; i < 513; i++) await transport.read(`${url}&id=${i}`);
+    await transport.read(`${url}&id=512`);
+    expect(fetcher).toHaveBeenCalledTimes(513);
     await transport.read(`${url}&id=0`);
-    expect(fetcher).toHaveBeenCalledTimes(130);
+    expect(fetcher).toHaveBeenCalledTimes(514);
+  });
+});
+
+describe("exchange limits", () => {
+  it("let public exchange APIs take more requests at once, with their own pacing", async () => {
+    const transport = createMarketTransport({
+      minIntervalMs: 0,
+      limits: { "fast.test": { concurrent: 4, intervalMs: 0 } },
+    });
+    let active = 0;
+    const peaks = new Map<string, number>();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (address: string) => {
+        const host = new URL(address).host;
+        active++;
+        peaks.set(host, Math.max(peaks.get(host) ?? 0, active));
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        active--;
+        return Response.json({ ok: true });
+      }),
+    );
+    await Promise.all(
+      Array.from({ length: 8 }, (_, i) => transport.read(`https://fast.test/${i}`)),
+    );
+    await Promise.all(
+      Array.from({ length: 8 }, (_, i) => transport.read(`https://slow.test/${i}`)),
+    );
+    expect(peaks.get("fast.test")).toBe(4);
+    expect(peaks.get("slow.test")).toBe(2);
   });
 });

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { FILTER_KEYS } from "@luxalgo/journal-core";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   BarChart3,
   BookOpen,
@@ -69,10 +69,18 @@ function NavLink({
   active: boolean;
   collapsed?: boolean;
 }) {
+  const router = useRouter();
+  // Prefetched when you point at it, not all at once on every page load: those server
+  // renders otherwise compete with the page's own requests (a chart's candles).
+  const warm = () => router.prefetch(href);
   return (
     <HoverHint content={collapsed ? label : null} side="right">
       <Link
         href={href}
+        prefetch={false}
+        onMouseEnter={warm}
+        onFocus={warm}
+        onTouchStart={warm}
         aria-current={active ? "page" : undefined}
         className={cn(
           "journal-sidebar-nav-link relative flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition-colors",

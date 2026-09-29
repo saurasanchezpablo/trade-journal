@@ -11,7 +11,9 @@ interface Match {
 /**
  * The chart's symbol field. For a source that lists its instruments, what you type is
  * searched there and matches are offered as you type (the browser's own suggestion list);
- * any exact symbol can still be typed.
+ * any exact symbol can still be typed. Nothing is searched until you focus the field or type:
+ * a source's listing is large (Binance's is several megabytes) and would otherwise be
+ * fetched with every chart that opens, competing with the chart's own candles.
  */
 export function SymbolSearchInput({
   id,
@@ -30,9 +32,10 @@ export function SymbolSearchInput({
 }) {
   const listId = useId();
   const [matches, setMatches] = useState<Match[]>([]);
+  const [engaged, setEngaged] = useState(false);
   const query = value.trim();
   useEffect(() => {
-    if (!searchable || !query) {
+    if (!searchable || !query || !engaged) {
       setMatches([]);
       return;
     }
@@ -51,7 +54,7 @@ export function SymbolSearchInput({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [searchable, provider, dataset, query]);
+  }, [searchable, provider, dataset, query, engaged]);
   return (
     <>
       <Input
@@ -61,7 +64,11 @@ export function SymbolSearchInput({
         autoCapitalize="characters"
         autoComplete="off"
         list={searchable ? listId : undefined}
-        onChange={(event) => onChange(event.target.value)}
+        onFocus={() => setEngaged(true)}
+        onChange={(event) => {
+          setEngaged(true);
+          onChange(event.target.value);
+        }}
       />
       {searchable && (
         <datalist id={listId}>

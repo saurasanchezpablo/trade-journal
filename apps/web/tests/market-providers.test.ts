@@ -4,7 +4,7 @@ import { alpaca } from "../src/server/market-data/alpaca";
 import { binance, coinbase } from "../src/server/market-data/public-crypto";
 import { oanda } from "../src/server/market-data/oanda";
 import { parseMarketCsv } from "../src/lib/market-csv";
-import { MAX_PAGES, readJson } from "../src/server/market-data/http";
+import { MAX_BARS, MAX_PAGES, readJson } from "../src/server/market-data/http";
 const from = Date.parse("2025-03-03T14:30:00Z");
 const request = { from, to: from + 120000, symbol: "BTC-USD", resolution: "1m" as const };
 const candle = { t: new Date(from).toISOString(), o: 100, h: 105, l: 95, c: 102, v: 1000 };
@@ -92,15 +92,42 @@ describe("market data adapters", () => {
     expect(data.quoteCurrency).toBe("USD");
     expect(data.truncated).toBe(false);
   });
-  it("caps long history and marks it truncated instead of estimating from an unfinished request", async () => {
-    const fetcher = vi.fn(async () => Response.json([]));
+  it("caps long history to its newest pages and marks it truncated", async () => {
+    const fetcher = vi.fn(async (_url: string) => Response.json([]));
     vi.stubGlobal("fetch", fetcher);
-    const data = await coinbase.history(
-      { ...request, to: from + 60_000 * 299 * (MAX_PAGES + 1) },
-      "",
+    const to = from + 60_000 * 299 * (MAX_PAGES + 1);
+    const data = await coinbase.history({ ...request, to }, "");
+    const pages = Math.ceil(MAX_BARS / 299) + 1;
+    expect(fetcher).toHaveBeenCalledTimes(pages);
+    // The pages kept are the newest ones: the last one ends at the request's end.
+    const ends = fetcher.mock.calls.map(([url]) =>
+      Date.parse(new URL(url).searchParams.get("end")!),
     );
-    expect(fetcher).toHaveBeenCalledTimes(MAX_PAGES);
+    expect(Math.max(...ends)).toBeGreaterThanOrEqual(to - 60_000);
     expect(data.truncated).toBe(true);
+  });
+
+  it("puts pages on a fixed grid, so a later request reuses the same page URLs", async () => {
+    const urls: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        urls.push(url);
+        return Response.json([]);
+      }),
+    );
+    const page = 60_000 * 299;
+    const base = Math.ceil(from / page) * page;
+    await coinbase.history({ ...request, from: base + 10 * 60_000, to: base + 2 * page }, "");
+    const first = [...urls];
+    urls.length = 0;
+    await coinbase.history({ ...request, from: base + 25 * 60_000, to: base + 2 * page }, "");
+    // The whole second page is the same URL both times, so the transport cache answers it:
+    // only the (different) partial first page is fetched again.
+    const full = `end=${encodeURIComponent(new Date(base + 2 * page).toISOString())}`;
+    expect(first.filter((u) => u.includes(full))).toHaveLength(1);
+    expect(urls).toHaveLength(1);
+    expect(urls[0]).not.toContain(full);
   });
   it("uses Binance's public data host and preserves the quote asset", async () => {
     const fetcher = vi.fn(async (url: string) =>
@@ -118,6 +145,26 @@ describe("market data adapters", () => {
       fetcher.mock.calls.every(([url]) => url.startsWith("https://data-api.binance.vision/")),
     ).toBe(true);
   });
+  it("asks Binance for the symbol and its candles at once, and names an unknown symbol", async () => {
+    let inFlight = 0;
+    let peak = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        inFlight++;
+        peak = Math.max(peak, inFlight);
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        inFlight--;
+        if (url.includes("exchangeInfo")) return Response.json({ symbols: [] });
+        return new Response("{}", { status: 400 });
+      }),
+    );
+    await expect(binance.history({ ...request, symbol: "NOPEUSDT" }, "")).rejects.toThrow(
+      "Binance spot symbol not found.",
+    );
+    expect(peak).toBeGreaterThanOrEqual(2);
+  });
+
   it("keeps the candle still forming only for a live chart, never for estimates", async () => {
     const now = Date.now();
     const minute = Math.floor(now / 60_000) * 60_000;
@@ -228,4 +275,6 @@ describe("market CSV parser", () => {
 
 afterEach(() => marketTransport.clear());
 
-beforeEach(() => Object.assign(marketTransport, createMarketTransport({ minIntervalMs: 0 })));
+beforeEach(() =>
+  Object.assign(marketTransport, createMarketTransport({ minIntervalMs: 0, limits: {} })),
+);

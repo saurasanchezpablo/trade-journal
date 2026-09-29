@@ -305,4 +305,6 @@ describe("replay without future chart data", () => {
 
 afterEach(() => marketTransport.clear());
 
-beforeEach(() => Object.assign(marketTransport, createMarketTransport({ minIntervalMs: 0 })));
+beforeEach(() =>
+  Object.assign(marketTransport, createMarketTransport({ minIntervalMs: 0, limits: {} })),
+);

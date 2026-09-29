@@ -17,40 +17,47 @@ export const binance: MarketDataProvider = {
       throw new MarketDataError("Use a Binance spot symbol such as BTCUSDT.");
     if (request.dataset)
       throw new MarketDataError("Binance uses spot candles; leave the dataset blank.");
-    const info = record(
-      await readJson(
+    // The symbol's details (its quote asset) and its candles are fetched at once; the details
+    // are kept for an hour, so a chart's later requests only wait for candles.
+    const [infoResult, historyResult] = await Promise.allSettled([
+      readJson(
         `${BINANCE}/api/v3/exchangeInfo?symbol=${encodeURIComponent(request.symbol)}`,
         {},
         request.signal,
-      ),
-    );
-    const market = array(info.symbols)
+        { ttlMs: 3_600_000 },
+      ).then(record),
+      windows(request, 999, async (from, to, signal) => {
+        const query = new URLSearchParams({
+          symbol: request.symbol,
+          interval: request.resolution,
+          startTime: String(from),
+          endTime: String(to - 1),
+          limit: "1000",
+        });
+        return validateBars(
+          array(await readJson(`${BINANCE}/api/v3/klines?${query}`, {}, signal)).map((item) => {
+            const row = array(item);
+            return {
+              time: number(row[0]),
+              open: number(row[1]),
+              high: number(row[2]),
+              low: number(row[3]),
+              close: number(row[4]),
+              volume: number(row[5]),
+            };
+          }),
+        );
+      }),
+    ]);
+    if (infoResult.status === "rejected") throw infoResult.reason;
+    const market = array(infoResult.value.symbols)
       .map(record)
       .find((row) => row.symbol === request.symbol);
+    // An unknown symbol says so, whatever the candle request answered.
     if (!market || typeof market.quoteAsset !== "string")
       throw new MarketDataError("Binance spot symbol not found.");
-    const history = await windows(request, 999, async (from, to, signal) => {
-      const query = new URLSearchParams({
-        symbol: request.symbol,
-        interval: request.resolution,
-        startTime: String(from),
-        endTime: String(to - 1),
-        limit: "1000",
-      });
-      return validateBars(
-        array(await readJson(`${BINANCE}/api/v3/klines?${query}`, {}, signal)).map((item) => {
-          const row = array(item);
-          return {
-            time: number(row[0]),
-            open: number(row[1]),
-            high: number(row[2]),
-            low: number(row[3]),
-            close: number(row[4]),
-            volume: number(row[5]),
-          };
-        }),
-      );
-    });
+    if (historyResult.status === "rejected") throw historyResult.reason;
+    const history = historyResult.value;
     return result(
       this.name,
       request,

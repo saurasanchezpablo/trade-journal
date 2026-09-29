@@ -5,8 +5,24 @@ type Job = { host: string; signal: AbortSignal; start: () => void; reject: () =>
 type Entry = { value: unknown; expires: number; bytes: number };
 type Flight = { controller: AbortController; promise: Promise<unknown>; users: number };
 
+/**
+ * How hard each exchange's public API may be asked: requests at once and the gap between
+ * starts. Well under their published limits (Binance: 6000 weight a minute, a candle page
+ * weighs 2; Bybit: 600 requests in 5 seconds; Coinbase: 10 a second). Other hosts, such as
+ * keyed brokers with small free tiers, keep the careful default.
+ */
+export const HOST_LIMITS: Record<string, { concurrent: number; intervalMs: number }> = {
+  "data-api.binance.vision": { concurrent: 4, intervalMs: 60 },
+  "api.binance.com": { concurrent: 4, intervalMs: 60 },
+  "api.bybit.com": { concurrent: 4, intervalMs: 60 },
+  "api.exchange.coinbase.com": { concurrent: 3, intervalMs: 150 },
+};
+
 /** Process-local GET transport. Credentials are hashed, never stored in cache keys. */
-export function createMarketTransport({ minIntervalMs = 350 } = {}) {
+export function createMarketTransport({
+  minIntervalMs = 350,
+  limits = HOST_LIMITS,
+}: { minIntervalMs?: number; limits?: typeof HOST_LIMITS } = {}) {
   const cache = new Map<string, Entry>();
   const flights = new Map<string, Flight>();
   const active = new Map<string, number>();
@@ -24,14 +40,14 @@ export function createMarketTransport({ minIntervalMs = 350 } = {}) {
       if (job.signal.aborted) {
         queue.splice(i, 1);
         job.reject();
-      } else if (running < 6 && (active.get(job.host) ?? 0) < 2) {
+      } else if (running < 8 && (active.get(job.host) ?? 0) < (limits[job.host]?.concurrent ?? 2)) {
         const wait = (nextStart.get(job.host) ?? 0) - Date.now();
         if (wait > 0) {
           delay = Math.min(delay, wait);
           i++;
         } else {
           queue.splice(i, 1);
-          nextStart.set(job.host, Date.now() + minIntervalMs);
+          nextStart.set(job.host, Date.now() + (limits[job.host]?.intervalMs ?? minIntervalMs));
           job.start();
         }
       } else i++;
@@ -71,7 +87,7 @@ export function createMarketTransport({ minIntervalMs = 350 } = {}) {
     url: string,
     headers: Record<string, string> = {},
     signal?: AbortSignal,
-    options: { cache?: boolean; timeoutMs?: number } = {},
+    options: { cache?: boolean; timeoutMs?: number; ttlMs?: number } = {},
   ): Promise<unknown> => {
     signal?.throwIfAborted();
     const host = new URL(url).host;
@@ -140,14 +156,15 @@ export function createMarketTransport({ minIntervalMs = 350 } = {}) {
           const query = new URL(url).searchParams;
           const end = query.get("end") ?? query.get("to") ?? query.get("endTime");
           const endTime = end && /^\d+$/.test(end) ? Number(end) : Date.parse(end ?? "");
-          const ttl = endTime < Date.now() - 300_000 ? 300_000 : 15_000;
+          // Candles that ended over five minutes ago never change: keep them for an hour.
+          const ttl = options.ttlMs ?? (endTime < Date.now() - 300_000 ? 3_600_000 : 15_000);
           if (size <= 4 * 1024 * 1024) {
             const prior = cache.get(key);
             if (prior) bytes -= prior.bytes;
             cache.delete(key);
             cache.set(key, { value, expires: Date.now() + ttl, bytes: size });
             bytes += size;
-            while (cache.size > 128 || bytes > 16 * 1024 * 1024) {
+            while (cache.size > 512 || bytes > 64 * 1024 * 1024) {
               const oldest = cache.keys().next().value!;
               bytes -= cache.get(oldest)!.bytes;
               cache.delete(oldest);
