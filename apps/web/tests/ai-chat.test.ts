@@ -14,6 +14,10 @@ const { readAiRequest } = await import("../src/server/ai-scope");
 const { POST: chat, GET: list } = await import("../src/app/api/ai/chat/route");
 const { GET: read, DELETE: remove } = await import("../src/app/api/ai/chat/[id]/route");
 const tools = await import("../src/server/ai-agent/tools");
+const { POST: recap } = await import("../src/app/api/ai/recap/route");
+const { POST: critique } = await import("../src/app/api/ai/critique/route");
+const { POST: weekly } = await import("../src/app/api/ai/weekly/route");
+const { postAiStream } = await import("../src/lib/ai-stream");
 const { listMessages, listConversations } = await import("../src/server/ai-agent/store");
 
 /** Tool calls that fetch candles would reach the network; these tests never make them. */
@@ -609,5 +613,130 @@ describe("journal tools", () => {
     expect(tools.candleSizeFor(30 * 60_000)).toBe("1m");
     expect(tools.candleSizeFor(6 * 3_600_000)).toBe("15m");
     expect(tools.candleSizeFor(20 * 86_400_000)).toBe("1d");
+  });
+});
+
+describe("recaps, critiques and weekly reviews", () => {
+  const call = (route: (r: Request) => Promise<Response>, body: unknown) =>
+    route(
+      new Request("http://localhost/api/ai/x", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      }),
+    );
+
+  it("stream as they are written when asked, ending with the usual payload", async () => {
+    script(() => anthropic.text("I kept ", "my stops."));
+    const recapped = await events(
+      await call(recap, {
+        date: "2026-09-15",
+        filters: { accounts: "a" },
+        timeZone: "UTC",
+        stream: true,
+        includeAnalyses: false,
+      }),
+    );
+    expect(recapped.map((e) => e.type)).toEqual(["text", "text", "done"]);
+    expect(recapped.at(-1)).toMatchObject({
+      recap: "I kept my stops.",
+      scope: { timeZone: "UTC" },
+      analyses: [],
+    });
+
+    const key = queryTrades({ accounts: "b" }).trades[0]!.key;
+    script(() => anthropic.text("Cut the loser sooner."));
+    const critiqued = await events(
+      await call(critique, { key, stream: true, includeAnalyses: false }),
+    );
+    expect(critiqued.at(-1)).toMatchObject({ type: "done", critique: "Cut the loser sooner." });
+
+    script(() => anthropic.text("A red week."));
+    const reviewed = await events(await call(weekly, { end: "2026-09-16", stream: true }));
+    expect(reviewed.at(-1)).toMatchObject({
+      type: "done",
+      review: "A red week.",
+      to: "2026-09-16",
+    });
+  });
+
+  it("stream a provider failure as a safe message", async () => {
+    script(
+      () =>
+        new Response(
+          JSON.stringify({
+            type: "error",
+            error: { type: "invalid_request_error", message: "Your credit balance is too low" },
+          }),
+          { status: 400, headers: { "Content-Type": "application/json" } },
+        ),
+    );
+    const failed = await events(
+      await call(recap, {
+        date: "2026-09-15",
+        filters: {},
+        timeZone: "UTC",
+        stream: true,
+        includeAnalyses: false,
+      }),
+    );
+    expect(failed).toEqual([
+      { type: "error", message: "AI billing: check your provider account's credits and quota." },
+    ]);
+  });
+
+  it("reject a stream flag that is not true or false", async () => {
+    const response = await call(recap, { date: "2026-09-15", filters: {}, stream: "yes" });
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toMatch(/stream must be true or false/);
+  });
+
+  it("are read on the page as text so far, then the payload", async () => {
+    const lines = [
+      { type: "text", delta: "Hel" },
+      { type: "text", delta: "lo" },
+      { type: "done", recap: "Hello", scope: { label: "All", timeZone: "UTC" } },
+    ];
+    // Split mid-line, as a network would.
+    const raw = lines.map((l) => JSON.stringify(l)).join("\n") + "\n";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        const encoder = new TextEncoder();
+        return new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue(encoder.encode(raw.slice(0, 20)));
+              controller.enqueue(encoder.encode(raw.slice(20)));
+              controller.close();
+            },
+          }),
+          { headers: { "Content-Type": "application/x-ndjson" } },
+        );
+      }),
+    );
+    const seen: string[] = [];
+    const result = await postAiStream<{ recap: string }>("/api/ai/recap", {}, (t) => seen.push(t));
+    expect(seen).toEqual(["Hel", "Hello"]);
+    expect(result).toEqual({ recap: "Hello", scope: { label: "All", timeZone: "UTC" } });
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () => new Response(JSON.stringify({ error: "No closed trades" }), { status: 400 }),
+      ),
+    );
+    await expect(postAiStream("/api/ai/recap", {}, () => {})).rejects.toThrow("No closed trades");
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ type: "error", message: "AI billing: check" }) + "\n", {
+            headers: { "Content-Type": "application/x-ndjson" },
+          }),
+      ),
+    );
+    await expect(postAiStream("/api/ai/recap", {}, () => {})).rejects.toThrow("AI billing");
   });
 });

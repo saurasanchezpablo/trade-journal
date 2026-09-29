@@ -7,6 +7,7 @@ import {
 import { db, accounts, playbooks } from "@/db";
 import { describeFilters } from "@/lib/filter-description";
 import { requireValue } from "./api";
+import { wantsStream } from "./ai-stream";
 import { getTimeZone } from "./settings";
 
 export function isDay(value: unknown): value is string {
@@ -83,9 +84,13 @@ export function readAiRequest(value: unknown, field: "question" | "date") {
   const body = value as Record<string, unknown>;
   requireValue(
     Object.keys(body).every((key) =>
-      [field, "filters", "timeZone", ...(field === "date" ? ["includeAnalyses"] : [])].includes(
-        key,
-      ),
+      [
+        field,
+        "filters",
+        "timeZone",
+        "stream",
+        ...(field === "date" ? ["includeAnalyses"] : []),
+      ].includes(key),
     ),
     "Unknown AI request field",
   );
@@ -141,6 +146,8 @@ export function readAiRequest(value: unknown, field: "question" | "date") {
     date: date as string | undefined,
     /** Recaps only: send the day's linked chart analyses (text and snapshots). Default on. */
     includeAnalyses: body.includeAnalyses !== false,
+    /** Answer as streamed events instead of one JSON response. */
+    stream: wantsStream(body.stream),
     scope: { label: label(true), timeZone },
     context: `Journal scope: ${label(false)}. Only the filtered data below is available. Do not infer results for excluded accounts or dates.`,
   };

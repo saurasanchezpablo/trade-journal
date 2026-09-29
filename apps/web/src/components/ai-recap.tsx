@@ -4,7 +4,8 @@ import { Sparkles } from "lucide-react";
 import type { AnalysisFilters } from "@luxalgo/journal-core";
 import { Button } from "./ui/button";
 import { AiNotice } from "./ai-notice";
-import { postJson } from "@/lib/use-api";
+import { useState } from "react";
+import { postAiStream } from "@/lib/ai-stream";
 import { useAiRequest, type AiScope } from "@/lib/use-ai-request";
 import { AiChartsToggle, useAiCharts, type AiAnalysisUsed } from "./ai-charts-option";
 
@@ -24,18 +25,26 @@ export function AiRecap({
 }) {
   const { run, busy, error, dismiss } = useAiRequest();
   const [charts, setCharts] = useAiCharts();
-  const generate = () =>
-    run(
+  // The recap as it is written; it joins the note once complete.
+  const [preview, setPreview] = useState("");
+  const generate = () => {
+    setPreview("");
+    return run(
       () =>
-        postJson<{ recap: string; scope: AiScope; analyses?: AiAnalysisUsed[] }>("/api/ai/recap", {
-          date,
-          filters,
-          timeZone,
-          // The server includes linked analyses unless told not to.
-          ...(charts ? {} : { includeAnalyses: false }),
-        }),
+        postAiStream<{ recap: string; scope: AiScope; analyses?: AiAnalysisUsed[] }>(
+          "/api/ai/recap",
+          {
+            date,
+            filters,
+            timeZone,
+            // The server includes linked analyses unless told not to.
+            ...(charts ? {} : { includeAnalyses: false }),
+          },
+          setPreview,
+        ),
       onRecap,
     );
+  };
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-3">
@@ -50,6 +59,15 @@ export function AiRecap({
         </Button>
         <AiChartsToggle checked={charts} onChange={setCharts} />
       </div>
+      {busy && preview && (
+        <p
+          aria-live="polite"
+          aria-label="Recap being written"
+          className="whitespace-pre-wrap rounded-md border p-3 text-sm leading-relaxed text-muted-foreground"
+        >
+          {preview}
+        </p>
+      )}
       {error && <AiNotice error={error} onRetry={() => void generate()} onDismiss={dismiss} />}
     </div>
   );

@@ -3,15 +3,18 @@ import { bad, handler, ok, requireValue } from "@/server/api";
 import { analysesPrompt, analysesUsed, analysisImages, linkedAnalyses } from "@/server/ai-analyses";
 import { getTimeZone } from "@/server/settings";
 import { runAi } from "@/server/ai";
+import { streamedAnswer, wantsStream } from "@/server/ai-stream";
 import { listExecutions } from "@/server/executions";
 import { getTradeByKey, rowToTrade } from "@/server/trades-query";
 
 /** Critique one trade: entries, exits, sizing, and the trader's own annotations. */
 export const POST = handler(async (request: Request) => {
-  const { key, includeAnalyses } = (await request.json()) as {
+  const { key, includeAnalyses, stream } = (await request.json()) as {
     key?: string;
     includeAnalyses?: unknown;
+    stream?: unknown;
   };
+  const streamed = wantsStream(stream);
   if (!key) return bad("key is required");
   requireValue(
     includeAnalyses === undefined || typeof includeAnalyses === "boolean",
@@ -34,8 +37,7 @@ export const POST = handler(async (request: Request) => {
           symbols: [trade.symbol],
         });
 
-  const critique = await runAi(
-    `Critique this single trade in under ${linked.length ? 220 : 150} words. Focus on execution quality visible in the
+  const prompt = `Critique this single trade in under ${linked.length ? 220 : 150} words. Focus on execution quality visible in the
 fills (entry clustering, scaling, exit discipline), risk (stop honored or not, R multiple),
 and the trader's own tags/mistakes. End with one concrete instruction for the next
 occurrence of this setup.${linked.length ? " Say whether the entry, stop and exit respected the levels and zones in the linked chart analyses." : ""}
@@ -50,10 +52,13 @@ Notes: ${row.notes ?? "none"}
 Fills:
 ${fills.map((fill) => `${fill.executedAt} ${fill.side} ${fill.quantity} @ ${fill.price}${fill.fee ? ` fee ${fill.fee}` : ""}`).join("\n")}
 
-${analysesPrompt(linked)}`,
-    linked.length ? 1500 : 1200,
-    analysisImages(linked),
-  );
-
-  return ok({ critique, analyses: analysesUsed(linked) });
+${analysesPrompt(linked)}`;
+  const ai = {
+    prompt,
+    maxOutputTokens: linked.length ? 1500 : 1200,
+    images: analysisImages(linked),
+  };
+  const result = (critique: string) => ({ critique, analyses: analysesUsed(linked) });
+  if (streamed) return streamedAnswer(request, ai, result);
+  return ok(result(await runAi(ai.prompt, ai.maxOutputTokens, ai.images)));
 });

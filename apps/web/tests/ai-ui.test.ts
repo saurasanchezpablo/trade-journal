@@ -44,6 +44,10 @@ vi.mock("@/components/rich-editor", () => ({
 vi.mock("@/components/charts/equity-area", () => ({ EquityArea: () => null }));
 vi.mock("@/components/pnl", () => ({ Pnl: () => null }));
 vi.mock("@/components/privacy", () => ({ MonetaryValue: () => null }));
+vi.mock("@/components/journal-chat", () => ({ JournalChat: () => null }));
+vi.mock("@/lib/ai-stream", () => ({
+  postAiStream: (url: string, body: unknown) => state.post(url, body),
+}));
 vi.mock("@/components/voice-note", () => ({ VoiceNote: () => null }));
 vi.mock("@/components/attachments", () => ({ Attachments: () => null }));
 vi.mock("@/components/review-export", () => ({ ReviewExport: () => null }));

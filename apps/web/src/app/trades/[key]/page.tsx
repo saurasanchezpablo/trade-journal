@@ -1,4 +1,6 @@
 "use client";
+import { JournalChat } from "@/components/journal-chat";
+import { postAiStream } from "@/lib/ai-stream";
 import { AiNotice } from "@/components/ai-notice";
 import { Checkbox } from "@/components/ui/checkbox";
 
@@ -154,13 +156,18 @@ function TradeView({ tradeKey }: { tradeKey: string }) {
     setAiBusy(true);
     setAiError(null);
     try {
-      const result = await postJson<{ critique: string; analyses?: AiAnalysisUsed[] }>(
+      setCritique(null);
+      setCritiqueCharts([]);
+      const result = await postAiStream<{ critique: string; analyses?: AiAnalysisUsed[] }>(
         "/api/ai/critique",
         { key: tradeKey, ...(aiCharts ? {} : { includeAnalyses: false }) },
+        setCritique,
       );
       setCritique(result.critique);
       setCritiqueCharts(result.analyses ?? []);
     } catch (error) {
+      // A critique cut short is not kept.
+      setCritique(null);
       setAiError(error instanceof Error ? error.message : "AI critique failed");
     } finally {
       setAiBusy(false);
@@ -310,6 +317,15 @@ function TradeView({ tradeKey }: { tradeKey: string }) {
                 <AiChartsUsed analyses={critiqueCharts} />
               </CardContent>
             )}
+            <CardContent>
+              <JournalChat
+                key={`${trade.key}:${timeZone}`}
+                target={{ kind: "trade", tradeKey: trade.key, timeZone }}
+                seed={aiBusy ? null : critique}
+                placeholder={critique ? "Ask about the critique" : "Ask about this trade"}
+                intro="Chats about this trade can look up its fills, candles and your other trades in its account."
+              />
+            </CardContent>
           </Card>
         </div>
       </div>

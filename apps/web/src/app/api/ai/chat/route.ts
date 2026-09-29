@@ -2,7 +2,8 @@ import { bad, handler, ok, requireValue } from "@/server/api";
 import { aiModel } from "@/server/ai";
 import { isDay, readAiRequest } from "@/server/ai-scope";
 import { queryTrades, getTradeByKey } from "@/server/trades-query";
-import { chatTurn, type ChatEvent } from "@/server/ai-agent/chat";
+import { chatTurn } from "@/server/ai-agent/chat";
+import { ndjsonResponse } from "@/server/ai-stream";
 import {
   MAX_MESSAGES,
   addMessage,
@@ -128,53 +129,18 @@ export const POST = handler(async (request: Request) => {
     return bad("An answer is still being written in this conversation.", 409);
   busy.add(active.id);
 
-  const stop = new AbortController();
-  request.signal.addEventListener("abort", () => stop.abort(), { once: true });
-  const encoder = new TextEncoder();
-  const stream = new ReadableStream<Uint8Array>({
-    async start(controller) {
-      let open = true;
-      const send = (event: ChatEvent | { type: "conversation"; conversation: Conversation }) => {
-        if (!open) return;
-        try {
-          controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
-        } catch {
-          open = false;
-        }
-      };
-      try {
-        send({ type: "conversation", conversation: getConversation(active.id) ?? active });
-        for await (const event of chatTurn({
-          scope,
-          conversation: active,
-          question: scope.question,
-          signal: stop.signal,
-        }))
-          send(event);
-      } catch {
-        send({ type: "error", message: "AI request failed. Try again shortly.", saved: null });
-      } finally {
-        busy.delete(active.id);
-        if (open) {
-          open = false;
-          try {
-            controller.close();
-          } catch {
-            // Already closed by the reader going away.
-          }
-        }
-      }
-    },
-    cancel() {
-      stop.abort();
-    },
-  });
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "application/x-ndjson; charset=utf-8",
-      "Cache-Control": "private, no-store",
-      // Proxies must pass events through as they are written.
-      "X-Accel-Buffering": "no",
-    },
+  return ndjsonResponse(request, async (send, stop) => {
+    try {
+      send({ type: "conversation", conversation: getConversation(active.id) ?? active });
+      for await (const event of chatTurn({
+        scope,
+        conversation: active,
+        question: scope.question,
+        signal: stop,
+      }))
+        send(event);
+    } finally {
+      busy.delete(active.id);
+    }
   });
 });

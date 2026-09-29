@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { dayKeyOf } from "@luxalgo/journal-core";
-import { postJson } from "@/lib/use-api";
+import { postAiStream } from "@/lib/ai-stream";
 import { Markdown } from "./rich-editor";
 import { Button } from "./ui/button";
 import { SectionCard } from "./section-card";
@@ -13,11 +13,14 @@ export function WeeklyReview({ timeZone }: { timeZone: string }) {
   const [busy, setBusy] = useState(false);
   const [review, setReview] = useState<{ review: string; from: string; to: string } | null>(null);
   const [error, setError] = useState("");
+  // The review as it is written.
+  const [writing, setWriting] = useState("");
   const write = async () => {
     setBusy(true);
     setError("");
+    setWriting("");
     try {
-      setReview(await postJson("/api/ai/weekly", { end }));
+      setReview(await postAiStream("/api/ai/weekly", { end }, setWriting));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not write the review.");
     } finally {
@@ -69,7 +72,16 @@ export function WeeklyReview({ timeZone }: { timeZone: string }) {
           {error}
         </p>
       )}
-      {review && (
+      {busy && writing && (
+        <article
+          className="rounded-md border p-3"
+          aria-label="Review being written"
+          aria-live="polite"
+        >
+          <Markdown>{writing}</Markdown>
+        </article>
+      )}
+      {review && !busy && (
         <article
           className="rounded-md border p-3"
           aria-label={`Review of ${review.from} to ${review.to}`}

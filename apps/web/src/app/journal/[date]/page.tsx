@@ -1,5 +1,6 @@
 "use client";
 import { AiRecap } from "@/components/ai-recap";
+import { JournalChat } from "@/components/journal-chat";
 import { analysesUsedMarkdown } from "@/components/ai-charts-option";
 import { DayAnalyses } from "@/components/day-analyses";
 import { dayKeyOf } from "@luxalgo/journal-core";
@@ -57,6 +58,7 @@ function JournalDay({ date }: { date: string }) {
   const { query, values: filters, timeZone } = useFilters();
   const { data, error } = useApi<DayPayload>(`/api/journal/${date}?${query}`);
   const [note, setNote] = useState<string | null>(null);
+  const [lastRecap, setLastRecap] = useState<{ key: string; text: string } | null>(null);
   const noteEditor = useRef<RichEditorHandle>(null);
   const { save, status: saving, flush } = useAutosave(`/api/journal/${date}`, "PUT");
   const noteValue = note ?? data?.note ?? "";
@@ -230,6 +232,7 @@ function JournalDay({ date }: { date: string }) {
                 timeZone={timeZone}
                 disabled={!data || !m?.closedTrades}
                 onRecap={({ recap, scope, analyses }) => {
+                  setLastRecap({ key: `${date}:${timeZone}:${query}`, text: recap });
                   // Append to the current draft, including edits made while AI was running.
                   const section = `## AI recap\n\n${scope.label.replace(/[\\`*_{}\[\]<>#]/g, "").replace(/[\r\n]+/g, " ")}\n\n${analysesUsedMarkdown(analyses)}${recap}`;
                   scheduleSave(
@@ -271,6 +274,20 @@ function JournalDay({ date }: { date: string }) {
               }}
             />
             <Attachments type="day" id={date} />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Ask about this day</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <JournalChat
+              key={`${date}:${timeZone}:${query}`}
+              target={{ kind: "day", date, filters, timeZone }}
+              seed={lastRecap?.key === `${date}:${timeZone}:${query}` ? lastRecap.text : null}
+              placeholder={lastRecap ? "Ask about the recap" : "Ask about this day's trades"}
+              intro="Uses the selected filters, like recaps. The AI can read the day's trades, plans and charts, and compare with other days."
+            />
           </CardContent>
         </Card>
       </div>

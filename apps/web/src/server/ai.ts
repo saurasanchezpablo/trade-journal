@@ -1,7 +1,7 @@
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createOpenAI } from "@ai-sdk/openai";
-import { APICallError, RetryError, generateText } from "ai";
+import { APICallError, RetryError, generateText, streamText, type ModelMessage } from "ai";
 import { getAiKey, getAiModel, getAiProvider } from "./settings";
 import { AI_PROVIDER_NAMES } from "@/lib/ai-settings";
 
@@ -76,6 +76,28 @@ export function aiFailure(error: unknown): Error {
   return new Error("AI request failed. Check your provider settings or try again shortly.");
 }
 
+const withImages = (
+  prompt: string,
+  images: Buffer[],
+): { prompt: string } | { messages: ModelMessage[] } =>
+  images.length
+    ? {
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: prompt },
+              ...images.map((image) => ({
+                type: "image" as const,
+                image,
+                mediaType: "image/png",
+              })),
+            ],
+          },
+        ],
+      }
+    : { prompt };
+
 /** `images` are PNGs sent after the prompt, in order; the prompt should refer to them. */
 export const runAi = async (
   prompt: string,
@@ -88,23 +110,7 @@ export const runAi = async (
     result = await generateText({
       ...model,
       system: AI_SYSTEM,
-      ...(images.length
-        ? {
-            messages: [
-              {
-                role: "user" as const,
-                content: [
-                  { type: "text" as const, text: prompt },
-                  ...images.map((image) => ({
-                    type: "image" as const,
-                    image,
-                    mediaType: "image/png",
-                  })),
-                ],
-              },
-            ],
-          }
-        : { prompt }),
+      ...withImages(prompt, images),
       maxOutputTokens,
     });
   } catch (error) {
@@ -119,3 +125,51 @@ export const runAi = async (
     );
   return result.text;
 };
+
+/**
+ * `runAi`, written as it arrives: yields text deltas, then ends. Failures throw the same
+ * safe messages; an answer with no text throws too.
+ */
+export async function* streamAi(
+  prompt: string,
+  maxOutputTokens = 1200,
+  images: Buffer[] = [],
+  signal?: AbortSignal,
+): AsyncGenerator<string> {
+  const model = aiModel();
+  let wrote = false;
+  let failure: unknown = null;
+  let filtered = false;
+  try {
+    const result = streamText({
+      ...model,
+      system: AI_SYSTEM,
+      ...withImages(prompt, images),
+      maxOutputTokens,
+      abortSignal: signal,
+      // Failures arrive as stream parts; the default logs the provider's response body.
+      onError: () => {},
+    });
+    for await (const part of result.fullStream) {
+      if (part.type === "text-delta" && part.text) {
+        wrote ||= part.text.trim().length > 0;
+        yield part.text;
+      } else if (part.type === "error") {
+        failure = part.error;
+        break;
+      } else if (part.type === "finish") {
+        filtered = part.finishReason === "content-filter";
+      }
+    }
+  } catch (error) {
+    failure = error;
+  }
+  if (signal?.aborted) return;
+  if (failure) throw aiFailure(failure);
+  if (!wrote)
+    throw new Error(
+      filtered
+        ? "AI returned no text: the provider's safety filter blocked the answer."
+        : "AI returned no text. Check the model or try again.",
+    );
+}

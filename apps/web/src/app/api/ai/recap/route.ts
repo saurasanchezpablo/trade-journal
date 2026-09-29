@@ -3,6 +3,7 @@ import { computeMetrics, dayKeyOf } from "@luxalgo/journal-core";
 import { db, journalDays } from "@/db";
 import { bad, handler, ok } from "@/server/api";
 import { runAi } from "@/server/ai";
+import { streamedAnswer } from "@/server/ai-stream";
 import { queryTrades } from "@/server/trades-query";
 import { accountContext, readAiRequest } from "@/server/ai-scope";
 import { analysesPrompt, analysesUsed, analysisImages, linkedAnalyses } from "@/server/ai-analyses";
@@ -48,8 +49,7 @@ export const POST = handler(async (request: Request) => {
     )
     .join("\n");
 
-  const recap = await runAi(
-    `Write a session recap for ${date} in first person ("I"), 120-200 words, markdown with a
+  const prompt = `Write a session recap for ${date} in first person ("I"), 120-200 words, markdown with a
 short "**Keep**" and "**Fix**" list at the end.${linked.length ? " Where chart analyses are attached, say whether the trades followed the plan drawn on them." : ""}
 
 ${scope.context}
@@ -64,10 +64,13 @@ ${tradeLines}
 
 ${existingNote ? `The trader's own note so far (respect it, build on it):\n${existingNote}` : ""}
 
-${analysesPrompt(linked)}`,
-    linked.length ? 1500 : 1200,
-    analysisImages(linked),
-  );
-
-  return ok({ recap, scope: scope.scope, analyses: analysesUsed(linked) });
+${analysesPrompt(linked)}`;
+  const ai = {
+    prompt,
+    maxOutputTokens: linked.length ? 1500 : 1200,
+    images: analysisImages(linked),
+  };
+  const result = (recap: string) => ({ recap, scope: scope.scope, analyses: analysesUsed(linked) });
+  if (scope.stream) return streamedAnswer(request, ai, result);
+  return ok(result(await runAi(ai.prompt, ai.maxOutputTokens, ai.images)));
 });
