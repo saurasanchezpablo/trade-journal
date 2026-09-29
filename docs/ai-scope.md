@@ -10,9 +10,12 @@ Ask your journal and daily recaps use the account selection and analysis filters
 - A completed recap appends a labeled section to the latest draft, preserving edits made during generation. A response from an obsolete scope cannot append or save a recap.
 - Single-trade critique continues to use the trade key.
 - Chart analyses linked to a recap follow the same rule: analyses embedded in the shared note are sent only with the note (all accounts, otherwise unfiltered). The day's versions of analyses (see [charts.md](charts.md#day-versions)) are sent for a filtered recap only when they chart a symbol traded in that subset. A critique sends analyses embedded in the trade's notes and the versions of its entry day on its symbol. A day's version is always sent as it was that day, never the live analysis. At most six are sent as text (drawings with prices, plan and grades, the day's price action, changes since the previous day), the first three also as PNG snapshots; see [charts.md](charts.md#ai-reviews-with-chart-analyses). The day's trades on an analysis's symbol, which of them came from its plan, and earlier days of the same type span accounts, so they are sent only with an all-account, otherwise unfiltered recap, never with a filtered recap or a critique.
+- The AI chat ([ai-chat.md](ai-chat.md)) keeps the scope a conversation started with: its read-only tools start from those trades and their filters can only narrow them. Follow-ups never pick up later filter changes.
 - The weekly review (`/api/ai/weekly`, from the Daily journal page) covers all accounts, like the shared day notes it reads: each day's trades, trades taken from a plan, plan grades and the Keep/Fix lists in the day notes. It takes no filters.
 
 ## API contract
+
+Recap, critique and the weekly review accept `stream: true` to receive the answer as it is written (newline-delimited `text` events, then `done` with the usual payload; see [ai-chat.md](ai-chat.md#api)).
 
 Recap also accepts `includeAnalyses: false` to leave linked chart analyses out (critique accepts the same field). Both return the analyses used as `analyses: [{ id, label, image }]`.
 

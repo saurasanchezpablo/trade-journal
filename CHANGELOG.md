@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
+- AI chat: **Ask your journal** (Reports), **Ask about this day** and a chat under each trade's AI review. The AI looks things up itself with read-only journal tools (totals, trade search, stats grouped by any Reports dimension, a trade's fills and notes, the candles around a trade, a day's note and plans, chart analyses), always within the conversation's accounts and filters. Follow-up questions continue the conversation, which is saved and can be reopened or deleted; a chat can start from a recap or critique. See [docs/ai-chat.md](docs/ai-chat.md)
+- AI answers appear as they are written: chat answers (with each lookup shown as it runs, and **Stop**), trade critiques, recaps and the weekly review
 - Google Gemini as an AI provider for recaps, trade critiques and "ask your journal": choose it in **Settings → AI** with a Gemini API key (or `GEMINI_API_KEY` on the server); default model `gemini-3.8-flash`, chart images included
 - Bybit as a chart source: public candles and real-time prices for perpetuals and futures (USDT/USDC), spot and inverse contracts, no API key; enable it in Settings and choose the market next to the symbol
 - Symbol search on Charts for Binance, Bybit and Coinbase: typing in the symbol field suggests the exchange's instruments, the most traded first
