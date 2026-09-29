@@ -33,12 +33,18 @@ export function candleSource(trade: Pick<AnnotatedTrade, "key" | "symbol" | "ass
       dataset:
         datasetId ??
         (replay.provider === "alpaca" && trade.assetClass === "crypto" ? "crypto" : null),
+      via: "replay" as const,
     };
   }
   const key = symbolKey(trade.symbol);
   const analysis = listAnalyses({ limit: 200 }).find((a) => matchKeys(a.symbol).has(key));
   return analysis
-    ? { provider: analysis.provider, symbol: analysis.symbol, dataset: analysis.dataset }
+    ? {
+        provider: analysis.provider,
+        symbol: analysis.symbol,
+        dataset: analysis.dataset,
+        via: "chart" as const,
+      }
     : null;
 }
 

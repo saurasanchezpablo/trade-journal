@@ -5,7 +5,7 @@ import { connectionKey, providerFor } from "@/server/market-data/connections";
 import { MarketDataError } from "@/server/market-data/provider";
 import { getTradeByKey, rowToTrade } from "@/server/trades-query";
 import { listExecutions } from "@/server/executions";
-import { isResolution } from "@/lib/market-data";
+import { RESOLUTIONS, isResolution, type Resolution } from "@/lib/market-data";
 import { estimateExcursions } from "@/lib/excursions";
 
 import { estimateFingerprint, saveEstimate, savedEstimates } from "@/server/market-data/estimates";
@@ -47,22 +47,35 @@ export const POST = handler(
       body.estimateOnly === undefined || typeof body.estimateOnly === "boolean",
       "Invalid response mode.",
     );
-    requireValue(Boolean(row.closedAt), "Market replay is available for closed trades only.");
     requireValue(
       row.assetClass !== "option",
       "Option contract history is not supported by this connector yet. An underlying's candles cannot stand in for option prices.",
     );
-    const from = Date.parse(row.openedAt),
-      to = Date.parse(row.closedAt!);
+    // An open trade shows its candles up to now; estimates need it closed.
+    const opened = Date.parse(row.openedAt),
+      closed = row.closedAt ? Date.parse(row.closedAt) : Date.now();
     requireValue(
-      Number.isFinite(from) && Number.isFinite(to) && to > from && to <= Date.now(),
+      Number.isFinite(opened) && Number.isFinite(closed) && closed > opened && opened <= Date.now(),
       "Trade must have valid past entry and exit timestamps.",
     );
+    // Candles before the entry and after the exit, so the trade is seen in its market (a
+    // five-minute trade on 1m candles is otherwise five candles). Estimates only read the
+    // candles between entry and exit.
+    const step = RESOLUTIONS[body.resolution as Resolution];
+    const pad = Math.max(30 * step, Math.round((closed - opened) / 4));
+    const from = Math.floor((opened - pad) / step) * step,
+      to = Math.min(Date.now(), closed + pad);
     try {
       const provider = providerFor(body.provider);
+      // Crypto exchanges: a coin booked as a CFD or "other" (a broker's BTCUSD) still has
+      // their candles; the prices can differ from the broker's, which the page says.
+      const bookedElsewhere =
+        ["binance", "bybit", "coinbase"].includes(provider.id) &&
+        row.assetClass != null &&
+        row.assetClass !== "crypto";
       if (["binance", "bybit", "coinbase"].includes(provider.id))
         requireValue(
-          row.assetClass == null || row.assetClass === "crypto",
+          row.assetClass == null || ["crypto", "cfd", "other", "forex"].includes(row.assetClass),
           "This provider supplies crypto candles only. Choose a crypto trade.",
         );
       if (provider.id === "alpaca")
@@ -101,6 +114,10 @@ export const POST = handler(
         history,
         body.basisConfirmed === true && currencyMatches,
       );
+      if (bookedElsewhere)
+        estimate.warnings.unshift(
+          `This trade is booked as ${row.assetClass === "other" ? "another asset class" : `a ${row.assetClass === "cfd" ? "CFD" : "forex"} instrument`}; exchange prices can differ from your broker's.`,
+        );
       if (!currencyMatches)
         estimate.warnings.unshift(
           `The candle quote currency (${history.quoteCurrency}) differs from this account (${accountCurrency}). Monetary estimates are unavailable; no FX conversion is applied.`,

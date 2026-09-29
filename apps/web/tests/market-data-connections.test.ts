@@ -13,6 +13,7 @@ const { insertExecutions } = await import("../src/server/executions");
 const { GET: savedHistory, POST: loadHistory } =
   await import("../src/app/api/trades/[key]/market-data/route");
 const { GET: listCsv, POST: csvRequest } = await import("../src/app/api/market-data/csv/route");
+const { GET: marketSource } = await import("../src/app/api/trades/[key]/market-source/route");
 const { GET: explorer } = await import("../src/app/api/trade-explorer/route");
 const { connectionKey, connections, saveConnection } =
   await import("../src/server/market-data/connections");
@@ -492,3 +493,133 @@ describe("market data credential lifecycle", () => {
 afterEach(() => marketTransport.clear());
 
 beforeEach(() => Object.assign(marketTransport, createMarketTransport({ minIntervalMs: 0 })));
+
+describe("a crypto trade's chart", () => {
+  const listing = {
+    symbols: [
+      { symbol: "BTCUSD", status: "TRADING", baseAsset: "BTC", quoteAsset: "USD" },
+      { symbol: "BTCUSDT", status: "TRADING", baseAsset: "BTC", quoteAsset: "USDT" },
+      { symbol: "BTCUSDC", status: "TRADING", baseAsset: "BTC", quoteAsset: "USDC" },
+    ],
+  };
+  const urls: string[] = [];
+  beforeEach(() => {
+    Object.assign(marketTransport, createMarketTransport({ minIntervalMs: 0, limits: {} }));
+    urls.length = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        urls.push(url);
+        if (url.includes("exchangeInfo?permissions")) return Response.json(listing);
+        if (url.includes("exchangeInfo?symbol"))
+          return Response.json({ symbols: [{ symbol: "BTCUSDT", quoteAsset: "USDT" }] });
+        const query = new URL(url).searchParams;
+        const start = Number(query.get("startTime"));
+        const step = query.get("interval") === "1h" ? 3_600_000 : 60_000;
+        return Response.json(
+          Array.from({ length: 5 }, (_, i) => [
+            start + i * step,
+            "82000",
+            "82100",
+            "81900",
+            "82050",
+            "3",
+          ]),
+        );
+      }),
+    );
+  });
+  const trade = (symbol: string, assetClass?: "crypto" | "cfd" | "equity", open = false) => {
+    db.insert(accounts)
+      .values({ id: "c", name: "Crypto", kind: "manual", createdAt: "2026-01-01" })
+      .run();
+    insertExecutions(
+      "c",
+      [
+        {
+          symbol,
+          side: "buy",
+          quantity: 1,
+          price: 82000,
+          fee: 0,
+          executedAt: "2026-09-01T10:00:00Z",
+          ...(assetClass ? { assetClass } : {}),
+        },
+        ...(open
+          ? []
+          : [
+              {
+                symbol,
+                side: "sell" as const,
+                quantity: 1,
+                price: 82100,
+                fee: 0,
+                executedAt: "2026-09-01T10:10:00Z",
+                ...(assetClass ? { assetClass } : {}),
+              },
+            ]),
+      ],
+      "manual",
+    );
+    return db.select().from(trades).all()[0]!.key;
+  };
+  const source = async (key: string) =>
+    (
+      await marketSource(new Request("http://localhost"), { params: Promise.resolve({ key }) })
+    ).json();
+
+  it("finds the coin on an enabled exchange however the symbol is written", async () => {
+    saveConnection("binance", "");
+    const key = trade("BTC");
+    expect(await source(key)).toEqual({
+      source: {
+        provider: "binance",
+        providerName: "Binance",
+        // The traded pair, not the thin BTCUSD.
+        symbol: "BTCUSDT",
+        dataset: null,
+        resolution: "1m",
+        via: "exchange",
+      },
+    });
+  });
+
+  it("says what to enable when no exchange is on, and leaves stocks to you", async () => {
+    const key = trade("BTCUSD");
+    expect((await source(key)).reason).toMatch(/Enable Binance, Bybit or Coinbase/);
+    db.delete(trades).run();
+    db.delete(executions).run();
+    db.delete(accounts).run();
+    saveConnection("binance", "");
+    const stock = trade("AAPL", "equity");
+    expect((await source(stock)).reason).toMatch(/Choose a data provider/);
+  });
+
+  it("loads candles around the trade, for a CFD booking and for an open trade too", async () => {
+    saveConnection("binance", "");
+    const cfd = trade("BTCUSD", "cfd");
+    const response = await loadHistory(
+      request({ provider: "binance", symbol: "BTCUSDT", resolution: "1m" }),
+      { params: Promise.resolve({ key: cfd }) },
+    );
+    expect(response.status).toBe(200);
+    const result = await response.json();
+    expect(result.estimate.warnings.some((w: string) => /booked as a CFD/.test(w))).toBe(true);
+    // Thirty candles before the entry at least.
+    const starts = urls
+      .filter((u) => u.includes("klines"))
+      .map((u) => Number(new URL(u).searchParams.get("startTime")));
+    expect(Math.min(...starts)).toBeLessThanOrEqual(Date.parse("2026-09-01T09:30:00Z"));
+
+    db.delete(trades).run();
+    db.delete(executions).run();
+    db.delete(accounts).run();
+    const open = trade("BTCUSDT", "crypto", true);
+    const live = await loadHistory(
+      request({ provider: "binance", symbol: "BTCUSDT", resolution: "1h" }),
+      { params: Promise.resolve({ key: open }) },
+    );
+    expect(live.status).toBe(200);
+    expect((await live.json()).estimate.mae).toBeNull();
+  });
+});

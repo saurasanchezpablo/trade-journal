@@ -59,8 +59,20 @@ export function TradeMarketData({
     setResult(null);
     setError("");
   };
-  const load = async () => {
-    if (!available.some((item) => item.id === provider) || (info?.datasets && !dataset)) return;
+  type Selection = { provider: string; symbol: string; dataset: string; resolution: Resolution };
+  // Candles chosen for you when the page opens (see `server/trade-market-source.ts`).
+  const [auto, setAuto] = useState<{ note: string } | { reason: string } | null>(null);
+  const autoStarted = useRef(false);
+  const load = async (
+    selection: Selection = { provider, symbol, dataset, resolution },
+    checked = { available: true },
+  ) => {
+    if (
+      checked.available &&
+      (!available.some((item) => item.id === selection.provider) ||
+        (providerInfo(selection.provider)?.datasets && !selection.dataset))
+    )
+      return;
     controller.current?.abort();
     const request = new AbortController();
     controller.current = request;
@@ -72,10 +84,10 @@ export function TradeMarketData({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          provider,
-          symbol,
-          dataset,
-          resolution,
+          provider: selection.provider,
+          symbol: selection.symbol,
+          dataset: selection.dataset,
+          resolution: selection.resolution,
           basisConfirmed: confirmed,
         }),
         signal: request.signal,
@@ -93,6 +105,62 @@ export function TradeMarketData({
       if (!request.signal.aborted) setBusy(false);
     }
   };
+  // Open with the trade's candles when a source is known or an enabled exchange lists it.
+  useEffect(() => {
+    if (autoStarted.current) return;
+    autoStarted.current = true;
+    const request = new AbortController();
+    fetch(`/api/trades/${encodeURIComponent(trade.key)}/market-source`, { signal: request.signal })
+      .then((response) => (response.ok ? response.json() : null))
+      .then(
+        (
+          body: {
+            source: {
+              provider: string;
+              providerName: string;
+              symbol: string;
+              dataset: string | null;
+              resolution: Resolution;
+              via: "replay" | "chart" | "exchange";
+            } | null;
+            reason?: string;
+          } | null,
+        ) => {
+          if (!body || request.signal.aborted) return;
+          if (!body.source) {
+            if (body.reason) setAuto({ reason: body.reason });
+            return;
+          }
+          const chosen = {
+            provider: body.source.provider,
+            symbol: body.source.symbol,
+            dataset: body.source.dataset ?? "",
+            resolution: body.source.resolution,
+          };
+          setProvider(chosen.provider);
+          setSymbol(chosen.symbol);
+          setDataset(chosen.dataset);
+          setResolution(chosen.resolution);
+          setAuto({
+            note: `${body.source.symbol} ${body.source.resolution} candles from ${body.source.providerName}, ${
+              body.source.via === "replay"
+                ? "as loaded for this trade before"
+                : body.source.via === "chart"
+                  ? "the source of your chart of this symbol"
+                  : "chosen for this symbol"
+            }. Change the source below if it is not the right one.`,
+          });
+          void load(chosen, { available: false });
+        },
+      )
+      .catch(() => {
+        // Without an automatic source the page works as before: choose one below.
+      });
+    return () => request.abort();
+    // Runs once per trade page.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trade.key]);
+
   return (
     <div className="space-y-3">
       <Card>
@@ -109,169 +177,179 @@ export function TradeMarketData({
               {connectionError}
             </p>
           )}
+          {auto && "note" in auto && (
+            <p role="status" className="text-xs text-muted-foreground">
+              {auto.note}
+            </p>
+          )}
+          {auto && "reason" in auto && available.length > 0 && (
+            <p role="status" className="text-xs text-muted-foreground">
+              {auto.reason}
+            </p>
+          )}
           {!available.length && (
             <p className="text-sm text-muted-foreground">
               <a className="underline" href="/settings#market-data">
                 Connect a market data provider in Settings
               </a>{" "}
-              to use historical replay and estimates.
+              to see this trade&apos;s candles, replay it and estimate MAE/MFE. Binance, Bybit and
+              Coinbase need no key.
             </p>
           )}
-          {!trade.closedAt ? (
-            <p className="text-sm text-muted-foreground">Available after this trade closes.</p>
-          ) : (
-            available.length > 0 && (
-              <>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="space-y-1">
-                    <Label htmlFor="market-provider">Data provider</Label>
-                    <OptionSelect
-                      id="market-provider"
-                      value={provider}
-                      onValueChange={(value) => {
-                        invalidate();
-                        setProvider(value);
-                        setDataset("");
-                        setConfirmed(false);
-                      }}
-                    >
-                      <option value="" disabled>
-                        Choose a data source
+          {!trade.closedAt && (
+            <p className="text-xs text-muted-foreground">
+              Open trade: candles up to now. Estimates are available once it closes.
+            </p>
+          )}
+          {available.length > 0 && (
+            <>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <Label htmlFor="market-provider">Data provider</Label>
+                  <OptionSelect
+                    id="market-provider"
+                    value={provider}
+                    onValueChange={(value) => {
+                      invalidate();
+                      setProvider(value);
+                      setDataset("");
+                      setConfirmed(false);
+                    }}
+                  >
+                    <option value="" disabled>
+                      Choose a data source
+                    </option>
+                    {available.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name}
                       </option>
-                      {available.map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.name}
-                        </option>
-                      ))}
-                    </OptionSelect>
-                  </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="market-symbol">Provider symbol</Label>
-                    <Input
-                      id="market-symbol"
-                      value={symbol}
-                      onChange={(event) => {
-                        invalidate();
-                        setSymbol(event.target.value);
-                        setConfirmed(false);
-                      }}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="market-resolution">Candle resolution</Label>
-                    <OptionSelect
-                      id="market-resolution"
-                      value={resolution}
-                      onValueChange={(value) => {
-                        invalidate();
-                        setResolution(value as Resolution);
-                      }}
-                    >
-                      {Object.keys(RESOLUTIONS).map((value) => (
-                        <option key={value} value={value}>
-                          {value}
-                        </option>
-                      ))}
-                    </OptionSelect>
-                  </div>
-                  {(info?.datasets ||
-                    info?.mode === "csv" ||
-                    info?.id === "london-strategic-edge") && (
-                    <div className="space-y-1">
-                      <Label htmlFor="market-dataset">Data feed / dataset</Label>
-                      {info?.datasets || info?.mode === "csv" ? (
-                        <OptionSelect
-                          id="market-dataset"
-                          value={dataset}
-                          onValueChange={(value) => {
-                            invalidate();
-                            setDataset(value);
-                            setConfirmed(false);
-                          }}
-                        >
-                          {(
-                            info.datasets ?? [
-                              { value: "", label: "Automatic matching file" },
-                              ...(csv?.datasets ?? []).map((item) => ({
-                                value: item.id,
-                                label: `${item.name} · ${item.symbol} · ${item.resolution}`,
-                              })),
-                            ]
-                          ).map((item) => (
-                            <option key={item.value} value={item.value}>
-                              {item.label}
-                            </option>
-                          ))}
-                        </OptionSelect>
-                      ) : (
-                        <Input
-                          id="market-dataset"
-                          value={dataset}
-                          placeholder="Leave blank for automatic selection"
-                          onChange={(event) => {
-                            invalidate();
-                            setDataset(event.target.value);
-                            setConfirmed(false);
-                          }}
-                        />
-                      )}
-                    </div>
-                  )}
+                    ))}
+                  </OptionSelect>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  {info?.description} {info?.symbolHint} Option contract history is not supported
-                  yet.
-                </p>
-                <label className="flex items-start gap-2 text-xs text-muted-foreground">
-                  <input
-                    type="checkbox"
-                    checked={confirmed}
-                    className="mt-0.5"
+                <div className="space-y-1">
+                  <Label htmlFor="market-symbol">Provider symbol</Label>
+                  <Input
+                    id="market-symbol"
+                    value={symbol}
                     onChange={(event) => {
                       invalidate();
-                      setConfirmed(event.target.checked);
+                      setSymbol(event.target.value);
+                      setConfirmed(false);
                     }}
                   />
-                  <span>
-                    Calculate and save MAE/MFE estimates for Reports. I confirm that this
-                    instrument, price adjustments and quote currency match my fills and account (
-                    {trade.currency}).
-                  </span>
-                </label>
-                <p className="text-xs text-muted-foreground">
-                  Unchecked: load candles and replay only. Checked: also calculate monetary
-                  estimates and save valid results to Reports. Missing or mismatched data stays
-                  unavailable.
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    disabled={
-                      busy ||
-                      !symbol.trim() ||
-                      !available.some((item) => item.id === provider) ||
-                      Boolean(info?.datasets && !dataset)
-                    }
-                    onClick={() => void load()}
-                  >
-                    {busy
-                      ? "Loading history…"
-                      : confirmed
-                        ? "Load data & save estimates"
-                        : "Load candles & replay"}
-                  </Button>
-                  {busy && (
-                    <Button variant="outline" onClick={invalidate}>
-                      Cancel
-                    </Button>
-                  )}
-                  {result && (
-                    <Button variant="outline" onClick={invalidate}>
-                      Show original chart
-                    </Button>
-                  )}
                 </div>
-              </>
-            )
+                <div className="space-y-1">
+                  <Label htmlFor="market-resolution">Candle resolution</Label>
+                  <OptionSelect
+                    id="market-resolution"
+                    value={resolution}
+                    onValueChange={(value) => {
+                      invalidate();
+                      setResolution(value as Resolution);
+                    }}
+                  >
+                    {Object.keys(RESOLUTIONS).map((value) => (
+                      <option key={value} value={value}>
+                        {value}
+                      </option>
+                    ))}
+                  </OptionSelect>
+                </div>
+                {(info?.datasets ||
+                  info?.mode === "csv" ||
+                  info?.id === "london-strategic-edge") && (
+                  <div className="space-y-1">
+                    <Label htmlFor="market-dataset">Data feed / dataset</Label>
+                    {info?.datasets || info?.mode === "csv" ? (
+                      <OptionSelect
+                        id="market-dataset"
+                        value={dataset}
+                        onValueChange={(value) => {
+                          invalidate();
+                          setDataset(value);
+                          setConfirmed(false);
+                        }}
+                      >
+                        {(
+                          info.datasets ?? [
+                            { value: "", label: "Automatic matching file" },
+                            ...(csv?.datasets ?? []).map((item) => ({
+                              value: item.id,
+                              label: `${item.name} · ${item.symbol} · ${item.resolution}`,
+                            })),
+                          ]
+                        ).map((item) => (
+                          <option key={item.value} value={item.value}>
+                            {item.label}
+                          </option>
+                        ))}
+                      </OptionSelect>
+                    ) : (
+                      <Input
+                        id="market-dataset"
+                        value={dataset}
+                        placeholder="Leave blank for automatic selection"
+                        onChange={(event) => {
+                          invalidate();
+                          setDataset(event.target.value);
+                          setConfirmed(false);
+                        }}
+                      />
+                    )}
+                  </div>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {info?.description} {info?.symbolHint} Option contract history is not supported yet.
+              </p>
+              <label className="flex items-start gap-2 text-xs text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={confirmed}
+                  className="mt-0.5"
+                  onChange={(event) => {
+                    invalidate();
+                    setConfirmed(event.target.checked);
+                  }}
+                />
+                <span>
+                  Calculate and save MAE/MFE estimates for Reports. I confirm that this instrument,
+                  price adjustments and quote currency match my fills and account ({trade.currency}
+                  ).
+                </span>
+              </label>
+              <p className="text-xs text-muted-foreground">
+                Unchecked: load candles and replay only. Checked: also calculate monetary estimates
+                and save valid results to Reports. Missing or mismatched data stays unavailable.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  disabled={
+                    busy ||
+                    !symbol.trim() ||
+                    !available.some((item) => item.id === provider) ||
+                    Boolean(info?.datasets && !dataset)
+                  }
+                  onClick={() => void load()}
+                >
+                  {busy
+                    ? "Loading history…"
+                    : confirmed
+                      ? "Load data & save estimates"
+                      : "Load candles & replay"}
+                </Button>
+                {busy && (
+                  <Button variant="outline" onClick={invalidate}>
+                    Cancel
+                  </Button>
+                )}
+                {result && (
+                  <Button variant="outline" onClick={invalidate}>
+                    Show original chart
+                  </Button>
+                )}
+              </div>
+            </>
           )}
           {error && (
             <p role="alert" className="text-sm text-destructive">
