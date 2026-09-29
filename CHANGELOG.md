@@ -79,6 +79,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Fixed
 
+- A crypto trade's page shows its candles by itself when Binance, Bybit or Coinbase is enabled, however the symbol was written (BTC, BTCUSD, XBTUSD, BTC/USDT, BTCUSDT.P); candles now include the market before the entry and after the exit, open trades show candles up to now, and a coin booked as a CFD (a broker's BTCUSD) is no longer refused
 - Charts load faster: candle pages are fetched several at a time on a fixed grid (so older pages come from the server's cache when a chart is reopened), public exchanges are no longer throttled like keyed brokers, Binance symbol details are cached, the chart engine downloads while the page loads, and the symbol search no longer downloads an exchange's whole listing before you use it
 - Charts pan and zoom smoothly with drawings on them: drawings sit over the candles instead of being re-uploaded to the graphics card on every frame (a drawing sent to the back still goes under)
 - Pages no longer prefetch every sidebar link on load, which slowed the page's own requests; a link is prefetched when you point at it

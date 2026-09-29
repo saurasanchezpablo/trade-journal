@@ -10,18 +10,32 @@ by default. No API key or provider history is shipped with the project.
    candle CSV. Configure or enable a connection only if you want to use it, then
    select **Test connection**. Environment credentials, when deliberately configured,
    take precedence over saved credentials.
-2. Open a closed trade. Select a provider, its exact symbol, and candle resolution.
-   Select a feed where required; an optional dataset can disambiguate instruments.
-   Broker-specific symbols are not silently translated.
-3. Select **Load market data**. This makes provider requests and uses your plan's
-   allowance. Replay supports restart, play/pause, step, speed and scrubbing.
+2. Open a trade (closed or still open). When a source is known for it, its candles load on
+   their own (see below); otherwise select a provider, its exact symbol, and candle
+   resolution, and a feed where required. An optional dataset can disambiguate instruments.
+3. Select **Load candles & replay**. This makes provider requests and uses your plan's
+   allowance. Candles start well before the entry and run past the exit (at least 30
+   candles, or a quarter of the trade's length, either side); an open trade's run up to
+   now. Replay supports restart, play/pause, step, speed and scrubbing.
 4. To enable monetary excursion estimates, first verify that the provider's
    instrument, price adjustment basis and quote currency match the executions and
    account currency. Derivatives also require a contract multiplier in Settings.
 
-Before history is explicitly loaded, Vela displays a price path from recorded
-fills for every asset class. Opening a trade never automatically contacts a market
-data provider, including public crypto feeds.
+Before candles load, Vela displays a price path from recorded fills for every asset class.
+
+### Candles chosen for a trade
+
+Opening a trade loads its candles by itself only from a source you enabled, in this order:
+the market replay you loaded for that trade before; a chart you saved on its symbol; or,
+for a coin (asset class crypto, or unset, CFD, forex or other, as brokers book BTCUSD), the
+first enabled public exchange that lists it: Binance, then Bybit's perpetuals and spot, then
+Coinbase. The journal symbol is matched however it was written (BTC, BTCUSD, BTC/USDT,
+XBTUSD, BTCUSDT.P), taking the exchange's most traded dollar pair unless you wrote a
+particular stablecoin. The page says which instrument and source it used, and you can change
+them. With no source enabled, nothing is requested and the page says what to enable.
+Automatic loads never save estimates; that still needs the confirmation checkbox. A coin
+booked as a CFD or forex shows the exchange's candles with a warning that its prices can
+differ from your broker's.
 
 ## What MAE and MFE mean here
 
