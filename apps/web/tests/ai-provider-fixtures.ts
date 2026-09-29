@@ -161,3 +161,19 @@ export function script(...responses: (() => Response)[]) {
       JSON.parse(String((fetcher.mock.calls[call] as [string, RequestInit])[1].body)) as unknown,
   };
 }
+
+/** A whole (not streamed) Anthropic answer with one text block, for `generateText`. */
+export const anthropicMessage = (text: string) =>
+  new Response(
+    JSON.stringify({
+      id: "msg_1",
+      type: "message",
+      role: "assistant",
+      model: "claude-fixture",
+      content: [{ type: "text", text }],
+      stop_reason: "end_turn",
+      stop_sequence: null,
+      usage: { input_tokens: 1, output_tokens: 1 },
+    }),
+    { headers: { "Content-Type": "application/json" } },
+  );

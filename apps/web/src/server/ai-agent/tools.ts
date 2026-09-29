@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import {
   DIMENSIONS,
   FILTER_KEYS,
@@ -14,7 +14,7 @@ import {
   type Dimension,
 } from "@luxalgo/journal-core";
 import { jsonSchema, tool, type ToolSet } from "ai";
-import { db, journalDays, playbooks, tradeExcursions } from "@/db";
+import { db, journalDays, playbooks, tradeRuleChecks } from "@/db";
 import { RESOLUTIONS, isResolution, type MarketBar, type Resolution } from "@/lib/market-data";
 import { matchKeys, symbolKey } from "@/lib/symbol-match";
 import { describePlan } from "@/lib/analysis-plan";
@@ -571,6 +571,19 @@ export function journalTools({ scope, signal }: ToolContext): ToolSet {
           })),
           notes: row?.notes?.trim() ? clip(row.notes.trim(), MAX_NOTE_CHARS) : null,
           strategyRules: rules.slice(0, 20),
+          // The trader's own rule review for this trade, where done.
+          ruleReview: strategy
+            ? db
+                .select({ rule: tradeRuleChecks.rule, followed: tradeRuleChecks.followed })
+                .from(tradeRuleChecks)
+                .where(
+                  and(
+                    eq(tradeRuleChecks.tradeKey, trade.key),
+                    eq(tradeRuleChecks.playbookId, strategy.id),
+                  ),
+                )
+                .all()
+            : [],
         };
       }),
     }),
