@@ -250,12 +250,14 @@ export function analysisAlertSource(id: string) {
       drawingsJson: chartAnalyses.drawingsJson,
       layersJson: chartAnalyses.layersJson,
       zonesJson: chartAnalyses.zonesJson,
+      planJson: chartAnalyses.planJson,
     })
     .from(chartAnalyses)
     .where(eq(chartAnalyses.id, id))
     .get();
   if (!row) return null;
   return {
+    plan: parsePlan(row.planJson),
     symbol: row.symbol,
     provider: row.provider,
     dataset: row.dataset,

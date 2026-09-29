@@ -139,6 +139,38 @@ describe("the server watches alerts while no page is open", () => {
     h.engine.stop();
   });
 
+  it("an alert says what the level is to the analysis's plan", async () => {
+    const plan = {
+      bias: "long",
+      playbookId: null,
+      scenarios: [
+        {
+          id: "s1",
+          name: "Reclaim",
+          direction: "long",
+          trigger: 100,
+          target: 108,
+          invalidation: 97,
+          note: "",
+        },
+      ],
+    };
+    const { id } = await analysis({ plan });
+    const h = harness();
+    h.engine.check();
+    h.price("BTCUSDT", 99);
+    h.price("BTCUSDT", 101);
+    await flush();
+    expect(h.delivered.map((n) => n.body)).toEqual([
+      'BTCUSDT crossed above Horizontal line at 100\nPlan: sets off "Reclaim" (long), target 108, wrong below 97.',
+    ]);
+    const events = await (
+      await eventsRoute.GET(new Request(`http://journal.test/api/alerts/events?analysisId=${id}`))
+    ).json();
+    expect(events.events[0].message).toContain('Plan: sets off "Reclaim"');
+    h.engine.stop();
+  });
+
   it("zones alert on entering and breaking; each alert waits a minute before repeating", async () => {
     await analysis();
     const h = harness();
@@ -148,8 +180,9 @@ describe("the server watches alerts while no page is open", () => {
     h.price("BTCUSDT", 113);
     await flush();
     expect(h.delivered.map((n) => n.body)).toEqual([
-      "BTCUSDT entered the zone 110 to 112",
-      "BTCUSDT broke above the zone 110 to 112",
+      // Each with its note: what the zone is to price.
+      "BTCUSDT entered the zone 110 to 112\nTesting it as resistance.",
+      "BTCUSDT broke above the zone 110 to 112\nResistance broken; it may hold as support now.",
     ]);
     // Back into the zone within the minute: no second "entered".
     h.price("BTCUSDT", 111);
@@ -159,7 +192,10 @@ describe("the server watches alerts while no page is open", () => {
     h.price("BTCUSDT", 113);
     h.price("BTCUSDT", 111);
     await flush();
-    expect(h.delivered.at(-1)!.body).toBe("BTCUSDT entered the zone 110 to 112");
+    // From above this time: the zone is being tested as support.
+    expect(h.delivered.at(-1)!.body).toBe(
+      "BTCUSDT entered the zone 110 to 112\nTesting it as support.",
+    );
     h.engine.stop();
   });
 

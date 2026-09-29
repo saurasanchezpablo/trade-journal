@@ -5,7 +5,8 @@ import { ALERT_TYPES, lineCrossings, type AlertLine, type LineSides } from "@/li
 import { zoneEvents, type SrZone } from "@/lib/sr-zones";
 import { drawingName, effectiveLayer, layerOf } from "@/lib/chart-layers";
 import { analysisEditPath, drawingLabel } from "@/lib/chart-analysis";
-import { lineAlert, zoneAlert, type AlertMessage } from "@/lib/alert-messages";
+import { alertText, lineAlert, zoneAlert, type AlertMessage } from "@/lib/alert-messages";
+import type { AnalysisPlan } from "@/lib/analysis-plan";
 import { analysisAlertSource } from "../chart-analyses";
 import { listenLive } from "../market-data/live";
 import { connectionKey, providerFor } from "../market-data/connections";
@@ -38,6 +39,8 @@ interface Rules {
   resolution: Resolution;
   lines: (AlertLine & { label: string })[];
   zones: SrZone[];
+  /** The analysis's plan, for the note that explains each alert. */
+  plan: AnalysisPlan | null;
 }
 
 interface Watch extends Rules {
@@ -126,6 +129,7 @@ export function rulesFor(analysisId: string): Rules | null {
     resolution: analysis.resolution,
     lines,
     zones,
+    plan: analysis.plan,
   };
 }
 
@@ -285,14 +289,20 @@ export class AlertEngine {
       const key = `zone-${event.zoneId}-${event.kind}`;
       if (!zone || !ready(key)) continue;
       watch.alertedAt.set(key, now);
-      fired.push(zoneAlert(watch.analysisId, watch.symbol, event, zone));
+      fired.push(zoneAlert(watch.analysisId, watch.symbol, event, zone, watch.plan));
     }
     for (const hit of lineCrossings(watch.lines, previous, { time, close }, watch.sides)) {
       if (!ready(hit.drawingId)) continue;
       watch.alertedAt.set(hit.drawingId, now);
       const line = watch.lines.find((l) => l.id === hit.drawingId);
       fired.push(
-        lineAlert(watch.analysisId, watch.symbol, hit, line?.label ?? drawingLabel(hit.type)),
+        lineAlert(
+          watch.analysisId,
+          watch.symbol,
+          hit,
+          line?.label ?? drawingLabel(hit.type),
+          watch.plan,
+        ),
       );
     }
     for (const message of fired) void this.emit(watch, message);
@@ -307,7 +317,7 @@ export class AlertEngine {
         analysisId: watch.analysisId,
         symbol: watch.symbol,
         title: message.title,
-        message: message.body,
+        message: alertText(message),
         at: nowIso(),
       })
       .run();
@@ -327,7 +337,7 @@ export class AlertEngine {
     try {
       const delivered = await this.deps.deliver({
         title: message.title,
-        body: message.body,
+        body: alertText(message),
         tag: message.tag,
         url: analysisEditPath(watch.analysisId),
       });

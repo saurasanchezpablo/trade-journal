@@ -105,6 +105,7 @@ import {
 import type { MarketCsvDataset } from "@/lib/market-csv";
 import { providerInfo } from "@/lib/market-providers";
 import { lineCrossings, type LineSides } from "@/lib/price-alerts";
+import { alertText, lineAlert, zoneAlert } from "@/lib/alert-messages";
 import { queueFlush } from "@/lib/save-queue";
 import { SymbolSearchInput } from "@/components/symbol-search";
 import { recentSymbols, type RecentSymbol } from "@/lib/recent-symbols";
@@ -205,6 +206,8 @@ const newZoneId = () => `zone-${Date.now().toString(36)}${Math.random().toString
 interface AlertEntry {
   key: string;
   label: string;
+  /** What the level is to the plan (see `lib/alert-explain.ts`). */
+  note?: string | null;
   at: number;
   drawingId?: string;
   direction?: "up" | "down";
@@ -1435,13 +1438,21 @@ const ChartBoard = memo(function ChartBoard({
         const key = `zone-${event.zoneId}-${event.kind}`;
         if (!zone || now - (alertedAt.current.get(key) ?? 0) < ALERT_COOLDOWN_MS) continue;
         alertedAt.current.set(key, now);
-        const range = `${zone.label ? `${zone.label} ` : ""}${fmtNumber(zone.low)} to ${fmtNumber(zone.high)}`;
-        const label =
-          event.kind === "enter"
-            ? `${zoneSymbol} entered the zone ${range}`
-            : `${zoneSymbol} broke ${event.direction === "up" ? "above" : "below"} the zone ${range}`;
-        notify("Zone alert", label, `${zoneSymbol}-${key}`);
-        pushAlert({ key: `${key}-${now}`, label, at: now, direction: event.direction });
+        const message = zoneAlert(
+          state.current.analysisId,
+          zoneSymbol,
+          event,
+          zone,
+          state.current.plan,
+        );
+        notify("Zone alert", alertText(message), `${zoneSymbol}-${key}`);
+        pushAlert({
+          key: `${key}-${now}`,
+          label: message.body,
+          note: message.note,
+          at: now,
+          direction: event.direction,
+        });
       }
       const hits = lineCrossings(
         state.current.drawings.filter((d) => layerVisible(state.current.layers, d.id)),
@@ -1456,11 +1467,12 @@ const ChartBoard = memo(function ChartBoard({
         const drawing = state.current.drawings.find((d) => d.id === hit.drawingId);
         const label =
           drawingName(state.current.layers, hit.drawingId) ?? drawingLabel(hit.type, drawing?.text);
-        const message = `${symbol} crossed ${hit.direction === "up" ? "above" : "below"} ${label} at ${fmtNumber(hit.price)}`;
-        notify("Chart alert", message, `${symbol}-${hit.drawingId}`);
+        const message = lineAlert(state.current.analysisId, symbol, hit, label, state.current.plan);
+        notify("Chart alert", alertText(message), `${symbol}-${hit.drawingId}`);
         pushAlert({
           key: `${hit.drawingId}-${now}`,
-          label: message,
+          label: message.body,
+          note: message.note,
           at: now,
           drawingId: hit.drawingId,
           direction: hit.direction,
@@ -2507,6 +2519,7 @@ const ChartBoard = memo(function ChartBoard({
                           </span>
                         )}
                         {alert.label}
+                        {alert.note && <span className="block">{alert.note}</span>}
                         <span className="block text-muted-foreground">
                           {new Date(alert.at).toLocaleTimeString()}
                         </span>
