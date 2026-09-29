@@ -31,6 +31,7 @@ interface SettingsBody {
   /** Set to a key string to store (encrypted), or null to clear. Absent = unchanged. */
   anthropicKey?: string | null;
   openaiKey?: string | null;
+  googleKey?: string | null;
   aiProvider?: AiProvider;
   aiModel?: string;
 }
@@ -39,7 +40,7 @@ export const PATCH = handler(async (request: Request) => {
   const body = (await request.json()) as SettingsBody;
   requireValue(body && typeof body === "object" && !Array.isArray(body), "Enter valid settings.");
   if (body.aiProvider !== undefined)
-    requireValue(isAiProvider(body.aiProvider), "Choose Anthropic or OpenAI.");
+    requireValue(isAiProvider(body.aiProvider), "Choose Anthropic, OpenAI or Google Gemini.");
   const provider = body.aiProvider ?? getAiProvider();
   if (body.aiModel !== undefined)
     requireValue(

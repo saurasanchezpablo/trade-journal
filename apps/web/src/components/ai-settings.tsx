@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import {
   AI_DEFAULT_MODELS,
+  AI_KEY_ENVIRONMENT,
+  AI_KEY_PLACEHOLDERS,
   AI_PROVIDER_NAMES,
   AI_PROVIDERS,
   type AiProvider,
@@ -70,8 +72,9 @@ export function AiSettings() {
       </CardHeader>
       <CardContent className="space-y-3">
         <p className="text-sm text-muted-foreground">
-          Use Anthropic or OpenAI for recaps, trade critiques, and “ask your journal”. Your key is
-          encrypted at rest. AI requests go from your server directly to the provider you select.
+          Use Anthropic, OpenAI or Google Gemini for recaps, trade critiques, and “ask your
+          journal”. Your key is encrypted at rest. AI requests go from your server directly to the
+          provider you select.
         </p>
         {data && (
           <p className="text-xs text-muted-foreground">
@@ -119,6 +122,8 @@ export function AiSettings() {
         <p className="text-xs text-muted-foreground">
           Use a text model available to your provider account. Each provider keeps its own model and
           key.
+          {provider === "google" &&
+            " On Gemini's free tier, Google may use what you send (your trades and notes) to improve its products, and people may review it; a key from a Cloud project with billing enabled keeps it out."}
         </p>
         <div className="space-y-1">
           <Label htmlFor="ai-api-key">{name} API key</Label>
@@ -131,19 +136,13 @@ export function AiSettings() {
               setApiKey(event.target.value);
               setSaved("");
             }}
-            placeholder={
-              connection?.configured
-                ? "Key configured"
-                : provider === "anthropic"
-                  ? "sk-ant-…"
-                  : "sk-…"
-            }
+            placeholder={connection?.configured ? "Key configured" : AI_KEY_PLACEHOLDERS[provider]}
             autoComplete="off"
             spellCheck={false}
           />
           <p className="text-xs text-muted-foreground">
             {environment
-              ? `Using ${provider === "openai" ? "OPENAI_API_KEY" : "ANTHROPIC_API_KEY"} from the server environment. Change or remove that variable on the server to update the key.`
+              ? `Using ${connection?.environmentKey ?? AI_KEY_ENVIRONMENT[provider][0]} from the server environment. Change or remove that variable on the server to update the key.`
               : connection?.configured
                 ? "Leave blank to keep your saved key, or enter a replacement."
                 : "Add your API key, then save to use this provider."}

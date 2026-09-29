@@ -37,7 +37,7 @@ export function aiFeedback(message: string): AiFeedback {
     return {
       title: "Set up AI to continue",
       description:
-        "Connect an Anthropic or OpenAI API key in Settings to ask questions, generate recaps, and review trades.",
+        "Connect an Anthropic, OpenAI or Google Gemini API key in Settings to ask questions, generate recaps, and review trades.",
       tone: "info",
       action: { label: "Set up AI", href: "/settings#ai-settings" },
     };

@@ -4,7 +4,10 @@ import { decryptJson, encryptJson } from "./crypto";
 import { EMPTY_DEFAULTS, type JournalDefaults } from "@/lib/journal-defaults";
 import {
   AI_DEFAULT_MODELS,
+  AI_KEY_ENVIRONMENT,
+  AI_PROVIDERS,
   isAiProvider,
+  type AiConnection,
   type AiProvider,
   type AiSettingsPayload,
 } from "@/lib/ai-settings";
@@ -48,9 +51,18 @@ export const getMultipliers = (): Record<string, number> => {
   }
 };
 
-export const aiKeyEnvironment = (provider: AiProvider): string | null =>
-  (provider === "openai" ? process.env.OPENAI_API_KEY : process.env.ANTHROPIC_API_KEY)?.trim() ||
-  null;
+/** The provider's key from the server environment, if one of its variables is set. */
+export const aiKeyEnvironment = (provider: AiProvider): string | null => {
+  for (const name of AI_KEY_ENVIRONMENT[provider]) {
+    const value = process.env[name]?.trim();
+    if (value) return value;
+  }
+  return null;
+};
+
+/** Which environment variable supplies the provider's key, for the Settings page. */
+export const aiKeyEnvironmentName = (provider: AiProvider): string | null =>
+  AI_KEY_ENVIRONMENT[provider].find((name) => process.env[name]?.trim()) ?? null;
 
 /** Provider keys are stored separately and encrypted like broker credentials. */
 export const getAiKey = (provider: AiProvider): string | null => {
@@ -77,12 +89,17 @@ export const setAnthropicKey = (key: string | null): void => setAiKey("anthropic
 export const getAiProvider = (): AiProvider => {
   const selected = getSetting("aiProvider");
   if (isAiProvider(selected)) return selected;
-  // Preserve existing Anthropic setups; an OpenAI-only setup works without a UI visit.
-  return !getAiKey("anthropic") && getAiKey("openai") ? "openai" : "anthropic";
+  // Preserve existing Anthropic setups; a setup with only one other provider's key works
+  // without a visit to Settings (OpenAI before Gemini when both are present).
+  if (getAiKey("anthropic")) return "anthropic";
+  if (getAiKey("openai")) return "openai";
+  if (getAiKey("google")) return "google";
+  return "anthropic";
 };
 
+/** The settings key of a provider's model (Anthropic keeps its original key). */
 export const aiModelSetting = (provider: AiProvider): string =>
-  provider === "anthropic" ? "aiModel" : "openaiModel";
+  provider === "anthropic" ? "aiModel" : `${provider}Model`;
 
 export const getAiModel = (provider: AiProvider): string =>
   getSetting(aiModelSetting(provider))?.trim() || AI_DEFAULT_MODELS[provider];
@@ -97,8 +114,11 @@ export const getAiSettings = (): AiSettingsPayload => {
         ? ("saved" as const)
         : null,
     model: getAiModel(provider),
+    environmentKey: aiKeyEnvironmentName(provider),
   });
-  const aiConnections = { anthropic: connection("anthropic"), openai: connection("openai") };
+  const aiConnections = Object.fromEntries(
+    AI_PROVIDERS.map((provider) => [provider, connection(provider)]),
+  ) as Record<AiProvider, AiConnection>;
   return {
     aiProvider,
     aiConfigured: aiConnections[aiProvider].configured,

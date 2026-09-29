@@ -27,6 +27,8 @@ beforeEach(() => {
   db.delete(settings).run();
   vi.stubEnv("ANTHROPIC_API_KEY", "");
   vi.stubEnv("OPENAI_API_KEY", "");
+  vi.stubEnv("GEMINI_API_KEY", "");
+  vi.stubEnv("GOOGLE_GENERATIVE_AI_API_KEY", "");
   vi.stubEnv("JOURNAL_PASSWORD", "");
   vi.stubGlobal(
     "fetch",
@@ -279,5 +281,98 @@ describe("AI provider requests through the real SDK adapters", () => {
     const result = runAi("Fixture").catch((error) => error as Error);
     await vi.runAllTimersAsync();
     expect(((await result) as Error).message).toContain("AI rate limit");
+  });
+});
+
+describe("Google Gemini", () => {
+  const gemini = (text: string, finishReason = "STOP") =>
+    Response.json({
+      candidates: [{ content: { role: "model", parts: text ? [{ text }] : [] }, finishReason }],
+      usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 5, totalTokenCount: 15 },
+    });
+
+  it("sends Gemini's own key and model to its endpoint, with chart images inline", async () => {
+    await save({
+      aiProvider: "google",
+      googleKey: "fixture-gemini",
+      openaiKey: "fixture-openai",
+      anthropicKey: "fixture-anthropic",
+    });
+    expect(await state()).toMatchObject({
+      aiProvider: "google",
+      aiConfigured: true,
+      aiModel: "gemini-3.8-flash",
+      aiConnections: { google: { configured: true, source: "saved", environmentKey: null } },
+    });
+    const fetcher = vi.fn(async () => gemini("Gemini fixture"));
+    vi.stubGlobal("fetch", fetcher);
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
+    expect(await runAi("Fixture journal question", 900, [png])).toBe("Gemini fixture");
+    const [url, init] = (fetcher.mock.calls as unknown as [string, RequestInit][])[0]!;
+    expect(url).toBe(
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent",
+    );
+    expect(new Headers(init.headers).get("x-goog-api-key")).toBe("fixture-gemini");
+    expect(JSON.stringify(init)).not.toMatch(/fixture-openai|fixture-anthropic/);
+    const body = JSON.parse(init.body as string);
+    expect(body.generationConfig).toMatchObject({ maxOutputTokens: 900 });
+    expect(JSON.stringify(body.contents)).toContain("Fixture journal question");
+    expect(JSON.stringify(body.contents)).toContain('"mimeType":"image/png"');
+    expect(JSON.stringify(body.systemInstruction)).toContain("reflection layer");
+  });
+
+  it("keeps its own model setting", async () => {
+    await save({ aiProvider: "google", googleKey: "fixture-gemini", aiModel: "gemini-3.5-flash" });
+    await save({ aiProvider: "openai", openaiKey: "fixture-openai", aiModel: "gpt-4.1" });
+    expect(getAiModel("google")).toBe("gemini-3.5-flash");
+    expect(getAiModel("openai")).toBe("gpt-4.1");
+    expect(getSetting("googleModel")).toBe("gemini-3.5-flash");
+  });
+
+  it("reads GEMINI_API_KEY first, then GOOGLE_GENERATIVE_AI_API_KEY, and says which", async () => {
+    vi.stubEnv("GOOGLE_GENERATIVE_AI_API_KEY", "fixture-sdk-name");
+    expect(getAiKey("google")).toBe("fixture-sdk-name");
+    vi.stubEnv("GEMINI_API_KEY", "fixture-google-name");
+    expect(getAiKey("google")).toBe("fixture-google-name");
+    // A Gemini-only environment works without a visit to Settings.
+    expect(await state()).toMatchObject({
+      aiProvider: "google",
+      aiConnections: {
+        google: { configured: true, source: "environment", environmentKey: "GEMINI_API_KEY" },
+      },
+    });
+    expect((await save({ googleKey: "fixture-replacement" })).status).toBe(400);
+  });
+
+  it("turns a wrong key into an authentication message without repeating it", async () => {
+    await save({ aiProvider: "google", googleKey: "fixture-gemini" });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json(
+          {
+            error: {
+              code: 400,
+              message: "API key not valid. Please pass a valid API key. fixture-private",
+              status: "INVALID_ARGUMENT",
+              details: [{ reason: "API_KEY_INVALID" }],
+            },
+          },
+          { status: 400 },
+        ),
+      ),
+    );
+    const error = (await runAi("Fixture").catch((e) => e)) as Error;
+    expect(error.message).toContain("authentication_error");
+    expect(error.message).not.toContain("fixture-private");
+  });
+
+  it("says when Gemini's safety filter blocked the answer", async () => {
+    await save({ aiProvider: "google", googleKey: "fixture-gemini" });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => gemini("", "SAFETY")),
+    );
+    await expect(runAi("Fixture")).rejects.toThrow(/safety filter/);
   });
 });

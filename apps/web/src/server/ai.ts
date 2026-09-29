@@ -1,4 +1,5 @@
 import { createAnthropic } from "@ai-sdk/anthropic";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createOpenAI } from "@ai-sdk/openai";
 import { APICallError, RetryError, generateText } from "ai";
 import { getAiKey, getAiModel, getAiProvider } from "./settings";
@@ -33,12 +34,15 @@ export const runAi = async (
     );
   }
   const model = getAiModel(provider);
+  let result: Awaited<ReturnType<typeof generateText>>;
   try {
-    const result = await generateText({
+    result = await generateText({
       model:
         provider === "openai"
           ? createOpenAI({ apiKey }).responses(model)
-          : createAnthropic({ apiKey })(model),
+          : provider === "google"
+            ? createGoogleGenerativeAI({ apiKey })(model)
+            : createAnthropic({ apiKey })(model),
       ...(provider === "openai" ? { providerOptions: { openai: { store: false } } } : {}),
       system: SYSTEM,
       ...(images.length
@@ -60,18 +64,23 @@ export const runAi = async (
         : { prompt }),
       maxOutputTokens,
     });
-    if (!result.text.trim()) throw new Error("AI returned no text. Check the model or try again.");
-    return result.text;
   } catch (error) {
     if (RetryError.isInstance(error)) error = error.lastError;
     // Provider error messages can contain key fragments or request data. Never relay them.
     if (APICallError.isInstance(error)) {
-      if (error.statusCode === 401 || error.statusCode === 403)
+      // Gemini answers a wrong key with 400 "API key not valid" rather than 401.
+      if (
+        error.statusCode === 401 ||
+        error.statusCode === 403 ||
+        /API key not valid|API_KEY_INVALID/i.test(error.message)
+      )
         throw new Error(
           "AI authentication_error: check your provider key and permissions in Settings.",
         );
       if (
-        /credit balance|billing|insufficient_quota|exceeded your current quota/i.test(error.message)
+        /credit balance|billing|insufficient_quota|exceeded your current quota|billing account/i.test(
+          error.message,
+        )
       )
         throw new Error("AI billing: check your provider account's credits and quota.");
       if (error.statusCode === 429 || error.statusCode === 529)
@@ -86,4 +95,12 @@ export const runAi = async (
     }
     throw new Error("AI request failed. Check your provider settings or try again shortly.");
   }
+  // Checked outside the request's error handling, so its own message reaches the user.
+  if (!result.text.trim())
+    throw new Error(
+      result.finishReason === "content-filter"
+        ? "AI returned no text: the provider's safety filter blocked the answer."
+        : "AI returned no text. Check the model or try again.",
+    );
+  return result.text;
 };

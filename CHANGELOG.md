@@ -6,6 +6,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
+- Google Gemini as an AI provider for recaps, trade critiques and "ask your journal": choose it in **Settings → AI** with a Gemini API key (or `GEMINI_API_KEY` on the server); default model `gemini-3.8-flash`, chart images included
 - Bybit as a chart source: public candles and real-time prices for perpetuals and futures (USDT/USDC), spot and inverse contracts, no API key; enable it in Settings and choose the market next to the symbol
 - Symbol search on Charts for Binance, Bybit and Coinbase: typing in the symbol field suggests the exchange's instruments, the most traded first
 - Sign in with an OpenID Connect provider such as Authentik, Keycloak or Zitadel (`JOURNAL_OIDC_*` settings, see [docs/authentication.md](docs/authentication.md)): authorization code flow with PKCE, state and nonce, ID token signature and claim validation, an allow-list of groups, verified emails or subjects, server-side sessions, **Sign out** in the sidebar (optionally ending the provider session too) and back-channel logout. Password sign-in keeps working and can be used alongside it
@@ -63,6 +64,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Fixed
 
+- An AI answer that came back empty showed "AI request failed" instead of saying it returned no text (or that the provider's safety filter blocked it)
 - A chart opened on a long saved view loads all of its candles (up to 20,000): it stopped at the newest 5000, so on 1h and shorter charts the start of the view stayed empty and a volume profile over it counted only the recent part, which moved its POC and value area towards recent prices
 - The volume profiles' value area holds at least its 70%: it stopped before the row that would take it past the share, so VAL to VAH could hold less (69.6% on a BTC test range, with a heavy row just above VAH left out)
 - Built-in Historical volatility is TradingView's HV (length 10, annualised by weeks on weekly candles and above; it was 2.6 times too high on weekly charts), and new SMA, EMA, WMA, Hull and ALMA indicators start at TradingView's length of 9 and the Stochastic at its %K smoothing of 1. Indicators already on a chart keep their settings
