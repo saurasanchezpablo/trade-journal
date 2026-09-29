@@ -21,7 +21,8 @@ function Side({ label, stats, currency }: { label: string; stats: SideStats; cur
     <div className="min-w-0">
       <div className="text-xs text-muted-foreground">{label}</div>
       <div className="tnum text-sm">
-        {stats.trades} trades · {stats.winRate === null ? "–" : fmtPercent(stats.winRate, 0)} won
+        {stats.trades} trade{stats.trades === 1 ? "" : "s"} ·{" "}
+        {stats.winRate === null ? "–" : fmtPercent(stats.winRate, 0)} won
       </div>
       <div className="text-sm">
         {stats.avgPnl === null ? "–" : <Pnl value={stats.avgPnl} currency={currency} />}{" "}

@@ -108,10 +108,11 @@ function pattern(
   };
 }
 
+/** "12 trades opened within 15 minutes of a loss: ..." (`label` describes the trades). */
 const compare = (label: string, rest: string) => (f: SideStats, b: SideStats) =>
   f.trades
-    ? `${f.trades} ${label}: ${pct(f.winRate)} won, ${money(f.avgPnl)} a trade, against ${pct(b.winRate)} and ${money(b.avgPnl)} for ${rest}.`
-    : `No ${label} found.`;
+    ? `${f.trades} trade${f.trades === 1 ? "" : "s"} ${label}: ${pct(f.winRate)} won, ${money(f.avgPnl)} a trade, against ${pct(b.winRate)} and ${money(b.avgPnl)} for ${rest}.`
+    : `No trades ${label}.`;
 
 /** Revenge trades: opened within `minutes` of a losing trade's close on the same account. */
 export function revengeTrades(trades: AnnotatedTrade[], minutes = 15): Set<string> {
@@ -209,7 +210,7 @@ export function detectBehaviours(
       "Revenge trades",
       revenge,
       calm,
-      compare(`trades opened within ${minutes} minutes of a loss`, "the rest"),
+      compare(`opened within ${minutes} minutes of a loss`, "the rest"),
       min,
     ),
   );
@@ -221,7 +222,7 @@ export function detectBehaviours(
       "Trading on after losses",
       tilted,
       fresh,
-      compare(`trades after ${streak} losses in a row that day`, "the rest"),
+      compare(`after ${streak} losses in a row that day`, "the rest"),
       min,
     ),
   );
@@ -243,7 +244,7 @@ export function detectBehaviours(
       "Sizing up after a loss",
       upAfterLoss,
       otherNext,
-      compare("trades sized up right after a loss on the same symbol", "the other trades"),
+      compare("sized up right after a loss on the same symbol", "the other trades"),
       min,
     ),
   );
@@ -298,7 +299,7 @@ export function detectBehaviours(
       "Results fading later in the day",
       late,
       early,
-      compare(`trades from the ${ordinal(lateFrom)} of a day on`, `the first ${lateFrom - 1}`),
+      compare(`from the ${ordinal(lateFrom)} of a day on`, `the first ${lateFrom - 1}`),
       min,
     ),
   );

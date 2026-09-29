@@ -22,7 +22,10 @@ export interface TrackedLesson {
   days: string[];
   /** Distinct weeks (Monday to Sunday) it appeared in. */
   weeks: number;
-  /** Weeks in a row it appeared, counting back from the week of `asOf`. */
+  /**
+   * Weeks in a row it appeared, counting back from the week of `asOf` (or the week before,
+   * while `asOf`'s week has not had it yet).
+   */
   streak: number;
   firstSeen: string;
   lastSeen: string;
@@ -118,8 +121,11 @@ export function trackLessons(
       const days = [...new Set(group.members.map((m) => m.date))].sort();
       const weeks = new Set(days.map(weekOf));
       let streak = 0;
+      // The anchor's week may not be over: a streak that reached last week still counts.
+      const back = (week: string) =>
+        new Date(Date.parse(`${week}T12:00:00Z`) - 7 * 86_400_000).toISOString().slice(0, 10);
       for (
-        let week = anchor;
+        let week = weeks.has(anchor) ? anchor : back(anchor);
         weeks.has(week);
         week = new Date(Date.parse(`${week}T12:00:00Z`) - 7 * 86_400_000).toISOString().slice(0, 10)
       )

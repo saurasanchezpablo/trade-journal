@@ -67,6 +67,20 @@ describe("lessons that keep coming back", () => {
     expect(lessons.filter((l) => l.kind === "fix")).toHaveLength(1);
   });
 
+  it("keep a streak through the current week until it is over", () => {
+    const fix = (t: string) => `**Fix**\n- ${t}\n`;
+    const [lesson] = trackLessons(
+      [
+        { date: "2026-09-08", note: fix("No trades after 3pm") },
+        { date: "2026-09-16", note: fix("No trades after 3pm") },
+        { date: "2026-09-23", note: fix("No trades after 3pm") },
+      ],
+      // Tuesday of the next week, before the lesson has come back this week.
+      "2026-09-29",
+    );
+    expect(lesson!.streak).toBe(3);
+  });
+
   it("start weeks on Monday", () => {
     expect(weekOf("2026-09-28")).toBe("2026-09-28");
     expect(weekOf("2026-10-04")).toBe("2026-09-28");
