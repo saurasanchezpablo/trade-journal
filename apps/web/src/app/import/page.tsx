@@ -2,7 +2,7 @@
 
 import { Suspense, useState } from "react";
 import { useRouter } from "next/navigation";
-import { FileUp, Landmark, PencilLine } from "lucide-react";
+import { FileUp, Landmark, PencilLine, Sparkles } from "lucide-react";
 import { AccountPicker } from "@/components/account-picker";
 import { ManualTradeEntry } from "@/components/manual-trade-entry";
 import { FilterBar } from "@/components/filter-bar";
@@ -157,6 +157,7 @@ function FileImport() {
     setSymbol("");
     setMapping({});
     setMappingApplied(false);
+    setMappingNote(null);
     setError(null);
     setBusy(true);
     try {
@@ -260,6 +261,34 @@ function FileImport() {
   };
 
   const mappingFields = ["symbol", "side", "quantity", "price", "fee", "timestamp"] as const;
+  const [mappingNote, setMappingNote] = useState<string | null>(null);
+  const suggestMapping = async () => {
+    if (!content) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const suggestion = await postJson<{
+        mapping: Record<string, string>;
+        missing: string[];
+        note: string;
+      }>("/api/ai/suggest-mapping", { content });
+      setMapping(suggestion.mapping);
+      setMappingApplied(false);
+      setMappingNote(
+        [
+          "Suggested by AI: check each column, then preview.",
+          suggestion.missing.length ? `Not found: ${suggestion.missing.join(", ")}.` : "",
+          suggestion.note,
+        ]
+          .filter(Boolean)
+          .join(" "),
+      );
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "No suggestion");
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <div className="space-y-3">
@@ -386,20 +415,40 @@ function FileImport() {
                   </div>
                 ))}
               </div>
-              <Button
-                size="sm"
-                onClick={previewWithMapping}
-                disabled={
-                  busy ||
-                  !mapping.symbol ||
-                  !mapping.side ||
-                  !mapping.quantity ||
-                  !mapping.price ||
-                  !mapping.timestamp
-                }
-              >
-                Preview with mapping
-              </Button>
+              {mappingNote && (
+                <p role="status" className="text-xs text-muted-foreground">
+                  {mappingNote}
+                </p>
+              )}
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void suggestMapping()}
+                  disabled={busy}
+                  title="Sends the header row and the first five rows to your AI provider"
+                >
+                  <Sparkles />
+                  Suggest with AI
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={previewWithMapping}
+                  disabled={
+                    busy ||
+                    !mapping.symbol ||
+                    !mapping.side ||
+                    !mapping.quantity ||
+                    !mapping.price ||
+                    !mapping.timestamp
+                  }
+                >
+                  Preview with mapping
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Suggest with AI sends the header row and the first five rows to your AI provider.
+              </p>
             </div>
           )}
 

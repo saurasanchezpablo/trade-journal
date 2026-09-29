@@ -19,6 +19,7 @@ const { queryTrades } = await import("../src/server/trades-query");
 const { anthropicMessage, openaiMessage, geminiMessage, script } =
   await import("./ai-provider-fixtures");
 const suggestLabels = await import("../src/app/api/ai/suggest-labels/route");
+const suggestMapping = await import("../src/app/api/ai/suggest-mapping/route");
 const playbookCheck = await import("../src/app/api/ai/playbook-check/route");
 
 const post = (route: { POST: (r: Request) => Promise<Response> }, body: unknown) =>
@@ -215,5 +216,42 @@ describe("suggested labels", () => {
       expect(response.status).toBe(400);
     }
     expect(provider.fetcher).not.toHaveBeenCalled();
+  });
+});
+
+describe("column mapping help", () => {
+  const csv = [
+    "Trade Date/Time,Instrument,B/S,Qty,Fill Px,Comm,Account No",
+    "2026-09-15 14:00:01,ESZ6,B,2,5000.25,2.1,U1234567",
+    "2026-09-15 14:30:09,ESZ6,S,2,5004.75,2.1,U1234567",
+    ...Array.from(
+      { length: 20 },
+      (_, i) => `2026-09-16 10:0${i % 10}:00,NQZ6,B,1,18000,1,U1234567`,
+    ),
+  ].join("\n");
+
+  it("suggests real columns only, and sends just the header and five rows", async () => {
+    const provider = script(() =>
+      anthropicMessage(
+        JSON.stringify({
+          symbol: "Instrument",
+          side: "B/S",
+          quantity: "Qty",
+          price: "Fill Px",
+          fee: "Commission", // not a header: dropped
+          timestamp: "Instrument", // already used: dropped
+          note: "B/S holds B or S.",
+        }),
+      ),
+    );
+    const response = await post(suggestMapping, { content: csv });
+    expect(await response.json()).toEqual({
+      mapping: { symbol: "Instrument", side: "B/S", quantity: "Qty", price: "Fill Px" },
+      missing: ["timestamp"],
+      note: "B/S holds B or S.",
+    });
+    const asked = JSON.stringify(provider.body(0));
+    expect(asked).toContain("Fill Px");
+    expect((asked.match(/U1234567/g) ?? []).length).toBe(5);
   });
 });
