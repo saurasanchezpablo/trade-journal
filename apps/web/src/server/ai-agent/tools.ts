@@ -25,6 +25,8 @@ import { getAnalysis, listAnalyses } from "../chart-analyses";
 import { listExecutions } from "../executions";
 import { connectionKey, providerFor } from "../market-data/connections";
 import { queryTrades, type TradeRow } from "../trades-query";
+import { lessonHistory } from "../lessons";
+import { describeLesson } from "@/lib/lesson-tracking";
 
 /**
  * Read-only journal tools for the AI chat. Every tool starts from the conversation's scope
@@ -717,6 +719,47 @@ export function journalTools({ scope, signal }: ToolContext): ToolSet {
       }),
     }),
 
+    recurring_lessons: tool({
+      description:
+        "The Keep and Fix lessons in the trader's day notes, grouped when they say the same thing, with the days they appeared, how many weeks, and how many weeks in a row up to the last day. Day notes are shared across accounts, so this needs an unfiltered all-account conversation.",
+      inputSchema: jsonSchema<{ from?: string; to?: string }>({
+        type: "object",
+        properties: {
+          from: {
+            type: "string",
+            description: "First day, YYYY-MM-DD. Default: 8 weeks before `to`.",
+          },
+          to: { type: "string", description: "Last day, YYYY-MM-DD. Default: today." },
+        },
+        additionalProperties: false,
+      }),
+      execute: safe((input: { from?: unknown; to?: unknown }) => {
+        if (!sharedScope(scope))
+          throw new RequestError(
+            "Not available: day notes are shared across accounts and this conversation is filtered.",
+          );
+        const day = (v: unknown) =>
+          typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
+        const to = day(input.to) ?? dayKeyOf(new Date().toISOString(), tz);
+        const from =
+          day(input.from) ??
+          new Date(Date.parse(`${to}T12:00:00Z`) - 55 * 86_400_000).toISOString().slice(0, 10);
+        const lessons = lessonHistory({ from, to });
+        return {
+          from,
+          to,
+          lessons: lessons.slice(0, 40).map((l) => ({
+            summary: describeLesson(l),
+            kind: l.kind,
+            days: l.days,
+            weeks: l.weeks,
+            weeksInARow: l.streak,
+            ...(l.variants.length ? { alsoWrittenAs: l.variants.slice(0, 5) } : {}),
+          })),
+        };
+      }),
+    }),
+
     list_chart_analyses: tool({
       description:
         "The trader's saved chart analyses (drawings, zones, plans), newest first, optionally for one symbol or journal day. Use get_chart_analysis for one in full.",
@@ -818,6 +861,8 @@ export function toolLabel(name: string, input: unknown): string {
       return "Fetched the candles around a trade";
     case "get_day":
       return `Read the journal day ${typeof record.date === "string" ? record.date : ""}`.trim();
+    case "recurring_lessons":
+      return "Read your recurring lessons";
     case "list_chart_analyses":
       return "Listed chart analyses";
     case "get_chart_analysis":

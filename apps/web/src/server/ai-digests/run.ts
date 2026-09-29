@@ -7,6 +7,7 @@ import { chatTurn } from "../ai-agent/chat";
 import { createConversation } from "../ai-agent/store";
 import { deliver as deliverAlert, type AlertNotification } from "../background-alerts/delivery";
 import { weekContext } from "../journal-history";
+import { recurringLessonsText } from "../lessons";
 import { getTimeZone } from "../settings";
 import { queryTrades } from "../trades-query";
 import { summaryOf, type DigestKind } from "./schedule";
@@ -80,7 +81,9 @@ played out, and whether trades taken from a plan did better than the rest), and 
 
 ${text}
 
-Use the tools for detail where it helps (group_stats, find_trades, get_day).`,
+${recurringLessonsText(period)}
+
+Where a lesson keeps coming back, say so with how many weeks in a row. Use the tools for detail where it helps (group_stats, find_trades, get_day).`,
     filters: { from: days[0]!, to: period },
     kind: "journal",
     anchor: null,

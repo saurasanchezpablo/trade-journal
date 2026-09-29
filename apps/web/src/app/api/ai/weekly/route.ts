@@ -3,6 +3,7 @@ import { runAi } from "@/server/ai";
 import { streamedAnswer, wantsStream } from "@/server/ai-stream";
 import { getTimeZone } from "@/server/settings";
 import { weekContext } from "@/server/journal-history";
+import { recurringLessonsText } from "@/server/lessons";
 import { isDayKey } from "@/lib/chart-analysis";
 import { weekEnding } from "@/lib/journal-lessons";
 
@@ -24,10 +25,13 @@ export const POST = handler(async (request: Request) => {
 markdown with these sections: "**What worked**", "**What cost me**" (name repeated mistakes and
 Fix items that came back), "**Plans**" (how often my graded scenarios played out, and whether
 trades taken from a plan did better than the rest), and "**Next week**" (at most three concrete
-rules). Use only the facts below; if something is missing, say so briefly instead of guessing.
+rules). Where a lesson keeps coming back, say so with how many weeks in a row. Use only the
+facts below; if something is missing, say so briefly instead of guessing.
 All accounts; amounts are not converted between currencies.
 
-${text}`;
+${text}
+
+${recurringLessonsText(end)}`;
   const result = (review: string) => ({ review, from: days[0], to: end });
   if (streamed) return streamedAnswer(request, { prompt, maxOutputTokens: 1400 }, result);
   return ok(result(await runAi(prompt, 1400)));

@@ -4,6 +4,7 @@ import { db, journalDays } from "@/db";
 import { bad, handler, ok } from "@/server/api";
 import { runAi } from "@/server/ai";
 import { streamedAnswer } from "@/server/ai-stream";
+import { recurringLessonsText } from "@/server/lessons";
 import { queryTrades } from "@/server/trades-query";
 import { accountContext, readAiRequest } from "@/server/ai-scope";
 import { analysesPrompt, analysesUsed, analysisImages, linkedAnalyses } from "@/server/ai-analyses";
@@ -50,7 +51,7 @@ export const POST = handler(async (request: Request) => {
     .join("\n");
 
   const prompt = `Write a session recap for ${date} in first person ("I"), 120-200 words, markdown with a
-short "**Keep**" and "**Fix**" list at the end.${linked.length ? " Where chart analyses are attached, say whether the trades followed the plan drawn on them." : ""}
+short "**Keep**" and "**Fix**" list at the end (if a listed lesson came back today, say for how many weeks).${linked.length ? " Where chart analyses are attached, say whether the trades followed the plan drawn on them." : ""}
 
 ${scope.context}
 ${accountContext(dayTrades, scope)}
@@ -63,6 +64,8 @@ Trades:
 ${tradeLines}
 
 ${existingNote ? `The trader's own note so far (respect it, build on it):\n${existingNote}` : ""}
+
+${onlyDateFilters ? recurringLessonsText(date) : ""}
 
 ${analysesPrompt(linked)}`;
   const ai = {

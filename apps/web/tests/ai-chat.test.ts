@@ -445,6 +445,36 @@ describe("journal tools", () => {
     expect(onlyA.closedTrades).toBe(2);
   });
 
+  it("track lessons that keep coming back, for an unfiltered conversation only", async () => {
+    const fix = (text: string) => `**Fix**\n- ${text}\n`;
+    db.insert(journalDays)
+      .values([
+        { date: "2026-09-08", note: fix("No trades after 3pm"), updatedAt: "x" },
+        { date: "2026-09-15", note: fix("no more trading after 3 pm"), updatedAt: "x" },
+        { date: "2026-09-16", note: fix("Stop trading after 3pm"), updatedAt: "x" },
+      ])
+      .run();
+    const all = await run(scopeFor({}), "recurring_lessons", { to: "2026-09-16" });
+    expect((all.lessons as { summary: string }[])[0]!.summary).toBe(
+      "Fix, second week in a row: Stop trading after 3pm (3 days since 2026-09-08)",
+    );
+    expect(await run(scopeFor({ accounts: "a" }), "recurring_lessons", {})).toMatchObject({
+      error: expect.stringMatching(/shared across accounts/),
+    });
+    // The weekly review is told about them.
+    const provider = script(() => anthropic.text("Review."));
+    await weekly(
+      new Request("http://localhost/api/ai/weekly", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ end: "2026-09-16" }),
+      }),
+    );
+    expect(JSON.stringify(provider.body(0))).toContain(
+      "Fix, second week in a row: Stop trading after 3pm",
+    );
+  });
+
   it("sort and page trade lists", async () => {
     const listed = await run(scopeFor({}), "find_trades", {
       sort: "netPnl",
