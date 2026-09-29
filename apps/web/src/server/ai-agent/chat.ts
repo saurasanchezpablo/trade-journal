@@ -75,12 +75,14 @@ export async function* chatTurn(input: {
   scope: AiScope;
   conversation: Conversation;
   question: string;
+  /** What the conversation shows as the question, when it differs from what the AI is asked. */
+  display?: string;
   signal?: AbortSignal;
 }): AsyncGenerator<ChatEvent> {
   const { scope, conversation, question, signal } = input;
   const model = aiModel();
   const history = historyMessages(listMessages(conversation.id));
-  addMessage(conversation.id, { role: "user", content: question });
+  addMessage(conversation.id, { role: "user", content: input.display ?? question });
 
   let text = "";
   const tools = new Map<string, ToolActivity>();

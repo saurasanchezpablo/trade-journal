@@ -1,5 +1,6 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useFilters } from "./filter-bar";
 import { JournalChat } from "./journal-chat";
@@ -14,6 +15,8 @@ const SUGGESTIONS = [
 /** Ask your journal, as a chat: the model looks up what it needs within the page's filters. */
 export function AskJournalChat() {
   const { values, timeZone } = useFilters();
+  // A weekly digest's notification links here with its chat.
+  const openId = useSearchParams()?.get("chat") ?? null;
   return (
     <Card>
       <CardHeader>
@@ -23,6 +26,7 @@ export function AskJournalChat() {
         <JournalChat
           key={timeZone}
           target={{ kind: "journal", filters: values, timeZone }}
+          openId={openId}
           suggestions={SUGGESTIONS}
           placeholder="Why do my Monday shorts keep failing?"
           intro="A new chat uses the selected accounts and filters. The AI looks up trades, stats, notes and charts within them; follow-ups keep that scope."

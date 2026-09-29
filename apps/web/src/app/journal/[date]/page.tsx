@@ -6,6 +6,7 @@ import { DayAnalyses } from "@/components/day-analyses";
 import { dayKeyOf } from "@luxalgo/journal-core";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { CandlestickChart } from "lucide-react";
 import { Suspense, use, useRef, useState } from "react";
 import type { IntradayPoint, TradeMetrics } from "@luxalgo/journal-core";
@@ -56,6 +57,8 @@ export default function JournalDayPage({ params }: { params: Promise<{ date: str
 
 function JournalDay({ date }: { date: string }) {
   const { query, values: filters, timeZone } = useFilters();
+  // A scheduled recap's notification links here with its chat.
+  const chatId = useSearchParams()?.get("chat") ?? null;
   const { data, error } = useApi<DayPayload>(`/api/journal/${date}?${query}`);
   const [note, setNote] = useState<string | null>(null);
   const [lastRecap, setLastRecap] = useState<{ key: string; text: string } | null>(null);
@@ -284,6 +287,7 @@ function JournalDay({ date }: { date: string }) {
             <JournalChat
               key={`${date}:${timeZone}:${query}`}
               target={{ kind: "day", date, filters, timeZone }}
+              openId={chatId}
               seed={lastRecap?.key === `${date}:${timeZone}:${query}` ? lastRecap.text : null}
               placeholder={lastRecap ? "Ask about the recap" : "Ask about this day's trades"}
               intro="Uses the selected filters, like recaps. The AI can read the day's trades, plans and charts, and compare with other days."

@@ -66,12 +66,15 @@ export function JournalChat({
   seed,
   placeholder = "Ask a question about your trades",
   intro,
+  openId,
 }: {
   target: ChatTarget;
   suggestions?: string[];
   seed?: string | null;
   placeholder?: string;
   intro?: string;
+  /** A saved conversation to open at once, such as a digest's from its notification. */
+  openId?: string | null;
 }) {
   const privateMode = usePrivacy();
   const history = useApi<{ conversations: Conversation[] }>(listUrl(target));
@@ -134,6 +137,13 @@ export function JournalChat({
     },
     [busy],
   );
+
+  const opened = useRef<string | null>(null);
+  useEffect(() => {
+    if (!openId || opened.current === openId) return;
+    opened.current = openId;
+    void open({ id: openId } as Conversation);
+  }, [openId, open]);
 
   const remove = async (conversation: Conversation) => {
     if (busy) return;

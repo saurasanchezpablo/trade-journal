@@ -8,6 +8,7 @@ import type { DayStats } from "@luxalgo/journal-core";
 import { FilterBar, useFilters } from "@/components/filter-bar";
 import { DayTypeStats } from "@/components/day-type-stats";
 import { WeeklyReview } from "@/components/weekly-review";
+import { AiDigests } from "@/components/ai-digests";
 import { Pnl } from "@/components/pnl";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -61,6 +62,7 @@ function Journal() {
       />
       <div className="space-y-2 p-4">
         <WeeklyReview timeZone={timeZone} />
+        <AiDigests timeZone={timeZone} />
         <DayTypeStats />
         {error ? (
           <div role="alert" className="space-y-2 text-sm text-destructive">

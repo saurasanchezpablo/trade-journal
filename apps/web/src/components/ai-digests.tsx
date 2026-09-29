@@ -1,0 +1,320 @@
+"use client";
+
+import Link from "next/link";
+import { useState } from "react";
+import { BellRing, Send } from "lucide-react";
+import { postJson, useApi } from "@/lib/use-api";
+import { Button } from "./ui/button";
+import { SectionCard } from "./section-card";
+
+interface DigestSettings {
+  recap: { enabled: boolean; time: string; weekdays: number[] };
+  weekly: { enabled: boolean; weekday: number; time: string };
+  summaryInNotification: boolean;
+}
+
+interface Digest {
+  id: string;
+  kind: "day" | "week";
+  period: string;
+  status: "running" | "sent" | "skipped" | "failed";
+  conversationId: string | null;
+  title: string;
+  detail: string;
+  delivered: number;
+  updatedAt: string;
+}
+
+interface DigestState {
+  settings: DigestSettings;
+  digests: Digest[];
+  delivery: { browsers: number; webhook: boolean };
+  aiConfigured: boolean;
+}
+
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const WEEKDAY_NAMES = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+];
+const STATUS: Record<Digest["status"], string> = {
+  running: "Writing",
+  sent: "Sent",
+  skipped: "Skipped",
+  failed: "Failed",
+};
+
+const chatUrl = (d: Digest) =>
+  !d.conversationId
+    ? null
+    : d.kind === "day"
+      ? `/journal/${d.period}?chat=${encodeURIComponent(d.conversationId)}`
+      : `/reports?chat=${encodeURIComponent(d.conversationId)}`;
+
+/**
+ * Scheduled AI digests: a session recap after the close and a weekly review, written by the
+ * AI chat (so you can open them and ask follow-ups) and sent to the browsers and webhook set
+ * up for background alerts.
+ */
+export function AiDigests({ timeZone }: { timeZone: string }) {
+  const { data, refresh } = useApi<DigestState>("/api/ai/digests");
+  const [saved, setSaved] = useState<DigestState | null>(null);
+  const [error, setError] = useState("");
+  const [sending, setSending] = useState<"day" | "week" | null>(null);
+  const current = saved ?? data;
+  const settings = current?.settings;
+
+  const save = async (next: DigestSettings) => {
+    setError("");
+    setSaved(current ? { ...current, settings: next } : null);
+    try {
+      setSaved(await postJson<DigestState>("/api/ai/digests", next, "PUT"));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not save.");
+      setSaved(null);
+      refresh();
+    }
+  };
+  const sendNow = async (kind: "day" | "week") => {
+    setSending(kind);
+    setError("");
+    try {
+      await postJson("/api/ai/digests/run", { kind });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not send it.");
+    } finally {
+      setSending(null);
+      setSaved(null);
+      refresh();
+    }
+  };
+
+  const delivery = current?.delivery;
+  const nowhere = delivery && !delivery.browsers && !delivery.webhook;
+  const summary = settings
+    ? [
+        settings.recap.enabled ? `recap at ${settings.recap.time}` : "",
+        settings.weekly.enabled
+          ? `weekly on ${WEEKDAYS[settings.weekly.weekday]} ${settings.weekly.time}`
+          : "",
+      ]
+        .filter(Boolean)
+        .join(", ") || "off"
+    : undefined;
+
+  return (
+    <SectionCard
+      id="journal-ai-digests"
+      title="Scheduled digests"
+      summary={summary}
+      contentClassName="space-y-3 text-sm"
+    >
+      <p className="text-xs text-muted-foreground">
+        The AI writes a session recap and a weekly review on schedule, in {timeZone}, and sends them
+        to your devices. Each is saved as a chat you can open and ask follow-ups in. Days with no
+        closed trades or note are skipped.
+      </p>
+      {current && !current.aiConfigured && (
+        <p role="status" className="text-xs">
+          Add an AI provider key in{" "}
+          <Link href="/settings" className="underline">
+            Settings
+          </Link>{" "}
+          first.
+        </p>
+      )}
+      {settings && (
+        <div className="space-y-3">
+          <fieldset className="flex flex-wrap items-center gap-2">
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={settings.recap.enabled}
+                onChange={(e) =>
+                  void save({
+                    ...settings,
+                    recap: { ...settings.recap, enabled: e.target.checked },
+                  })
+                }
+              />
+              Session recap at
+            </label>
+            <input
+              type="time"
+              aria-label="Recap time"
+              value={settings.recap.time}
+              onChange={(e) =>
+                e.target.value &&
+                void save({ ...settings, recap: { ...settings.recap, time: e.target.value } })
+              }
+              className="h-8 rounded-md border bg-background px-2 text-sm"
+            />
+            <span className="text-muted-foreground">on</span>
+            <div className="flex flex-wrap gap-1" role="group" aria-label="Recap weekdays">
+              {WEEKDAYS.map((name, day) => {
+                const on = settings.recap.weekdays.includes(day);
+                return (
+                  <button
+                    key={name}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() =>
+                      void save({
+                        ...settings,
+                        recap: {
+                          ...settings.recap,
+                          weekdays: on
+                            ? settings.recap.weekdays.filter((d) => d !== day)
+                            : [...settings.recap.weekdays, day].sort(),
+                        },
+                      })
+                    }
+                    className={`h-7 rounded-md border px-2 text-xs ${on ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent"}`}
+                  >
+                    {name}
+                  </button>
+                );
+              })}
+            </div>
+          </fieldset>
+          <fieldset className="flex flex-wrap items-center gap-2">
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={settings.weekly.enabled}
+                onChange={(e) =>
+                  void save({
+                    ...settings,
+                    weekly: { ...settings.weekly, enabled: e.target.checked },
+                  })
+                }
+              />
+              Weekly review on
+            </label>
+            <select
+              aria-label="Weekly review day"
+              value={settings.weekly.weekday}
+              onChange={(e) =>
+                void save({
+                  ...settings,
+                  weekly: { ...settings.weekly, weekday: Number(e.target.value) },
+                })
+              }
+              className="h-8 rounded-md border bg-background px-2 text-sm"
+            >
+              {WEEKDAY_NAMES.map((name, day) => (
+                <option key={name} value={day}>
+                  {name}
+                </option>
+              ))}
+            </select>
+            <span className="text-muted-foreground">at</span>
+            <input
+              type="time"
+              aria-label="Weekly review time"
+              value={settings.weekly.time}
+              onChange={(e) =>
+                e.target.value &&
+                void save({ ...settings, weekly: { ...settings.weekly, time: e.target.value } })
+              }
+              className="h-8 rounded-md border bg-background px-2 text-sm"
+            />
+          </fieldset>
+          <label className="flex items-start gap-2 text-xs">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={settings.summaryInNotification}
+              onChange={(e) => void save({ ...settings, summaryInNotification: e.target.checked })}
+            />
+            <span>
+              Put the start of the review in the notification. It can include amounts, which then
+              show on lock screens and in webhook messages (an ntfy.sh topic can be read by anyone
+              who knows its name).
+            </span>
+          </label>
+        </div>
+      )}
+      {delivery && (
+        <p className="flex items-start gap-2 text-xs text-muted-foreground">
+          <BellRing className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+          {nowhere ? (
+            <span>
+              No browser or webhook receives notifications yet: turn them on under{" "}
+              <Link href="/charts" className="underline">
+                Charts → Alerts
+              </Link>
+              . Digests are still written and listed here.
+            </span>
+          ) : (
+            <span>
+              Sent to {delivery.browsers} browser{delivery.browsers === 1 ? "" : "s"}
+              {delivery.webhook ? " and the webhook" : ""} set up under{" "}
+              <Link href="/charts" className="underline">
+                Charts → Alerts
+              </Link>
+              .
+            </span>
+          )}
+        </p>
+      )}
+      <div className="flex flex-wrap gap-2">
+        {(["day", "week"] as const).map((kind) => (
+          <Button
+            key={kind}
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={sending !== null || !current?.aiConfigured}
+            onClick={() => void sendNow(kind)}
+          >
+            <Send />
+            {sending === kind
+              ? "Writing…"
+              : kind === "day"
+                ? "Send today's recap now"
+                : "Send this week's review now"}
+          </Button>
+        ))}
+      </div>
+      {error && (
+        <p role="alert" className="text-xs text-destructive">
+          {error}
+        </p>
+      )}
+      {current && current.digests.length > 0 && (
+        <ul className="divide-y rounded-md border" aria-label="Recent digests">
+          {current.digests.map((d) => {
+            const url = chatUrl(d);
+            return (
+              <li key={d.id} className="flex flex-wrap items-center gap-x-3 gap-y-0.5 px-3 py-2">
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate">
+                    {d.title ||
+                      (d.kind === "day"
+                        ? `Session recap · ${d.period}`
+                        : `Weekly review · ${d.period}`)}
+                  </span>
+                  <span className="block text-xs text-muted-foreground">
+                    {STATUS[d.status]}
+                    {d.detail ? `: ${d.detail}` : ""}
+                  </span>
+                </span>
+                {url && (
+                  <Link href={url} className="text-xs underline">
+                    Open
+                  </Link>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </SectionCard>
+  );
+}
