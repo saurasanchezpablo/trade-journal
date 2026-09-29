@@ -25,6 +25,9 @@ const goalsRoute = await import("../src/app/api/goals/route");
 const periodReview = await import("../src/app/api/ai/period-review/route");
 const suggestGoals = await import("../src/app/api/ai/suggest-goals/route");
 const { listMessages } = await import("../src/server/ai-agent/store");
+const planDraft = await import("../src/app/api/ai/plan-draft/route");
+const analysesRoute = await import("../src/app/api/analyses/route");
+const { importCsvDataset } = await import("../src/server/market-data/csv");
 const playbookCheck = await import("../src/app/api/ai/playbook-check/route");
 
 const post = (route: { POST: (r: Request) => Promise<Response> }, body: unknown) =>
@@ -387,5 +390,86 @@ describe("monthly and quarterly reviews", () => {
         { metric: null, comparator: null, target: null, text: "Be lucky" },
       ],
     });
+  });
+});
+
+describe("a pre-market plan draft", () => {
+  it("drafts from the chart's levels and the previous session, and checks the prices", async () => {
+    const day = Date.parse("2026-09-15T00:00:00Z");
+    importCsvDataset({
+      name: "PLAN daily",
+      symbol: "PLAN",
+      resolution: "1d",
+      currency: "USD",
+      priceBasis: "raw",
+      content: ["time,open,high,low,close,volume"]
+        .concat(
+          Array.from({ length: 5 }, (_, i) => {
+            const t = new Date(day - (5 - i) * 86_400_000).toISOString();
+            return `${t},${100 + i},${105 + i},${98 + i},${102 + i},1000`;
+          }),
+        )
+        .join("\n"),
+    });
+    const created = await (
+      await post(analysesRoute, {
+        title: "PLAN levels",
+        symbol: "PLAN",
+        provider: "market-csv",
+        resolution: "1d",
+        rangeFrom: day - 10 * 86_400_000,
+        rangeTo: day,
+        drawings: {
+          version: 1,
+          drawings: [
+            {
+              id: "res",
+              type: "hline",
+              paneId: "price",
+              anchors: [{ time: day - 86_400_000, price: 110 }],
+              style: {},
+              visible: true,
+              locked: false,
+            },
+          ],
+        },
+      })
+    ).json();
+    const provider = script(() =>
+      anthropicMessage(
+        JSON.stringify({
+          bias: "long",
+          biasReason: "Higher closes all week.",
+          scenarios: [
+            {
+              name: "Break of 110",
+              direction: "long",
+              trigger: 110,
+              target: 115,
+              invalidation: 112, // above the trigger: wrong for a long
+              note: "",
+              levelNote: "the horizontal line at 110",
+            },
+          ],
+        }),
+      ),
+    );
+    const response = await post(planDraft, { analysisId: created.analysis.id, day: "2026-09-15" });
+    expect(await response.json()).toMatchObject({
+      day: "2026-09-15",
+      bias: "long",
+      scenarios: [
+        {
+          name: "Break of 110",
+          trigger: 110,
+          target: 115,
+          invalidation: null,
+          problems: ["the invalidation was on the wrong side of the trigger for a long"],
+        },
+      ],
+    });
+    const asked = JSON.stringify(provider.body(0));
+    expect(asked).toContain("Previous session: open 104, high 109, low 102, close 106");
+    expect(asked).toMatch(/: 110\\n/);
   });
 });

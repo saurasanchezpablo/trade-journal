@@ -47,6 +47,7 @@ import type {
 import { IndicatorsPanel } from "@/components/indicators-panel";
 import { PineEditor, type EditorDraft } from "@/components/pine-editor";
 import { PlanEditor } from "@/components/plan-editor";
+import { PlanDraft } from "@/components/plan-draft";
 import { EMPTY_PLAN, isPlanEmpty, type AnalysisPlan } from "@/lib/analysis-plan";
 import type { ChartIndicator, IndicatorAlert } from "@/components/chart-indicators-bridge";
 import {
@@ -2296,6 +2297,16 @@ const ChartBoard = memo(function ChartBoard({
                 pickPrice={() =>
                   drawings.find((d) => d.id === lastLine.current)?.anchors[0]?.price ?? null
                 }
+              />
+              <PlanDraft
+                analysisId={analysisId}
+                plan={plan}
+                disabled={!board || Boolean(viewing)}
+                onAccept={(next) => {
+                  setPlan(next);
+                  state.current.plan = next;
+                  schedule();
+                }}
               />
               <div className="space-y-1">
                 <Label>Add to journal</Label>
