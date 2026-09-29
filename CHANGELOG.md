@@ -79,6 +79,9 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Fixed
 
+- Charts load faster: candle pages are fetched several at a time on a fixed grid (so older pages come from the server's cache when a chart is reopened), public exchanges are no longer throttled like keyed brokers, Binance symbol details are cached, the chart engine downloads while the page loads, and the symbol search no longer downloads an exchange's whole listing before you use it
+- Charts pan and zoom smoothly with drawings on them: drawings sit over the candles instead of being re-uploaded to the graphics card on every frame (a drawing sent to the back still goes under)
+- Pages no longer prefetch every sidebar link on load, which slowed the page's own requests; a link is prefetched when you point at it
 - An AI answer that came back empty showed "AI request failed" instead of saying it returned no text (or that the provider's safety filter blocked it)
 - A chart opened on a long saved view loads all of its candles (up to 20,000): it stopped at the newest 5000, so on 1h and shorter charts the start of the view stayed empty and a volume profile over it counted only the recent part, which moved its POC and value area towards recent prices
 - The volume profiles' value area holds at least its 70%: it stopped before the row that would take it past the share, so VAL to VAH could hold less (69.6% on a BTC test range, with a heavy row just above VAH left out)

@@ -138,6 +138,15 @@ work on renders into through portals; each chart is a `ChartBoard`), `lib/multiv
 `components/multiview.tsx` (menu, layout, chart header); the chart takes optional `sync` and
 `size` props.
 
+## Drawings over the candles
+
+Drawings sit over the candles and indicators, as on TradingView. **Send to back** (Layers
+panel) still puts a drawing under the candles, but only then: a drawing under the candles
+is painted on its own canvas and uploaded to the graphics card as a full-chart picture on
+every frame (each pan, zoom and live tick), which with a few drawings cost about a third of
+the frame rate. Analyses saved with Vela's old default (just under the candles) open with
+their drawings over the candles, in the same order among themselves.
+
 ## Layers and folders
 
 Folders hold layers, and layers hold drawings. The **Layers** panel is docked beside the chart

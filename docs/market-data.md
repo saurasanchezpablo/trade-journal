@@ -198,23 +198,31 @@ also removes its saved derived estimates, leaving all trade executions intact.
 
 ## Performance and request limits
 
-All remote adapters use the same server-side transport: at most six active GETs
-per process, two per provider host, and 64 queued requests. New upstream calls
-are spaced at least 350 ms apart per host; cache hits skip that delay. Identical concurrent
-requests share one upstream call. Cancelling a view or report releases its share;
-the upstream request is cancelled when no consumers remain. HTTP errors are not
-cached, and 429 responses apply a credential-scoped cooldown using Retry-After
-(or 30 seconds when it is absent). These are application limits, not a guarantee
-that every provider plan permits the same request rate.
+All remote adapters use the same server-side transport: at most eight active GETs
+per process and 64 queued requests. Hosts are paced one by one: public exchange APIs
+(Binance, Bybit: four at a time, 60 ms apart; Coinbase: three, 150 ms apart) stay well under
+their published limits, and every other host (keyed brokers with small free tiers) keeps two
+at a time, 350 ms apart. Cache hits skip the pacing. Identical concurrent requests share one
+upstream call. Cancelling a view or report releases its share; the upstream request is
+cancelled when no consumers remain. HTTP errors are not cached, and 429 responses apply a
+credential-scoped cooldown using Retry-After (or 30 seconds when it is absent). These are
+application limits, not a guarantee that every provider plan permits the same request rate.
 
-Completed historical request windows are cached in memory for up to five minutes;
-recent data and metadata expire after 15 seconds. Cache identity includes the exact
-URL, feed and a hash of the credential headers. Connection tests bypass the cache.
-The cache holds at most 128 responses and 16 MiB of serialized payloads (decoded
-objects add overhead), and is lost on restart. LSE's ascending and descending
-coverage checks run concurrently and both remain required; trades sharing a date
-window reuse those pages. Other adapters keep their existing pagination and
-coverage checks. Provider outages, latency and plan quotas can still cause waits.
+A history request is cut into the source's pages (1000 candles on Binance, 299 on Coinbase)
+on a fixed grid counted from the epoch, and up to four pages are fetched at once. Because a
+page is the same URL from one request to the next, a chart reopened or a timeframe switched
+back gets its older pages from the cache; only the newest page is fetched again. Past the
+depth cap (20,000 candles) the oldest pages are the ones left out, and the result is marked
+truncated. Binance's symbol details are fetched alongside the candles and kept for an hour.
+
+Candles that ended more than five minutes ago never change, so their pages are cached in
+memory for an hour; recent data and metadata expire after 15 seconds. Cache identity
+includes the exact URL, feed and a hash of the credential headers. Connection tests bypass
+the cache. The cache holds at most 512 responses and 64 MiB of serialized payloads (decoded
+objects add overhead), and is lost on restart. LSE's ascending and descending coverage
+checks run concurrently and both remain required; trades sharing a date window reuse those
+pages. Provider outages, latency and plan quotas can still cause waits: a single Binance
+page can take one to several seconds to arrive.
 
 CSV imports validate once per import. Dataset bounds and counts are materialized
 in SQLite, with an additive upgrade for existing files. History selects metadata
