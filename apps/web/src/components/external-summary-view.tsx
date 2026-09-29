@@ -40,7 +40,7 @@ function ScenarioBox({
       </div>
       <p className="text-sm font-medium">{scenario.title}</p>
       <p className="text-sm">{scenario.description}</p>
-      <dl className="grid gap-x-4 gap-y-0.5 text-xs sm:grid-cols-3">
+      <dl className="grid grid-cols-[repeat(auto-fit,minmax(7rem,1fr))] gap-x-4 gap-y-0.5 text-xs">
         <div>
           <dt className="text-muted-foreground">Trigger</dt>
           <dd>{scenario.trigger ?? "none said"}</dd>
@@ -71,7 +71,14 @@ function ScenarioBox({
 }
 
 /** An external analysis as a trader's notes: scenarios, their reasons, trades and levels. */
-export function ExternalSummaryView({ summary }: { summary: ExternalSummary }) {
+export function ExternalSummaryView({
+  summary,
+  compact = false,
+}: {
+  summary: ExternalSummary;
+  /** In a narrow card: the scenarios one under the other. */
+  compact?: boolean;
+}) {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -85,7 +92,7 @@ export function ExternalSummaryView({ summary }: { summary: ExternalSummary }) {
         )}
       </div>
       <p className="text-sm leading-relaxed">{summary.overview}</p>
-      <div className="grid gap-3 lg:grid-cols-2">
+      <div className={compact ? "grid gap-3" : "grid gap-3 lg:grid-cols-2"}>
         {summary.mainScenario ? (
           <ScenarioBox
             label="Main scenario"

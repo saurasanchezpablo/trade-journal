@@ -313,11 +313,13 @@ function scenarioLines(label: string, s: Scenario, reasons: string[]) {
     s.invalidation !== null ? `invalid at ${price(s.invalidation)}` : "",
     s.likelihood ? `likelihood: ${s.likelihood}` : "",
   ].filter(Boolean);
+  // Blank lines between the parts: single line breaks run together in markdown.
   return [
     `**${label}: ${s.title}** (${direction(s.direction)}${s.instrument ? `, ${s.instrument}` : ""})`,
+    "",
     s.description,
-    ...(facts.length ? [`_${facts.join(" · ")}_`] : []),
-    ...(reasons.length ? ["Why:", ...reasons.map((r) => `- ${r}`)] : []),
+    ...(facts.length ? ["", `_${facts.join(" · ")}_`] : []),
+    ...(reasons.length ? ["", "Why:", "", ...reasons.map((r) => `- ${r}`)] : []),
   ];
 }
 
@@ -342,6 +344,7 @@ export function summaryMarkdown(
     out.push(
       "",
       "**Their open trades**",
+      "",
       ...summary.openTrades.map(
         (t) =>
           `- ${t.instrument} ${t.direction}${t.entry !== null ? ` from ${price(t.entry)}` : ""}${t.stopLoss !== null ? `, stop ${price(t.stopLoss)}` : ""}${t.takeProfits.length ? `, take profit ${prices(t.takeProfits)}` : ""}${t.note ? `. ${t.note}` : ""}`,
@@ -351,6 +354,7 @@ export function summaryMarkdown(
     out.push(
       "",
       "**Trade ideas**",
+      "",
       ...summary.tradeIdeas.map((t) => {
         const entry =
           t.entryLow !== null && t.entryHigh !== null && t.entryLow !== t.entryHigh
@@ -371,6 +375,7 @@ export function summaryMarkdown(
         )
         .join("; ")}`,
     );
-  if (summary.caveats.length) out.push("", "**Caveats**", ...summary.caveats.map((c) => `- ${c}`));
+  if (summary.caveats.length)
+    out.push("", "**Caveats**", "", ...summary.caveats.map((c) => `- ${c}`));
   return out.join("\n");
 }

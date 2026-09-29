@@ -14,7 +14,7 @@ const { youtubeTransport } = await import("../src/server/external-analysis/youtu
 const store = await import("../src/server/external-analysis/store");
 const { runCheck, checkRunning, WAIT_RETRY_MS } =
   await import("../src/server/external-analysis/process");
-const { dailyDue } = await import("../src/server/external-analysis/scheduler");
+const { dailyDue, ExternalScheduler } = await import("../src/server/external-analysis/scheduler");
 const channelsRoute = await import("../src/app/api/external/channels/route");
 const externalRoute = await import("../src/app/api/external/route");
 const videoRoute = await import("../src/app/api/external/videos/[id]/route");
@@ -397,6 +397,28 @@ describe("the daily check", () => {
     expect(dailyDue(at("2026-09-29T06:30:00Z"), "Europe/Madrid", "08:00", "2026-09-28").due).toBe(
       true,
     );
+  });
+});
+
+describe("the scheduler", () => {
+  it("reads the feeds once a day and only retries in between", async () => {
+    const channel = store.addChannel({ channelId: CHANNEL, title: "Crypto Banter", url: "x" });
+    store.markChannelChecked(channel.id, null);
+    videos = [videos[0]!];
+    script(() => anthropicMessage(JSON.stringify(summary)));
+    let now = NOW; // 12:00 UTC, after the 08:00 check time
+    const scheduler = new ExternalScheduler({ deps: { ...deps, now: () => now } });
+    await scheduler.tick();
+    const feeds = () => requests.filter((u) => u.includes("feeds/videos.xml")).length;
+    expect(feeds()).toBe(1);
+    expect(store.getVideo("NEWEST00001")!.status).toBe("summarized");
+    now += 15 * 60_000;
+    await scheduler.tick();
+    expect(feeds()).toBe(1);
+    // The next day at 08:00 it reads them again.
+    now = Date.parse("2026-09-30T08:05:00Z");
+    await scheduler.tick();
+    expect(feeds()).toBe(2);
   });
 });
 

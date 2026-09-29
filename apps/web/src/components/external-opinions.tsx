@@ -102,7 +102,7 @@ export function ExternalOpinions({
                         : ""}
                     </p>
                   )}
-                  {open === v.videoId && <ExternalSummaryView summary={v.summary!} />}
+                  {open === v.videoId && <ExternalSummaryView summary={v.summary!} compact />}
                   <div className="flex flex-wrap gap-2">
                     <Button
                       type="button"

@@ -68,6 +68,8 @@ const STATUS: Record<Status, string> = {
   skipped: "NOT SUMMARISED",
 };
 
+const summaryCount = (n: number) => `${n} ${n === 1 ? "summary" : "summaries"}`;
+
 const SOURCE = {
   captions: "from its captions",
   pasted: "from your transcript",
@@ -384,7 +386,7 @@ function ExternalAnalysis() {
             </select>
             <p className="text-xs text-muted-foreground">
               {data
-                ? `${data.videos.filter((v) => v.status === "summarized").length} summaries, newest first.`
+                ? `${summaryCount(data.videos.filter((v) => v.status === "summarized").length)}, newest first.`
                 : ""}
             </p>
           </SectionCard>
@@ -428,7 +430,9 @@ function VideoCard({
   focused: boolean;
   onChanged: () => void;
 }) {
-  const [open, setOpen] = useState(initiallyOpen);
+  // Follows the page (the newest summary opens once it is ready) until you open or close it.
+  const [chosen, setChosen] = useState<boolean | null>(null);
+  const open = chosen ?? initiallyOpen;
   const [day, setDay] = useState(() => dayKeyOf(video.publishedAt, timeZone));
   const [pasting, setPasting] = useState(false);
   const [transcript, setTranscript] = useState("");
@@ -500,7 +504,7 @@ function VideoCard({
           {video.summary && open && <ExternalSummaryView summary={video.summary} />}
           <div className="flex flex-wrap items-center gap-2">
             {video.summary && (
-              <Button type="button" size="sm" variant="ghost" onClick={() => setOpen((v) => !v)}>
+              <Button type="button" size="sm" variant="ghost" onClick={() => setChosen(!open)}>
                 {open ? "Hide summary" : "Show summary"}
               </Button>
             )}
