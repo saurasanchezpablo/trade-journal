@@ -36,6 +36,8 @@ touches as little as possible.
 | `apps/web/src/server/ai.ts` (coaching)                                                   | `withImages` exported and taking `AiImage` (a buffer or `{ data, mediaType }`).                                                                                   | Re-add the export and type.                                                 |
 | `packages/core/src/index.ts`                                                             | `export * from "./behaviour";`                                                                                                                                    | Re-add the export.                                                          |
 | `apps/web/src/components/shell.tsx` (performance)                                        | `NavLink` prefetches on hover, focus or touch (`prefetch={false}` plus `router.prefetch`).                                                                        | Re-add the three handlers and `prefetch={false}`.                           |
+| `apps/web/src/components/shell.tsx` (external analysis)                                  | An "External analysis" entry in `NAV` (icon `MonitorPlay`).                                                                                                       | Re-add the entry and the icon import.                                       |
+| `apps/web/src/app/journal/[date]/page.tsx` (external analysis)                           | `<ExternalOpinions>` above "Ask about this day", appending to the note like recaps.                                                                               | Re-add the import and the element.                                          |
 | `apps/web/src/server/market-data/http.ts`, `transport.ts`, `public-crypto.ts`            | Concurrent grid-aligned `windows()`, per-host `HOST_LIMITS`, hour-long cache for past pages, Binance symbol details beside the candles.                           | Keep upstream's adapters and re-add the pacing, paging and cache changes.   |
 
 Nothing else upstream owns is changed: no database schema, bootstrap or upgrade edits (the
@@ -60,6 +62,11 @@ dependencies added are single sign-on's (push uses Node's crypto).
   `components/ai-digests.tsx`, tests `ai-digests.test.ts` and `ai-provider-fixtures.ts`; the
   scheduler starts from `instrumentation-node.ts`.
 - Explained alerts: `lib/alert-explain.ts`, test `alert-explain.test.ts`.
+- External analysis (docs/external-analysis.md): `lib/youtube.ts`, `lib/external-summary.ts`,
+  `server/external-analysis/*` (its own tables; scheduler started from `instrumentation-node.ts`),
+  `app/api/external/**`, `app/external/page.tsx`, components `external-summary-view.tsx` and
+  `external-opinions.tsx`, the chat's `external_opinions` tool, tests `youtube`,
+  `youtube.live`, `external-analysis` and `external-summary`.
 - AI coaching (docs/ai-coaching.md): `packages/core/src/behaviour.ts`; `lib/{lesson-tracking,trade-context,goals,plan-draft,note-search,trade-snapshot}.ts`;
   `server/{ai-structured,ai-images,lessons,trade-context,goals,note-search}.ts` (goals and note passages in their own
   tables); `app/api/{behaviour,lessons,goals,notes-search}/**` and

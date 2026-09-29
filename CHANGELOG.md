@@ -6,6 +6,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
+- External analysis: follow YouTube channels (by @handle, link or one of their videos) and the AI summarises each new video every day into the author's main and secondary scenario with the reasons for each, their open trades, when they would go long or short with the stop loss and take profits, and their key levels; add a summary to a journal day as an External opinion (see [docs/external-analysis.md](docs/external-analysis.md))
 - Habits on Reports: revenge trades, trading on after losses, sizing up after a loss, size creeping up and results fading later in the day, each against the rest of your trades with what it cost; the AI chat reads the same numbers (see [docs/ai-coaching.md](docs/ai-coaching.md))
 - Lessons that keep coming back: Keep and Fix items from your day notes grouped when they say the same thing, with weeks in a row, on the Daily journal and in recaps, weekly reviews and the AI chat
 - Trade critiques read the market around the trade (where the entry sat in the day's range and against VWAP, how far price went for and against it, how much the exit kept, what happened after) and the replay chart's picture
