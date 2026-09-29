@@ -17,6 +17,24 @@ with no page open and notifies you.
   so editing lines or zones updates the watch without any change to how the journal saves.
   Deleting an analysis stops its watch. At most 25 analyses are watched.
 
+## What an alert says
+
+Each alert, in the open chart and in background notifications, adds a short note from the
+analysis's own plan (no AI call, so it is instant and exact):
+
+- A line or zone at a scenario's trigger (within 0.3% of its price) says the scenario is set
+  off, with its target and where it is wrong, when price crosses in the scenario's direction,
+  or that the trigger was crossed the other way.
+- At a target: the target is reached, or price went back through it.
+- At an invalidation: the scenario is invalidated here, or price went back past it.
+- Elsewhere, a zone reads as support or resistance (entered from above or below; a break flips
+  its role), and the bias, when set, says whether the move is with it or against it.
+
+For example: "BTCUSDT crossed above Horizontal line at 100 / Plan: sets off "Reclaim" (long),
+target 108, wrong below 97." The note follows the plan as last saved.
+
+Scheduled AI digests use the same delivery; see [ai-chat.md](ai-chat.md#scheduled-digests).
+
 ## How you are notified
 
 - **Notify this browser** turns on Web Push for the browser or installed app you are using
@@ -47,7 +65,7 @@ in settings.
   `instrumentation-node.ts`.
 - `server/background-alerts/delivery.ts`: keys, subscriptions, push and webhook delivery;
   `web-push.ts`: encryption and VAPID.
-- `lib/alert-messages.ts`: alert wording.
+- `lib/alert-messages.ts`: alert wording; `lib/alert-explain.ts`: the plan note.
 - `app/api/alerts/{watch,push,test,webhook,events}`.
 - `components/background-alerts.tsx`: the controls in the Alerts card (self-contained).
 - `public/sw.js`: shows notifications (also the installable app's service worker, see

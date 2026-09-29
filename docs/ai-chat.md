@@ -67,6 +67,32 @@ needed rather than resent. Delete a conversation from **Saved chats**.
 
 In privacy mode, questions and answers are hidden on screen.
 
+## Scheduled digests
+
+**Daily journal → Scheduled digests** has the AI write, on schedule, a **session recap** (at a
+time you choose, on the weekdays you choose) and a **weekly review** (the seven days ending on
+the weekday you choose), in the journal's timezone. Both are off until you switch them on.
+
+- Each digest is an AI chat with the same tools and scope rules as above: a recap covers all
+  accounts for that day (so it reads the day note), a weekly review covers all accounts from
+  the week's first day to its last. It is saved like any chat, so you can open it and ask
+  follow-ups: a recap opens on its journal day, a weekly review on Reports.
+- It is sent through the background alerts delivery ([alerts.md](alerts.md#how-you-are-notified)):
+  the browsers you turned notifications on for, and the webhook (such as an ntfy topic). With
+  neither set up, digests are still written and listed on the card.
+- The notification says how many trades were reviewed and opens the chat. **Put the start of
+  the review in the notification** adds its first sentences instead; they can include amounts,
+  which then show on lock screens and in webhook messages.
+- Days with no closed trades and no day note, and weeks with neither trades nor Keep/Fix
+  lessons, are skipped without asking the AI.
+- The server checks once a minute. A slot missed while it was down is still sent if it is
+  recent (up to three hours late for a recap, a day for the weekly review), never a stale one.
+  Each digest is sent once per day or week; **Send today's recap now** and **Send this
+  week's review now** write one on demand (again if it was already sent).
+- The card lists the latest digests: sent (and to how many devices), skipped or failed, with
+  the reason. They are kept in their own table (`ai_digests`, created on first use); the most
+  recent 120 are kept. `JOURNAL_AI_DIGESTS=off` stops the check entirely.
+
 ## API
 
 - `POST /api/ai/chat` streams one turn as newline-delimited JSON (`application/x-ndjson`):
@@ -79,6 +105,11 @@ In privacy mode, questions and answers are hidden on screen.
   - Invalid requests are refused with a JSON 400 before any provider call.
 - `GET /api/ai/chat?kind=&anchor=` lists conversations; `GET /api/ai/chat/{id}` returns one
   with its messages; `DELETE /api/ai/chat/{id}` removes it.
+- `GET /api/ai/digests` returns the digest settings, where they are delivered and the latest
+  digests; `PUT` saves `{ recap: { enabled, time, weekdays }, weekly: { enabled, weekday,
+time }, summaryInNotification }` (times `HH:MM`, weekdays 0 Sunday to 6 Saturday).
+  `POST /api/ai/digests/run` with `kind` (`day` or `week`) and optional `period` (YYYY-MM-DD,
+  default today) writes and sends one now.
 - `POST /api/ai/recap`, `/api/ai/critique` and `/api/ai/weekly` take `stream: true` for the
   same `text` events followed by `done` with their usual payload.
 
@@ -87,4 +118,7 @@ In privacy mode, questions and answers are hidden on screen.
 `pnpm exec vitest run apps/web/tests/ai-chat.test.ts` replays provider streams in the
 Anthropic, OpenAI (Responses) and Gemini formats at the `fetch` level: tool calls and their
 results, a follow-up's history, the scope never widening, provider failures, stopping part
-way, and the streamed recap, critique and weekly review.
+way, and the streamed recap, critique and weekly review. `ai-digests.test.ts` covers the
+schedule (weekdays, timezone, catch-up), sending once per period, skipping empty days, the
+notification's wording and links, and the settings API; `alert-explain.test.ts` the notes on
+alerts.

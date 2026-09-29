@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
+- Scheduled AI digests: a session recap after the close and a weekly review, written by the AI chat on the days and times you choose and sent as push notifications or to your webhook (such as ntfy); tap one to open it as a chat and ask follow-ups. Off until switched on under **Daily journal → Scheduled digests**; amounts stay out of notifications unless you choose otherwise
+- Chart alerts explain themselves: each notification says what the level is to the analysis's plan (it sets off a scenario, with its target and stop, reaches a target or invalidates a scenario), or whether the move is with or against your bias
 - AI chat: **Ask your journal** (Reports), **Ask about this day** and a chat under each trade's AI review. The AI looks things up itself with read-only journal tools (totals, trade search, stats grouped by any Reports dimension, a trade's fills and notes, the candles around a trade, a day's note and plans, chart analyses), always within the conversation's accounts and filters. Follow-up questions continue the conversation, which is saved and can be reopened or deleted; a chat can start from a recap or critique. See [docs/ai-chat.md](docs/ai-chat.md)
 - AI answers appear as they are written: chat answers (with each lookup shown as it runs, and **Stop**), trade critiques, recaps and the weekly review
 - Google Gemini as an AI provider for recaps, trade critiques and "ask your journal": choose it in **Settings → AI** with a Gemini API key (or `GEMINI_API_KEY` on the server); default model `gemini-3.8-flash`, chart images included
