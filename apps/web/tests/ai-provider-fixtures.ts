@@ -177,3 +177,28 @@ export const anthropicMessage = (text: string) =>
     }),
     { headers: { "Content-Type": "application/json" } },
   );
+
+/** A whole OpenAI Responses answer with one text output. */
+export const openaiMessage = (text: string) =>
+  Response.json({
+    id: "resp_1",
+    created_at: 1,
+    model: "gpt-fixture",
+    status: "completed",
+    output: [
+      {
+        type: "message",
+        id: "msg_1",
+        role: "assistant",
+        content: [{ type: "output_text", text, annotations: [] }],
+      },
+    ],
+    usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
+  });
+
+/** A whole Gemini answer with one text part. */
+export const geminiMessage = (text: string) =>
+  Response.json({
+    candidates: [{ content: { role: "model", parts: [{ text }] }, finishReason: "STOP" }],
+    usageMetadata: { promptTokenCount: 1, candidatesTokenCount: 1 },
+  });

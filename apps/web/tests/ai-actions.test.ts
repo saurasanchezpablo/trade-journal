@@ -16,7 +16,9 @@ const { eq } = await import("drizzle-orm");
 const { insertExecutions } = await import("../src/server/executions");
 const { setSetting } = await import("../src/server/settings");
 const { queryTrades } = await import("../src/server/trades-query");
-const { anthropicMessage, script } = await import("./ai-provider-fixtures");
+const { anthropicMessage, openaiMessage, geminiMessage, script } =
+  await import("./ai-provider-fixtures");
+const suggestLabels = await import("../src/app/api/ai/suggest-labels/route");
 const playbookCheck = await import("../src/app/api/ai/playbook-check/route");
 
 const post = (route: { POST: (r: Request) => Promise<Response> }, body: unknown) =>
@@ -143,5 +145,75 @@ describe("the playbook check", () => {
     const unreadable = await post(playbookCheck, { key: tradeKey() });
     expect(unreadable.status).toBe(500);
     expect((await unreadable.json()).error).toMatch(/could not read/);
+  });
+});
+
+describe("suggested labels", () => {
+  const answer = JSON.stringify({
+    trades: [
+      {
+        trade: 1,
+        tags: ["Breakout", "breakout-retest"],
+        mistakes: ["no stop"],
+        rating: 2,
+        reason: "No stop was set and the loss ran.",
+      },
+    ],
+  });
+
+  it("reuse the labels in use, mark new ones, and leave out what the trade has", async () => {
+    db.update(trades)
+      .set({ tagsJson: JSON.stringify(["Breakout"]), mistakesJson: JSON.stringify(["No stop"]) })
+      .run();
+    insertExecutions("a", fills("BBB", 110, "2026-09-16"), "manual");
+    const key = queryTrades({ symbol: "AAA" }).trades[0]!.key;
+    const provider = script(() => anthropicMessage(answer));
+    const response = await post(suggestLabels, { keys: [key] });
+    expect(response.status).toBe(200);
+    const [s] = (await response.json()).suggestions;
+    expect(s).toMatchObject({
+      key,
+      symbol: "AAA",
+      // "Breakout" and "no stop" are already on the trade (in any case).
+      tags: ["breakout-retest"],
+      mistakes: [],
+      newLabels: ["breakout-retest"],
+      rating: 2,
+      currentTags: ["Breakout"],
+      reason: "No stop was set and the loss ran.",
+    });
+    const asked = JSON.stringify(provider.body(0));
+    expect(asked).toContain("Tags in use: Breakout");
+    expect(asked).toContain("Mistakes in use: No stop");
+    // Nothing is saved until applied.
+    expect(queryTrades({ symbol: "AAA" }).trades[0]!.annotations?.tags).toEqual(["Breakout"]);
+  });
+
+  it("read the same answer from OpenAI and Gemini", async () => {
+    const key = tradeKey();
+    setSetting("aiProvider", "openai");
+    vi.stubEnv("OPENAI_API_KEY", "fixture-openai-key");
+    let provider = script(() => openaiMessage(answer));
+    let s = (await (await post(suggestLabels, { keys: [key] })).json()).suggestions[0];
+    expect(s.tags).toEqual(["Breakout", "breakout-retest"]);
+    expect((provider.body(0) as { text?: { format?: { type?: string } } }).text?.format?.type).toBe(
+      "json_schema",
+    );
+
+    setSetting("aiProvider", "google");
+    vi.stubEnv("GEMINI_API_KEY", "fixture-gemini-key");
+    provider = script(() => geminiMessage(answer));
+    s = (await (await post(suggestLabels, { keys: [key] })).json()).suggestions[0];
+    expect(s.mistakes).toEqual(["no stop"]);
+    expect(JSON.stringify(provider.body(0))).toContain("responseSchema");
+  });
+
+  it("take 1 to 20 existing trades", async () => {
+    const provider = script();
+    for (const keys of [[], Array.from({ length: 21 }, (_, i) => `k${i}`), ["missing"]]) {
+      const response = await post(suggestLabels, { keys });
+      expect(response.status).toBe(400);
+    }
+    expect(provider.fetcher).not.toHaveBeenCalled();
   });
 });

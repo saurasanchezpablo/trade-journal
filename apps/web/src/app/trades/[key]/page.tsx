@@ -1,6 +1,7 @@
 "use client";
 import { JournalChat } from "@/components/journal-chat";
 import { postAiStream } from "@/lib/ai-stream";
+import { TradeLabelSuggestions } from "@/components/label-suggestions";
 import { tradeSnapshot } from "@/lib/trade-snapshot";
 import { AiNotice } from "@/components/ai-notice";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -417,6 +418,16 @@ function AnnotationsCard({
             Reviewed
           </label>
         </div>
+
+        <TradeLabelSuggestions
+          tradeKey={trade.key}
+          onApply={async (labels) => {
+            if (labels.tags) setTags(labels.tags.join(", "));
+            if (labels.mistakes) setMistakes(labels.mistakes.join(", "));
+            await flush();
+            await onPatch({ ...labels });
+          }}
+        />
 
         <div className="grid grid-cols-2 gap-2">
           <div>

@@ -22,6 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { BulkLabelSuggestions } from "@/components/label-suggestions";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import Loading from "@/app/loading";
@@ -410,6 +411,14 @@ function Trades() {
                 <Trash2 />
                 Delete
               </Button>
+              <div className="basis-full">
+                <BulkLabelSuggestions
+                  key={selectedKeys.join("|")}
+                  keys={selectedKeys}
+                  timeZone={timeZone}
+                  onChanged={refresh}
+                />
+              </div>
             </CardContent>
           </Card>
         )}
