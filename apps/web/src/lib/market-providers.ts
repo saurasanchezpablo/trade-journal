@@ -54,7 +54,7 @@ export const MARKET_PROVIDERS: ProviderInfo[] = [
     description:
       "Public Binance spot candles. No API key required. Availability depends on your region and the listed pair.",
     symbolHint:
-      "Spot pairs use BTCUSDT or ETHUSDT. USDT is not USD; account and quote currencies must match for estimates.",
+      "Spot pairs use BTCUSDT or ETHUSDT. For a USD account, USDT and USDC count as dollars in estimates; other quote currencies must match the account.",
     searchable: true,
     fields: [],
   },

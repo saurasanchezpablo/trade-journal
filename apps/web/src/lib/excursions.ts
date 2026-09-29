@@ -59,7 +59,7 @@ export function estimateExcursions(
   }
   if (!basisConfirmed)
     return empty(
-      "Confirm that the provider instrument, price basis and quote currency match your fills and account currency to calculate estimates.",
+      "Monetary estimates need candles quoted in the account's currency. The price move is shown instead.",
     );
   if (!trade.closedAt) return empty("Estimates are available for closed trades only.");
   if (history.truncated)

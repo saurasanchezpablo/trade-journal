@@ -14,7 +14,7 @@ import type { MarketCsvDataset } from "@/lib/market-csv";
 import { replayFrame } from "@/lib/trade-replay";
 import { VELA_TIMEFRAME } from "@/lib/chart-analysis";
 import { useApi } from "@/lib/use-api";
-import { fmtMoney } from "@/lib/utils";
+import { fmtMoney, fmtNumber, fmtPercent } from "@/lib/utils";
 import { TradeChart, type ChartExecution, type ChartTrade } from "./trade-chart";
 import { registerTradeSnapshot } from "@/lib/trade-snapshot";
 import { usePrivacy } from "./privacy";
@@ -49,6 +49,8 @@ export function TradeMarketData({
   );
   const [confirmed, setConfirmed] = useState(false);
   const [result, setResult] = useState<TradeMarketResult | null>(null);
+  // Candles loaded stay loaded: this only switches the chart between candles and fills alone.
+  const [showCandles, setShowCandles] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const controller = useRef<AbortController | null>(null);
@@ -169,8 +171,8 @@ export function TradeMarketData({
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            Load candles for this trade to use replay. Enable the checkbox to also calculate and
-            save monetary MAE/MFE estimates for Reports.
+            The market around this trade, its replay, and how far price went against you (MAE) and
+            in your favour (MFE) while it was open.
           </p>
           {connectionError && (
             <p role="alert" className="text-sm text-destructive">
@@ -313,14 +315,13 @@ export function TradeMarketData({
                   }}
                 />
                 <span>
-                  Calculate and save MAE/MFE estimates for Reports. I confirm that this instrument,
-                  price adjustments and quote currency match my fills and account ({trade.currency}
-                  ).
+                  Save the MAE/MFE estimate for Reports. I confirm that this instrument, price
+                  adjustments and quote currency match my fills and account ({trade.currency}).
                 </span>
               </label>
               <p className="text-xs text-muted-foreground">
-                Unchecked: load candles and replay only. Checked: also calculate monetary estimates
-                and save valid results to Reports. Missing or mismatched data stays unavailable.
+                MAE and MFE are worked out whenever candles load. Checked: they are also saved for
+                Reports. Missing or mismatched data stays unavailable.
               </p>
               <div className="flex flex-wrap gap-2">
                 <Button
@@ -335,7 +336,7 @@ export function TradeMarketData({
                   {busy
                     ? "Loading history…"
                     : confirmed
-                      ? "Load data & save estimates"
+                      ? "Load candles & save estimates"
                       : "Load candles & replay"}
                 </Button>
                 {busy && (
@@ -343,9 +344,9 @@ export function TradeMarketData({
                     Cancel
                   </Button>
                 )}
-                {result && (
-                  <Button variant="outline" onClick={invalidate}>
-                    Show original chart
+                {result && result.bars.length > 0 && (
+                  <Button variant="outline" onClick={() => setShowCandles((v) => !v)}>
+                    {showCandles ? "Show fills only" : "Show candles"}
                   </Button>
                 )}
               </div>
@@ -364,8 +365,9 @@ export function TradeMarketData({
           keeps those saved estimates; it does not calculate new ones.
         </p>
       )}
-      {result && result.bars.length > 0 ? (
+      {result && result.bars.length > 0 && showCandles ? (
         <HistoricalReplay
+          savedBefore={Boolean(saved?.saved)}
           history={result}
           trade={trade}
           executions={executions}
@@ -380,39 +382,67 @@ export function TradeMarketData({
             <div>
               <p className="text-xs text-muted-foreground">Estimated MAE</p>
               <p className="text-sm">
-                {busy
-                  ? "Loading candles…"
-                  : error
-                    ? "Data request failed"
-                    : saved?.saved
-                      ? privacy
-                        ? "••••"
-                        : fmtMoney(saved.saved.estimate.mae!, trade.currency)
-                      : "Load market data to calculate"}
+                {busy ? (
+                  "Loading candles…"
+                ) : error ? (
+                  "Data request failed"
+                ) : result?.bars.length ? (
+                  <Excursion
+                    savedBefore={Boolean(saved?.saved)}
+                    estimate={result.estimate}
+                    side="adverse"
+                    currency={trade.currency}
+                    privacy={privacy}
+                  />
+                ) : saved?.saved ? (
+                  privacy ? (
+                    "••••"
+                  ) : (
+                    fmtMoney(saved.saved.estimate.mae!, trade.currency)
+                  )
+                ) : (
+                  "Load market data to calculate"
+                )}
               </p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Estimated MFE</p>
               <p className="text-sm">
-                {busy
-                  ? "Loading candles…"
-                  : error
-                    ? "Data request failed"
-                    : saved?.saved
-                      ? privacy
-                        ? "••••"
-                        : fmtMoney(saved.saved.estimate.mfe!, trade.currency)
-                      : "Load market data to calculate"}
+                {busy ? (
+                  "Loading candles…"
+                ) : error ? (
+                  "Data request failed"
+                ) : result?.bars.length ? (
+                  <Excursion
+                    savedBefore={Boolean(saved?.saved)}
+                    estimate={result.estimate}
+                    side="favorable"
+                    currency={trade.currency}
+                    privacy={privacy}
+                  />
+                ) : saved?.saved ? (
+                  privacy ? (
+                    "••••"
+                  ) : (
+                    fmtMoney(saved.saved.estimate.mfe!, trade.currency)
+                  )
+                ) : (
+                  "Load market data to calculate"
+                )}
               </p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Trade replay</p>
               <p className="text-sm">
-                {busy ? "Loading candles…" : "Available after candles load"}
+                {busy
+                  ? "Loading candles…"
+                  : result?.bars.length
+                    ? "Loaded: show candles to replay"
+                    : "Available after candles load"}
               </p>
             </div>
           </div>
-          {result && (
+          {result && result.bars.length === 0 && (
             <p role="status" className="text-sm text-muted-foreground">
               No candles were returned for this instrument and trade period. Check the symbol,
               dataset and plan coverage.
@@ -425,12 +455,65 @@ export function TradeMarketData({
   );
 }
 
+/**
+ * One excursion: the money amount when the estimate has one (with whether it is saved for
+ * Reports), else the price move from the candles, else why neither is known.
+ */
+function Excursion({
+  estimate,
+  side,
+  currency,
+  privacy,
+  savedBefore = false,
+}: {
+  estimate: ExcursionEstimate;
+  side: "adverse" | "favorable";
+  currency: string;
+  privacy: boolean;
+  /** An estimate for this trade was saved for Reports on an earlier load. */
+  savedBefore?: boolean;
+}) {
+  if (privacy) return <>••••</>;
+  const money = side === "adverse" ? estimate.mae : estimate.mfe;
+  const move = estimate.priceMove;
+  const moveText = move
+    ? `${fmtNumber(side === "adverse" ? move.adverse : move.favorable)} in price (${fmtPercent(
+        side === "adverse" ? move.adversePct : move.favorablePct,
+        2,
+      )})`
+    : null;
+  if (money !== null)
+    return (
+      <span>
+        {fmtMoney(money, currency).replace(/^\+/, "")}
+        {moveText && (
+          <span className="block text-xs font-normal text-muted-foreground">{moveText}</span>
+        )}
+        <span className="block text-xs font-normal text-muted-foreground">
+          {estimate.saved || savedBefore ? "Saved for Reports" : "Not saved for Reports"}
+        </span>
+      </span>
+    );
+  if (moveText)
+    return (
+      <span>
+        {moveText}
+        <span className="block text-xs font-normal text-muted-foreground">
+          No money amount: see the limits below
+        </span>
+      </span>
+    );
+  return <>Unavailable</>;
+}
+
 function HistoricalReplay({
+  savedBefore,
   history,
   trade,
   executions,
   privacy,
 }: {
+  savedBefore: boolean;
   history: TradeMarketResult;
   trade: ChartTrade & { currency: string };
   executions: ChartExecution[];
@@ -556,25 +639,33 @@ function HistoricalReplay({
           <div>
             <p className="text-xs text-muted-foreground">Estimated MAE · adverse</p>
             <p className="font-medium">
-              {privacy
-                ? "••••"
-                : !complete
-                  ? "Hidden during replay"
-                  : history.estimate.mae === null
-                    ? "Unavailable"
-                    : fmtMoney(history.estimate.mae, trade.currency).replace(/^\+/, "")}
+              {!complete && !privacy ? (
+                "Hidden during replay"
+              ) : (
+                <Excursion
+                  savedBefore={savedBefore}
+                  estimate={history.estimate}
+                  side="adverse"
+                  currency={trade.currency}
+                  privacy={privacy}
+                />
+              )}
             </p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Estimated MFE · favorable</p>
             <p className="font-medium">
-              {privacy
-                ? "••••"
-                : !complete
-                  ? "Hidden during replay"
-                  : history.estimate.mfe === null
-                    ? "Unavailable"
-                    : fmtMoney(history.estimate.mfe, trade.currency).replace(/^\+/, "")}
+              {!complete && !privacy ? (
+                "Hidden during replay"
+              ) : (
+                <Excursion
+                  savedBefore={savedBefore}
+                  estimate={history.estimate}
+                  side="favorable"
+                  currency={trade.currency}
+                  privacy={privacy}
+                />
+              )}
             </p>
           </div>
         </div>

@@ -8,7 +8,8 @@ import { join } from "node:path";
 const originalDir = process.env.JOURNAL_DATA_DIR;
 const scratch = mkdtempSync(join(tmpdir(), "journal-market-data-test-"));
 process.env.JOURNAL_DATA_DIR = scratch;
-const { db, settings, accounts, executions, trades, marketCsvDatasets } = await import("../src/db");
+const { db, settings, accounts, executions, trades, marketCsvDatasets, tradeExcursions } =
+  await import("../src/db");
 const { insertExecutions } = await import("../src/server/executions");
 const { GET: savedHistory, POST: loadHistory } =
   await import("../src/app/api/trades/[key]/market-data/route");
@@ -123,14 +124,17 @@ describe("trade history endpoint", () => {
       await explorer(new Request("http://localhost/api/trade-explorer?accounts=other"))
     ).json();
     expect(other.points).toEqual([]);
-    // Chart-only loads do not erase the earlier, explicitly confirmed estimate.
+    expect(result.estimate.saved).toBe(true);
+    // A load without the confirmation shows the estimate but does not save it, and does not
+    // erase the earlier, explicitly confirmed one.
     const chartOnly = await (
       await loadHistory(request({ ...body, basisConfirmed: false }), {
         params: Promise.resolve({ key }),
       })
     ).json();
     expect(chartOnly.bars).toHaveLength(3);
-    expect(chartOnly.estimate.mae).toBeNull();
+    expect(chartOnly.estimate).toMatchObject({ mae: 20, mfe: 40, saved: false });
+    expect(chartOnly.estimate.warnings.at(-1)).toMatch(/not saved to Reports/);
     expect(
       (await (await savedHistory(request({}), { params: Promise.resolve({ key }) })).json()).saved
         .estimate.mae,
@@ -621,5 +625,103 @@ describe("a crypto trade's chart", () => {
     );
     expect(live.status).toBe(200);
     expect((await live.json()).estimate.mae).toBeNull();
+  });
+});
+
+describe("a crypto trade's MAE and MFE", () => {
+  beforeEach(() => {
+    Object.assign(marketTransport, createMarketTransport({ minIntervalMs: 0, limits: {} }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url.includes("exchangeInfo"))
+          return Response.json({ symbols: [{ symbol: "BTCUSDT", quoteAsset: "USDT" }] });
+        const start = Number(new URL(url).searchParams.get("startTime"));
+        // Price dips to 81,500 and runs to 83,000 during the trade.
+        return Response.json(
+          Array.from({ length: 60 }, (_, i) => {
+            const t = start + i * 60_000;
+            const inTrade =
+              t >= Date.parse("2026-09-01T10:00:00Z") && t < Date.parse("2026-09-01T10:10:00Z");
+            return [
+              t,
+              "82000",
+              inTrade ? "83000" : "82100",
+              inTrade ? "81500" : "81900",
+              "82050",
+              "3",
+            ];
+          }),
+        );
+      }),
+    );
+  });
+  const trade = (currency: string) => {
+    db.insert(accounts)
+      .values({ id: "m", name: "Manual", kind: "manual", currency, createdAt: "2026-01-01" })
+      .run();
+    insertExecutions(
+      "m",
+      [
+        {
+          symbol: "BTC",
+          side: "buy",
+          quantity: 0.5,
+          price: 82000,
+          fee: 0,
+          executedAt: "2026-09-01T10:00:00Z",
+        },
+        {
+          symbol: "BTC",
+          side: "sell",
+          quantity: 0.5,
+          price: 82100,
+          fee: 0,
+          executedAt: "2026-09-01T10:10:00Z",
+        },
+      ],
+      "manual",
+    );
+    return db.select().from(trades).all()[0]!.key;
+  };
+  const load = (key: string, basisConfirmed = false) =>
+    loadHistory(
+      request({ provider: "binance", symbol: "BTCUSDT", resolution: "1m", basisConfirmed }),
+      {
+        params: Promise.resolve({ key }),
+      },
+    ).then((r) => r.json());
+
+  it("are worked out for a manual trade in a USD account from USDT candles, without confirming", async () => {
+    saveConnection("binance", "");
+    const result = await load(trade("USD"));
+    // 0.5 BTC: 500 against (82,000 to 81,500), 500 in favour (to 83,000).
+    expect(result.estimate).toMatchObject({ mae: 250, mfe: 500, saved: false });
+    expect(result.estimate.priceMove).toEqual({
+      adverse: 500,
+      favorable: 1000,
+      adversePct: 500 / 82000,
+      favorablePct: 1000 / 82000,
+    });
+    expect(result.estimate.warnings.join(" ")).toMatch(
+      /quoted in USDT, counted as the account's USD/,
+    );
+    // Nothing is saved for Reports until confirmed.
+    expect(db.select().from(tradeExcursions).all()).toEqual([]);
+  });
+
+  it("are saved for Reports when confirmed", async () => {
+    saveConnection("binance", "");
+    const result = await load(trade("USD"), true);
+    expect(result.estimate.saved).toBe(true);
+    expect(db.select().from(tradeExcursions).all()).toHaveLength(1);
+  });
+
+  it("show the price move when the account's currency differs from the candles'", async () => {
+    saveConnection("binance", "");
+    const result = await load(trade("EUR"));
+    expect(result.estimate.mae).toBeNull();
+    expect(result.estimate.priceMove).toMatchObject({ adverse: 500, favorable: 1000 });
+    expect(result.estimate.warnings[0]).toMatch(/differs from this account \(EUR\)/);
   });
 });

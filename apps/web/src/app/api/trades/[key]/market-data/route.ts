@@ -7,6 +7,9 @@ import { getTradeByKey, rowToTrade } from "@/server/trades-query";
 import { listExecutions } from "@/server/executions";
 import { RESOLUTIONS, isResolution, type Resolution } from "@/lib/market-data";
 import { estimateExcursions } from "@/lib/excursions";
+import { tradeMarketFacts } from "@/lib/trade-context";
+import type { AnnotatedTrade } from "@luxalgo/journal-core";
+import type { MarketHistory } from "@/lib/market-data";
 
 import { estimateFingerprint, saveEstimate, savedEstimates } from "@/server/market-data/estimates";
 
@@ -107,24 +110,47 @@ export const POST = handler(
         .from(accounts)
         .where(eq(accounts.id, row.accountId))
         .get()?.currency;
-      const currencyMatches = !history.quoteCurrency || history.quoteCurrency === accountCurrency;
-      const estimate = estimateExcursions(
-        trade,
-        listExecutions(row.accountId, trade.executionIds),
-        history,
-        body.basisConfirmed === true && currencyMatches,
-      );
+      // Dollar stablecoins count as dollars (they trade within a fraction of a cent of it).
+      const quote = history.quoteCurrency;
+      const exact = !quote || quote === accountCurrency;
+      const dollars =
+        !exact &&
+        accountCurrency === "USD" &&
+        ["USDT", "USDC", "FDUSD", "BUSD", "USD"].includes(quote!);
+      const currencyMatches = exact || dollars;
+      // A coin on a crypto exchange: one unit is one coin (manual trades carry no asset class).
+      const onExchange = ["binance", "bybit", "coinbase"].includes(provider.id);
+      const estimated =
+        onExchange && trade.contractMultiplier == null && trade.assetClass == null
+          ? { ...trade, assetClass: "crypto" as const }
+          : trade;
+      const fills = trade.executionIds.length
+        ? listExecutions(row.accountId, trade.executionIds)
+        : [];
+      // Worked out for every load, to show; saved for Reports only when you confirm the basis.
+      const estimate = estimateExcursions(estimated, fills, history, currencyMatches);
+      estimate.priceMove = estimate.priceBasisMismatch ? null : priceMove(trade, history);
       if (bookedElsewhere)
         estimate.warnings.unshift(
           `This trade is booked as ${row.assetClass === "other" ? "another asset class" : `a ${row.assetClass === "cfd" ? "CFD" : "forex"} instrument`}; exchange prices can differ from your broker's.`,
         );
+      if (dollars)
+        estimate.warnings.unshift(
+          `The candles are quoted in ${quote}, counted as the account's USD; stablecoins can drift slightly from the dollar.`,
+        );
       if (!currencyMatches)
         estimate.warnings.unshift(
-          `The candle quote currency (${history.quoteCurrency}) differs from this account (${accountCurrency}). Monetary estimates are unavailable; no FX conversion is applied.`,
+          `The candle quote currency (${quote}) differs from this account (${accountCurrency}). Monetary estimates are unavailable; no FX conversion is applied.`,
         );
+      const save = body.basisConfirmed === true && estimate.mae !== null && estimate.mfe !== null;
       const current = getTradeByKey(key);
-      if (current && estimateFingerprint(rowToTrade(current)) === fingerprint)
+      if (save && current && estimateFingerprint(rowToTrade(current)) === fingerprint)
         saveEstimate(trade, { ...history, estimate }, fingerprint);
+      estimate.saved = save;
+      if (!save && estimate.mae !== null)
+        estimate.warnings.push(
+          "Shown here, not saved to Reports: tick the confirmation and load again to save it.",
+        );
       if (body.estimateOnly) {
         const { bars: _bars, ...metadata } = history;
         return ok({ ...metadata, estimate });
@@ -136,3 +162,27 @@ export const POST = handler(
     }
   },
 );
+
+/** The price move while open, from the candles alone (any currency or contract size). */
+function priceMove(trade: AnnotatedTrade, history: MarketHistory) {
+  const step = RESOLUTIONS[history.resolution];
+  const facts = tradeMarketFacts(
+    {
+      direction: trade.direction,
+      avgEntry: trade.avgEntry,
+      avgExit: trade.avgExit ?? null,
+      openedAt: trade.openedAt,
+      closedAt: trade.closedAt ?? null,
+    },
+    history.bars,
+    Date.parse(trade.openedAt),
+    step,
+  );
+  if (facts.mae === null || facts.mfe === null || !(trade.avgEntry > 0)) return null;
+  return {
+    adverse: facts.mae,
+    favorable: facts.mfe,
+    adversePct: facts.mae / trade.avgEntry,
+    favorablePct: facts.mfe / trade.avgEntry,
+  };
+}

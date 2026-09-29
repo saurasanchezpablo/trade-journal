@@ -76,6 +76,24 @@ export function TradeChart(props: {
   );
 }
 
+/**
+ * The fills as a price path: one point per fill, and with a single fill, a second point at
+ * the trade's end (or now) at the same price, so the chart has a line to draw.
+ */
+export function pathPoints(fills: readonly ChartExecution[], endMs: number) {
+  const points = fills.map((fill) => ({
+    time: Date.parse(fill.executedAt),
+    open: fill.price,
+    high: fill.price,
+    low: fill.price,
+    close: fill.price,
+    volume: 0,
+  }));
+  const last = points.at(-1);
+  if (points.length === 1 && last && endMs > last.time) points.push({ ...last, time: endMs });
+  return points;
+}
+
 function PriceChart({
   trade,
   executions,
@@ -103,9 +121,10 @@ function PriceChart({
         (a, b) => Date.parse(a.executedAt) - Date.parse(b.executedAt),
       );
       const openMs = Date.parse(trade.openedAt);
+      // An open trade runs to now, so a single fill still draws a line.
       const closeMs = trade.closedAt
         ? Date.parse(trade.closedAt)
-        : Date.parse(sorted.at(-1)!.executedAt);
+        : Math.max(Date.parse(sorted.at(-1)!.executedAt), Date.now());
       const durationMs = Math.max(closeMs - openMs, 60_000);
       const pad = Math.max(durationMs * 0.35, 15 * 60_000);
 
@@ -211,14 +230,7 @@ function PriceChart({
         drawings: false,
         visibleRange: { from: openMs - pad, to: closeMs + pad },
         priceStyle: "line",
-        data: sorted.map((execution) => ({
-          time: Date.parse(execution.executedAt),
-          open: execution.price,
-          high: execution.price,
-          low: execution.price,
-          close: execution.price,
-          volume: 0,
-        })),
+        data: pathPoints(sorted, closeMs),
       });
       let indicator = chart.addNativeIndicator(type);
       const themeObserver = new MutationObserver(() => {
@@ -249,6 +261,15 @@ function PriceChart({
     };
   }, [trade.key, height]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  if (executions.length === 0)
+    return (
+      <figure
+        className="flex items-center justify-center rounded-lg border p-6 text-sm text-muted-foreground"
+        style={{ height: Math.min(height, 160) }}
+      >
+        No fills are recorded for this trade, so there is no price path to draw.
+      </figure>
+    );
   return (
     <figure>
       <div ref={hostRef} style={{ height }} className="overflow-hidden rounded-lg border" />

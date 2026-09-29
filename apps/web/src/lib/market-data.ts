@@ -90,6 +90,19 @@ export interface ExcursionEstimate {
   priceBasisMismatch?: boolean;
   mae: number | null;
   mfe: number | null;
+  /**
+   * How far price went against the average entry and in its favour while the trade was open,
+   * as a price distance and a share of the entry: known from the candles alone, whatever the
+   * currency or contract size.
+   */
+  priceMove?: {
+    adverse: number;
+    favorable: number;
+    adversePct: number;
+    favorablePct: number;
+  } | null;
+  /** The monetary estimate was saved for Reports (the confirmation was ticked). */
+  saved?: boolean;
   sampledBars: number;
   excludedBars: number;
   warnings: string[];
