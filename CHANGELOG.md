@@ -171,6 +171,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - External analysis: the daily check time, maximum age and minimum length are saved when you leave the field or press Enter (typing no longer saves each keystroke and jumbles the value), an empty or out-of-range value is not saved and says what to type, a video's journal day follows the journal's time zone once it loads, and check and retry times show in the journal's time zone
 - Pine Script editor: pressing Ctrl/Cmd+S or Ctrl/Cmd+Enter twice quickly no longer saves two scripts or adds two indicators
 - Under `pnpm dev` a trade's page loads its candles by itself again (React Strict Mode cancelled the first lookup and never retried it)
+- Charts: enabling, refreshing or disabling the economic calendar says why when it fails instead of doing nothing
 
 ## [0.1.0] - 2026-09-03
 

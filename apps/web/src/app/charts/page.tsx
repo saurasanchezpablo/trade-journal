@@ -439,10 +439,15 @@ function ChartLab() {
     return () => clearInterval(timer);
   }, [refreshCalendar]);
   const calendarAction = useCallback(
+    // A failure reaches the caller (the Overlays panel says why); the calendar is re-read
+    // either way, as the server may have changed it before failing.
     async (action: "enable" | "disable" | "refresh") => {
-      await postJson("/api/economic-events", { action });
-      if (action === "enable") changeOverlays({ ...overlaysRef.current, economic: true });
-      refreshCalendar();
+      try {
+        await postJson("/api/economic-events", { action });
+        if (action === "enable") changeOverlays({ ...overlaysRef.current, economic: true });
+      } finally {
+        refreshCalendar();
+      }
     },
     [changeOverlays, refreshCalendar],
   );

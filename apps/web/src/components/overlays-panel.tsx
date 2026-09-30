@@ -50,10 +50,16 @@ export function OverlaysPanel({
         (!options.economicCurrencies.length || options.economicCurrencies.includes(e.currency)),
     )
     .slice(0, 8);
+  const [failure, setFailure] = useState("");
   const act = async (action: "enable" | "disable" | "refresh") => {
     setBusy(true);
+    setFailure("");
     try {
       await onCalendar(action);
+    } catch (cause) {
+      setFailure(
+        `Could not ${action} the economic calendar: ${cause instanceof Error ? cause.message : "the request failed."}`,
+      );
     } finally {
       setBusy(false);
     }
@@ -143,6 +149,11 @@ export function OverlaysPanel({
           </div>
         }
       >
+        {failure && (
+          <p role="alert" className="mb-1.5 text-xs text-destructive">
+            {failure}
+          </p>
+        )}
         {!calendar?.enabled ? (
           <div className="space-y-1.5">
             <p className="text-xs text-muted-foreground">
