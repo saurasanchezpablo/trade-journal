@@ -153,6 +153,9 @@ export function ReportMarketEstimates({
                       setConfirmed(false);
                     }}
                   >
+                    <option value="" disabled>
+                      Choose a dataset
+                    </option>
                     {info.datasets.map((item) => (
                       <option key={item.value} value={item.value}>
                         {item.label}

@@ -80,6 +80,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Fixed
 
+- Net P&L in Reports and playbook adherence is signed, so a gain is not told apart by colour alone; the market estimates dataset picker asks for a choice instead of starting blank; the prop tracker's section buttons say which one is shown; removing a market data CSV asks first
 - Searching or switching folders in the Notebook while writing no longer reloads the open note with older text
 - The dashboard shows amounts in the accounts' currency (not always dollars), says so when the selected accounts mix currencies instead of adding them up, and its "vs prior 7d" window follows the journal's timezone
 - A day's intraday P&L chart shows times in the journal's timezone instead of UTC

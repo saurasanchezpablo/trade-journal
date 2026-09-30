@@ -560,15 +560,14 @@ export function PropFirmTracker() {
               </Button>
             </div>
             <div
-              role="tablist"
+              role="group"
               aria-label="Prop tracker sections"
               className="flex gap-2 overflow-x-auto"
             >
               {["overview", "accounts", "payouts", "ledger"].map((v) => (
                 <Button
                   key={v}
-                  role="tab"
-                  aria-selected={tab === v}
+                  aria-pressed={tab === v}
                   variant={tab === v ? "secondary" : "outline"}
                   onClick={() => setTab(v)}
                 >

@@ -58,7 +58,8 @@ interface Analysis {
 const number = (n: number | null) =>
   n === null ? "-" : n.toLocaleString(undefined, { maximumFractionDigits: 2 });
 const percent = (n: number | null) => (n === null ? "-" : `${(n * 100).toFixed(1)}%`);
-const money = (n: number, currency: string) => `${number(n)} ${currency}`;
+/** Signed, so a gain never relies on its colour alone (docs/design.md). */
+const money = (n: number, currency: string) => `${n > 0 ? "+" : ""}${number(n)} ${currency}`;
 function Summary({ data }: { data: Analysis }) {
   const s = data.summary;
   return (

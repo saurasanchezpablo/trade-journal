@@ -40,15 +40,13 @@ export function MarketCsvSettings({ onChange }: { onChange: () => void }) {
     setError("");
     setMessage("");
     try {
-      const body = await postJson<Preview>("/api/market-data/csv", {
-        action,
-        id,
-        ...file,
-        symbol,
-        resolution,
-        currency,
-        priceBasis,
-      });
+      // Removing names the dataset only; it never re-sends the chosen file.
+      const body = await postJson<Preview>(
+        "/api/market-data/csv",
+        action === "remove"
+          ? { action, id }
+          : { action, id, ...file, symbol, resolution, currency, priceBasis },
+      );
       if (action === "preview") setPreview(body);
       else {
         setPreview(null);
@@ -250,7 +248,10 @@ export function MarketCsvSettings({ onChange }: { onChange: () => void }) {
             size="sm"
             variant="outline"
             disabled={busy}
-            onClick={() => void act("remove", dataset.id)}
+            onClick={() => {
+              if (confirm(`Remove ${dataset.name} and the MAE/MFE estimates saved from it?`))
+                void act("remove", dataset.id);
+            }}
           >
             Remove dataset
           </Button>

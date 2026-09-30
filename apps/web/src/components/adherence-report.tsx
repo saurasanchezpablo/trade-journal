@@ -22,6 +22,9 @@ interface Adherence {
   }[];
 }
 const pct = (n: number | null) => (n === null ? "-" : `${Math.round(n * 100)}%`);
+/** Signed, so a gain never relies on its colour alone (docs/design.md). */
+const signed = (n: number, digits?: number) =>
+  `${n > 0 ? "+" : ""}${digits === undefined ? n.toLocaleString(undefined, { maximumFractionDigits: 2 }) : n.toFixed(digits)}`;
 export function AdherenceReport({ bookId }: { bookId: string }) {
   const { query } = useFilters();
   const { data, error } = useApi<{ books: Adherence[] }>(`/api/adherence?${query}`);
@@ -58,8 +61,7 @@ export function AdherenceReport({ bookId }: { bookId: string }) {
               {b.currencies.length <= 1 && (
                 <p className={s.netPnl >= 0 ? "text-profit" : "text-loss"}>
                   <MonetaryValue>
-                    {s.netPnl.toLocaleString(undefined, { maximumFractionDigits: 2 })}{" "}
-                    {b.currencies[0] ?? ""}
+                    {signed(s.netPnl)} {b.currencies[0] ?? ""}
                   </MonetaryValue>
                 </p>
               )}
@@ -85,8 +87,8 @@ export function AdherenceReport({ bookId }: { bookId: string }) {
               </p>
               {b.currencies.length <= 1 && (
                 <p>
-                  Net P&L: <MonetaryValue>{r.followed.netPnl.toFixed(2)}</MonetaryValue> followed /{" "}
-                  <MonetaryValue>{r.broken.netPnl.toFixed(2)}</MonetaryValue> broken{" "}
+                  Net P&L: <MonetaryValue>{signed(r.followed.netPnl, 2)}</MonetaryValue> followed /{" "}
+                  <MonetaryValue>{signed(r.broken.netPnl, 2)}</MonetaryValue> broken{" "}
                   {b.currencies[0] ?? ""}
                 </p>
               )}
