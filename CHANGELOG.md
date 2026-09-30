@@ -88,6 +88,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - Import: the statement picker can be reached with the keyboard, dropping a file on it works (the browser used to open the file and leave the page), and choosing the same file again reads it again
 - Manual trade entry refuses a partly filled execution instead of dropping it (an exit without its price saved the trade as still open)
 - The login page shows the real reason a sign-in failed and cannot be submitted twice
+- Import: MetaTrader 4 HTML statements use each trade's reported Profit instead of rebuilding it from prices without the contract size, and a swap credit adds to the trade instead of counting as a fee. Re-importing a statement imported before adds no fills; see [docs/importers.md](docs/importers.md#parsing-fixes-and-earlier-imports) to rebuild earlier trades
 - Import: a swap credit on a MetaTrader 5 exit deal now adds to the trade's net P&L instead of being subtracted twice (re-importing such a file adds no fills; trades already imported keep their earlier P&L until their fills are deleted and imported again)
 - Habits: sizing up after a loss compares a trade only with the last trade on the symbol that had already closed when it opened, and trades whose timestamps carry different offsets are ordered by their moment in time
 - A journal opened over plain http on the local network (http://192.168.x.x) can add fee and risk rules, prop firm expenses and payouts again (they needed a browser feature only secure pages have)

@@ -189,3 +189,34 @@ it("blocks reimports over rounded fractional timestamps without affecting manual
   expect(db.select().from(executions).all()).toEqual(before);
   expect(insertExecutions("test", parsed.executions, "manual").inserted).toBe(2);
 });
+
+it("a MetaTrader statement imported by the earlier parser reimports without adding fills", async () => {
+  const { insertExecutions } = await import("../src/server/executions");
+  const content = cases.find((test) => test.format === "metatrader")!.content;
+  // What the earlier parser saved: the same fills, P&L rebuilt from prices.
+  insertExecutions(
+    "test",
+    [
+      {
+        symbol: "EURUSD",
+        side: "buy",
+        quantity: 1,
+        price: 100,
+        fee: 0,
+        executedAt: "2026-01-05T09:30:00.000Z",
+      },
+      {
+        symbol: "EURUSD",
+        side: "sell",
+        quantity: 1,
+        price: 110,
+        fee: 0,
+        executedAt: "2026-01-05T10:00:00.000Z",
+      },
+    ],
+    "import",
+  );
+  const response = await post({ mode: "commit", content, timeZone: "UTC", accountId: "test" });
+  expect(await response.json()).toMatchObject({ inserted: 0, duplicates: 2 });
+  expect(db.select().from(executions).all()).toHaveLength(2);
+});

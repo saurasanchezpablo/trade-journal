@@ -4,6 +4,7 @@ import { detectFormat, parseAuto } from "../src/detect";
 import { parseWithMapping, readHeaders } from "../src/formats/generic";
 import { parseMoney } from "../src/numbers";
 import { parseTimestamp } from "../src/dates";
+import { storedImportMetadata, type ImportedExecution } from "../src/types";
 
 // NOTE: fixtures are synthetic, shaped after each platform's documented export.
 // Validating against real exports is a launch-checklist item; every parser is
@@ -37,6 +38,18 @@ const MT4_HTML = `<html><head><title>Statement</title></head><body>
 <tr><td>Ticket</td><td>Open Time</td><td>Type</td><td>Size</td><td>Item</td><td>Price</td><td>S / L</td><td>T / P</td><td>Close Time</td><td>Price</td><td>Commission</td><td>Taxes</td><td>Swap</td><td>Profit</td></tr>
 <tr><td>12345</td><td>2026.01.05 09:31</td><td>buy</td><td>1.00</td><td>eurusd</td><td>1.09500</td><td>0.00000</td><td>0.00000</td><td>2026.01.05 14:20</td><td>1.09850</td><td>-7.00</td><td>0.00</td><td>-0.50</td><td>350.00</td></tr>
 </table></body></html>`;
+
+/** Round trips as the journal builds them from stored fills. */
+const journalTrips = (executions: ImportedExecution[]) =>
+  buildRoundTrips(
+    executions.map((e, i) => ({
+      ...e,
+      id: `e${i}`,
+      accountId: "a",
+      source: "import" as const,
+      importMetadata: storedImportMetadata(e),
+    })),
+  );
 
 describe("importers turn any platform's export into normalized executions", () => {
   it("a TradeZella export migrates with net P&L preserved to the cent", () => {
@@ -92,20 +105,36 @@ describe("importers turn any platform's export into normalized executions", () =
     expect(result.executions[0]!.symbol).toBe("ES");
   });
 
-  it("a MetaTrader HTML statement reconstructs each closed trade with swap folded into fees", () => {
+  it("a MetaTrader HTML statement keeps each trade's reported profit, commission and swap", () => {
     const result = parseAuto(MT4_HTML)!;
     expect(result.format).toBe("metatrader");
     expect(result.executions).toHaveLength(2);
-    const trades = buildRoundTrips(
-      result.executions.map((e, i) => ({
-        ...e,
-        id: `e${i}`,
-        accountId: "a",
-        source: "import" as const,
-      })),
-    );
+    const trades = journalTrips(result.executions);
     expect(trades[0]!.symbol).toBe("EURUSD");
     expect(trades[0]!.fees).toBeCloseTo(7.5, 6);
+    // Profit 350 is the statement's own figure; no contract size is needed.
+    expect(trades[0]!.netPnl).toBeCloseTo(342.5, 6);
+  });
+
+  it("a swap credit on a MetaTrader statement adds to the trade instead of counting as a fee", () => {
+    const result = parseAuto(MT4_HTML.replace("<td>-0.50</td>", "<td>+2.50</td>"))!;
+    expect(result.format).toBe("metatrader");
+    expect(result.executions.every((e) => e.fee >= 0)).toBe(true);
+    const [trade] = journalTrips(result.executions);
+    expect(trade!.fees).toBeCloseTo(4.5, 6);
+    expect(trade!.netPnl).toBeCloseTo(345.5, 6); // 350 profit - 7 commission + 2.50 swap
+  });
+
+  it("MetaTrader statements keep the fill identity the earlier parser saved", () => {
+    // Re-importing a statement imported before must match the rows it saved.
+    const result = parseAuto(MT4_HTML)!;
+    expect(
+      result.executions.map((e) => [e.symbol, e.side, e.quantity, e.price, e.executedAt]),
+    ).toEqual([
+      ["EURUSD", "buy", 1, 1.095, "2026-01-05T09:31:00.000Z"],
+      ["EURUSD", "sell", 1, 1.0985, "2026-01-05T14:20:00.000Z"],
+    ]);
+    expect(result.executions.every((e) => e.importMetadata === undefined)).toBe(true);
   });
 
   it("an unknown file is not guessed at — it goes to the column mapper instead", () => {

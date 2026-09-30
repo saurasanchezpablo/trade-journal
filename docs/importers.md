@@ -68,6 +68,11 @@ selections beyond the defaults.
   minus commissions, the difference is folded into fees so imported history agrees with
   the trader's old numbers to the cent (skipped when a contract multiplier makes the
   price-implied gross meaningless)
+- MetaTrader 4 HTML statements: each trade's gross P&L is the statement's own Profit (no
+  contract size needed); Commission and Swap are signed, so a swap credit adds to the trade
+  and a credit larger than the commission gives a zero fee, never a negative one. A
+  statement whose header is not recognized falls back to the older positional reading, where
+  P&L comes from prices and the contract multiplier
 - Content-hash dedup on insert: re-importing the same file with the same timezone is a no-op
 
 ## NinjaTrader execution exports
@@ -199,6 +204,26 @@ trades. Before correcting data:
 
 There is no automatic bulk time shift: files can use different zones, explicit
 offsets, and daylight-saving rules. A fixed hour adjustment is not reliable.
+
+## Parsing fixes and earlier imports
+
+A fill's dedup identity is its symbol, side, quantity, price and timestamp (plus the source
+id and group for history exports); fees and reported P&L are not part of it. Facts that only
+shape how trades are rebuilt (the trade a reconstructed fill belongs to, the order of fills
+at the same instant, the statement's P&L) are stored with legacy-format fills outside that
+identity, so a file imported before a fix still matches the rows it saved and re-importing
+it adds nothing. Those earlier rows keep the facts they were saved with: to rebuild them
+with a fix, delete the affected trades (which removes their fills and annotations) and
+import the file again.
+
+Where a fix changes an identity field itself, the importer also reports what the earlier
+parser read. A re-import that would place corrected fills next to rows the earlier parser
+saved is refused before any writes, as for the timestamp upgrades above; recover the
+corrected history in a new account, or delete the affected trades first.
+
+- **MetaTrader 4 HTML statements** now read the statement's Profit, Commission and signed
+  Swap. The fills keep the identity the earlier parser gave them, so earlier imports
+  deduplicate; their trades keep the old price-based P&L and swap-as-fee until re-imported.
 
 ## Sample file
 
