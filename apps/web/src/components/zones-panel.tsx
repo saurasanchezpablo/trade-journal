@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Crosshair, Eye, EyeOff, Plus, Trash2 } from "lucide-react";
 import { zoneSummary, type SrZone, type ZoneKind, type ZoneStats } from "@/lib/sr-zones";
 import { cn, fmtNumber } from "@/lib/utils";
@@ -32,6 +33,17 @@ export function ZonesPanel({
 }) {
   const update = (id: string, patch: Partial<SrZone>) =>
     onChange(zones.map((z) => (z.id === id ? { ...z, ...patch } : z)));
+  // A low or high that is not saved says why; the field goes back to the saved price.
+  const [problem, setProblem] = useState<{ id: string; text: string } | null>(null);
+  const refuse = (id: string, text: string) => {
+    setProblem({ id, text });
+    return false;
+  };
+  const save = (id: string, patch: Partial<SrZone>) => {
+    setProblem((p) => (p?.id === id ? null : p));
+    update(id, patch);
+    return true;
+  };
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-2">
@@ -108,12 +120,22 @@ export function ZonesPanel({
                 <PriceField
                   label="Low"
                   value={zone.low}
-                  onCommit={(low) => low < zone.high && update(zone.id, { low })}
+                  onCommit={(low) =>
+                    low < zone.high
+                      ? save(zone.id, { low })
+                      : refuse(zone.id, `The low must be under the high (${price(zone.high)}).`)
+                  }
+                  onInvalid={() => refuse(zone.id, "Enter a price, like 101.5.")}
                 />
                 <PriceField
                   label="High"
                   value={zone.high}
-                  onCommit={(high) => high > zone.low && update(zone.id, { high })}
+                  onCommit={(high) =>
+                    high > zone.low
+                      ? save(zone.id, { high })
+                      : refuse(zone.id, `The high must be above the low (${price(zone.low)}).`)
+                  }
+                  onInvalid={() => refuse(zone.id, "Enter a price, like 101.5.")}
                 />
                 <select
                   aria-label="Zone kind"
@@ -126,6 +148,11 @@ export function ZonesPanel({
                   <option value="resistance">Resistance</option>
                 </select>
               </div>
+              {problem?.id === zone.id && (
+                <p role="alert" className="text-[11px] text-destructive">
+                  {problem.text}
+                </p>
+              )}
               {s && (
                 <p className="text-[11px] text-muted-foreground">
                   {zoneSummary({ ...zone, label: "" }, s, (n) => fmtNumber(n))}
@@ -140,26 +167,36 @@ export function ZonesPanel({
   );
 }
 
+const price = (value: number) => String(Number(value.toPrecision(10)));
+
 function PriceField({
   label,
   value,
   onCommit,
+  onInvalid,
 }: {
   label: string;
   value: number;
-  onCommit: (v: number) => void;
+  /** Save a changed price; false when refused, and the field shows the saved price again. */
+  onCommit: (v: number) => boolean;
+  onInvalid: () => void;
 }) {
   return (
     <input
       aria-label={`Zone ${label.toLowerCase()}`}
       title={label}
-      defaultValue={String(Number(value.toPrecision(10)))}
+      defaultValue={price(value)}
       key={value}
       inputMode="decimal"
       onBlur={(e) => {
-        const next = Number(e.target.value);
-        if (Number.isFinite(next) && next !== value) onCommit(next);
-        else e.target.value = String(Number(value.toPrecision(10)));
+        const text = e.target.value.trim();
+        const next = Number(text);
+        const saved = () => (e.target.value = price(value));
+        // An emptied field is not a price of 0.
+        if (!text || !Number.isFinite(next)) {
+          saved();
+          onInvalid();
+        } else if (next === value || !onCommit(next)) saved();
       }}
       onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
       className="h-7 min-w-0 rounded border bg-background px-1.5 text-xs tabular-nums"
