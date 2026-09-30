@@ -23,6 +23,10 @@ const MAX_SKIP_REASONS = 5;
 
 const isFiniteNumber = (n: unknown): n is number => typeof n === "number" && Number.isFinite(n);
 
+/** An ISO-style date and time that names its offset: `...T10:00Z`, `...10:00:00+02:00`. */
+export const EXPLICIT_INSTANT =
+  /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2}(\.\d+)?)?\s*(Z|[+-]\d{2}:?\d{2})$/i;
+
 /** Plain-language reason a row can't be journaled, or null when the row is valid. */
 export const executionProblem = (row: unknown, source: ExecutionSource): string | null => {
   if (!row || typeof row !== "object") return "Execution is missing.";
@@ -36,6 +40,9 @@ export const executionProblem = (row: unknown, source: ExecutionSource): string 
   if (!isFiniteNumber(r.fee ?? 0)) return `${label}: fee must be a finite number.`;
   if (typeof r.executedAt !== "string" || !Number.isFinite(Date.parse(r.executedAt)))
     return `${label}: timestamp is missing or invalid.`;
+  // A typed-in time without an offset would be read in the server's own timezone.
+  if (source === "manual" && !EXPLICIT_INSTANT.test(r.executedAt.trim()))
+    return `${label}: timestamp needs a date, a time and a UTC offset or Z (for example 2026-01-05T10:00:00Z).`;
   const meta = r.importMetadata;
   const factsOk = (facts: NonNullable<ImportedExecution["reconstruction"]>) =>
     (facts.group === undefined ||
@@ -114,7 +121,17 @@ export const insertExecutions = (
     db.select({ id: accounts.id }).from(accounts).where(eq(accounts.id, accountId)).get(),
     "Account not found.",
   );
-  const { usable, skipped, skippedReasons } = partitionExecutions(rows, source);
+  const partition = partitionExecutions(rows, source);
+  const { skipped, skippedReasons } = partition;
+  // Manual and API fills are stored as canonical UTC instants, so the same moment always
+  // dedups to the same hash and sorts by time. The entry form already sends this form.
+  const usable =
+    source === "manual"
+      ? partition.usable.map((row) => ({
+          ...row,
+          executedAt: new Date(row.executedAt.trim()).toISOString(),
+        }))
+      : partition.usable;
   requireValue(
     !usable.some((row) => row.ninjaTrader || row.importMetadata?.group?.startsWith("ninjatrader")),
     "NinjaTrader fills require the reviewed import endpoint.",

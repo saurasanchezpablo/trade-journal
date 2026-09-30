@@ -1,6 +1,6 @@
 import type { ImportedExecution } from "@luxalgo/journal-importers";
 import { bad, handler, ok, requireValue } from "@/server/api";
-import { insertExecutions } from "@/server/executions";
+import { EXPLICIT_INSTANT, insertExecutions } from "@/server/executions";
 
 interface ManualBody {
   accountId: string;
@@ -33,6 +33,11 @@ export const POST = handler(async (request: Request) => {
     ) {
       return bad("every execution needs symbol, side, quantity > 0, price, executedAt");
     }
+    // Without an offset the time would be read in the server's timezone, not the trader's.
+    if (!EXPLICIT_INSTANT.test(row.executedAt.trim()))
+      return bad(
+        "executedAt needs a UTC offset or Z, for example 2026-01-05T15:30:00Z or 2026-01-05T10:30:00-05:00",
+      );
   }
   const rows = body.executions.map((row) => ({
     ...row,
