@@ -179,6 +179,34 @@ describe("importers turn any platform's export into normalized executions", () =
     expect(result.executions.every((e) => e.importMetadata === undefined)).toBe(true);
   });
 
+  it("DAS short sells and covers import as sells and buys", () => {
+    const result = parseAuto(`Symb,B/S,Qty,Price,Date,Time
+AAPL,SS,100,185.50,2026-01-05,09:31:00
+AAPL,BC,100,185.00,2026-01-05,09:45:00
+MSFT,Short Sell,10,400,2026-01-05,10:00:00
+MSFT,Cover,10,399,2026-01-05,10:05:00
+TSLA,Sell Short,5,240,2026-01-05,11:00:00
+TSLA,Buy to cover,5,239,2026-01-05,11:05:00`)!;
+    expect(result.format).toBe("das-trader");
+    expect(result.executions.map((e) => e.side)).toEqual([
+      "sell",
+      "buy",
+      "sell",
+      "buy",
+      "sell",
+      "buy",
+    ]);
+    expect(result.skippedRows).toBe(0);
+  });
+
+  it("a fill whose side is not recognized is skipped and the user is told", () => {
+    const result = parseAuto(`Symb,B/S,Qty,Price,Date,Time
+AAPL,B,100,185.50,2026-01-05,09:31:00
+AAPL,XFER,100,185.00,2026-01-05,09:45:00`)!;
+    expect(result.executions).toHaveLength(1);
+    expect(result.warnings.join(" ")).toContain('"XFER"');
+  });
+
   it("an unknown file is not guessed at — it goes to the column mapper instead", () => {
     const weird = `When,Ticker,Way,Amount,Cost
 2026-01-05 09:31:00,AAPL,bought,100,185.50`;

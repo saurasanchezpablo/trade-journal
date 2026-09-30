@@ -70,6 +70,9 @@ selections beyond the defaults.
   conversion), explicit offsets and a `UTC`/`GMT` suffix honored as-is. Other zone
   abbreviations (`EST`, `CDT`, ...) are ambiguous, so they are stripped and the statement's
   timezone applies. A date such as `01-05-2026` without a time is a date, never an offset
+- Sides: `Buy`/`B`/`BOT`/`Bid`/`BC`/`Cover`/`Buy to cover` are buys, `Sell`/`S`/`SLD`/`Ask`/
+  `SS`/`Short Sell`/`Sell short` are sells. A fill row with any other side is skipped and the
+  preview names the values
 - Slash dates (`04/03/2026`) follow the order the file proves (a first number above 12 means
   day-first); a file that settles nothing is read month-first with a warning
 - TradeZella P&L: the row's stated net P&L is kept exactly (commissions are the fee and the

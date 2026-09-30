@@ -35,15 +35,18 @@ export interface FillsFormatSpec {
 
 export const parseSide = (value: string | undefined): "buy" | "sell" | null => {
   if (!value) return null;
-  const text = value.trim().toLowerCase();
+  const text = value.trim().toLowerCase().replace(/\s+/g, " ");
   // "bid"/"ask" per TopstepX fills exports: bid = buy interest, ask = sell.
+  // DAS and other day-trading platforms mark short sales "SS" and covers "BC".
   if (
-    /^(buy|bot|bought|long|b|bid|btc|buytoopen|buytoclose|buy to open|buy to close)$/.test(text) ||
+    /^(buy|bot|bought|long|b|bid|btc|bc|cover|buytoopen|buytoclose|buytocover|buy to open|buy to close|buy to cover)$/.test(
+      text,
+    ) ||
     /^buy/.test(text)
   )
     return "buy";
   if (
-    /^(sell|sld|sold|short|s|ask|stc|selltoopen|selltoclose|sell to open|sell to close)$/.test(
+    /^(sell|sld|sold|short|s|ss|ask|stc|shortsell|short sell|selltoopen|selltoclose|sell to open|sell to close)$/.test(
       text,
     ) ||
     /^sell/.test(text)
@@ -74,13 +77,17 @@ export const rowsToFills = (
       `Values such as "${ambiguous}" can mean a thousands separator or a decimal comma, and nothing else in the file tells which; they were read with a thousands separator. Check the quantities and prices in the preview.`,
     );
 
+  const unknownSides = new Set<string>();
+
   for (const row of records) {
     if (spec.rowFilter && !spec.rowFilter(row)) {
       skippedRows++;
       continue;
     }
     const symbolRaw = pick(row, columns.symbol);
-    const side = parseSide(pick(row, columns.side));
+    const sideText = pick(row, columns.side);
+    const side = parseSide(sideText);
+    if (sideText && !side) unknownSides.add(sideText.trim());
     const quantityText = pick(row, columns.quantity);
     const priceText = pick(row, columns.price);
     const quantity = parseQuantity(quantityText, decimal);
@@ -150,6 +157,13 @@ export const rowsToFills = (
       ...(Object.keys(legacy).length ? { legacy } : {}),
     });
   }
+  if (unknownSides.size)
+    warnings.push(
+      `Rows with an unrecognized side (${[...unknownSides]
+        .slice(0, 5)
+        .map((side) => `"${side}"`)
+        .join(", ")}) were skipped; a fill's side is never guessed.`,
+    );
   return { executions, skippedRows, warnings };
 };
 
