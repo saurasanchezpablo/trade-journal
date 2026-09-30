@@ -1,5 +1,5 @@
 import { and, eq, inArray } from "drizzle-orm";
-import type { ImportedExecution } from "@luxalgo/journal-importers";
+import { storedImportMetadata, type ImportedExecution } from "@luxalgo/journal-importers";
 import { db, executions, accounts, trades } from "@/db";
 import { executionHash, newId, nowIso } from "./ids";
 import { rebuildAccount } from "./rebuild";
@@ -36,19 +36,31 @@ export const executionProblem = (row: unknown, source: ExecutionSource): string 
   if (typeof r.executedAt !== "string" || !Number.isFinite(Date.parse(r.executedAt)))
     return `${label}: timestamp is missing or invalid.`;
   const meta = r.importMetadata;
+  const factsOk = (facts: NonNullable<ImportedExecution["reconstruction"]>) =>
+    (facts.group === undefined ||
+      (typeof facts.group === "string" && facts.group.length > 0 && facts.group.length <= 2000)) &&
+    Number.isSafeInteger(facts.order) &&
+    facts.order >= 0 &&
+    (facts.reportedGrossPnl === undefined || Number.isFinite(facts.reportedGrossPnl)) &&
+    (facts.preserveFee === undefined || typeof facts.preserveFee === "boolean");
   const metaOk =
     !meta ||
     (source === "import" &&
       typeof meta.id === "string" &&
       meta.id.length > 0 &&
       meta.id.length <= 2000 &&
-      (meta.group === undefined ||
-        (typeof meta.group === "string" && meta.group.length > 0 && meta.group.length <= 2000)) &&
-      Number.isSafeInteger(meta.order) &&
-      meta.order >= 0 &&
-      (meta.reportedGrossPnl === undefined || Number.isFinite(meta.reportedGrossPnl)) &&
-      (meta.preserveFee === undefined || typeof meta.preserveFee === "boolean"));
-  if (!metaOk) return `${label}: invalid imported execution metadata.`;
+      factsOk(meta));
+  const facts = r.reconstruction;
+  const factsValid = !facts || (source === "import" && typeof facts === "object" && factsOk(facts));
+  const legacy = r.legacy;
+  const legacyOk =
+    !legacy ||
+    (typeof legacy === "object" &&
+      (legacy.symbol === undefined || (typeof legacy.symbol === "string" && !!legacy.symbol)) &&
+      (legacy.quantity === undefined || isFiniteNumber(legacy.quantity)) &&
+      (legacy.price === undefined || isFiniteNumber(legacy.price)) &&
+      (legacy.executedAt === undefined || typeof legacy.executedAt === "string"));
+  if (!metaOk || !factsValid || !legacyOk) return `${label}: invalid imported execution metadata.`;
   return null;
 };
 
@@ -122,14 +134,20 @@ export const insertExecutions = (
       );
       for (const row of usable) {
         if (existingHashes.has(executionHash(row))) continue;
-        const candidates = [row.legacyExecutedAt, row.executedAt.replace(/\.\d{3}Z$/, ".000Z")];
+        // How older parsers may have saved this fill: a changed timestamp, a
+        // rounded fraction, or other identity fields a parsing fix corrected.
+        const candidates = [
+          row.legacyExecutedAt ? { executedAt: row.legacyExecutedAt } : undefined,
+          { executedAt: row.executedAt.replace(/\.\d{3}Z$/, ".000Z") },
+          row.legacy,
+        ];
         requireValue(
-          !candidates.some(
-            (executedAt) =>
-              executedAt &&
-              executedAt !== row.executedAt &&
-              existingHashes.has(executionHash({ ...row, executedAt })),
-          ),
+          !candidates.some((earlier) => {
+            if (!earlier) return false;
+            const candidate = { ...row, ...earlier };
+            const hash = executionHash(candidate);
+            return hash !== executionHash(row) && existingHashes.has(hash);
+          }),
           "Matching imported fills have timestamps from an older parser or indistinguishable whole-second executions. Import the complete corrected history into a new journal account and compare it before retiring the old account; nothing was saved.",
         );
       }
@@ -147,13 +165,15 @@ export const insertExecutions = (
           side: row.side,
           quantity: row.quantity,
           price: row.price,
-          fee: row.importMetadata?.preserveFee
+          fee: storedImportMetadata(row)?.preserveFee
             ? row.fee
             : defaultFee(row.fee, row.quantity, accountId, row.symbol, defaults),
           executedAt: row.executedAt,
           assetClass: row.assetClass ?? null,
           source,
-          importMetadataJson: row.importMetadata ? JSON.stringify(row.importMetadata) : null,
+          importMetadataJson: storedImportMetadata(row)
+            ? JSON.stringify(storedImportMetadata(row))
+            : null,
           contentHash,
           createdAt,
         })

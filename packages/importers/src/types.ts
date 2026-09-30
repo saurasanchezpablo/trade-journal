@@ -10,8 +10,23 @@ export interface ImportedExecution {
   executedAt: string;
   /** Previous parser timestamp, only for detecting an unsafe reimport after a parsing fix. */
   legacyExecutedAt?: string;
+  /**
+   * What an earlier parser read for this fill's identity fields, set only where
+   * a parsing fix changed them. Only for detecting an unsafe reimport over rows
+   * that the earlier parser saved.
+   */
+  legacy?: Partial<Pick<ImportedExecution, "symbol" | "quantity" | "price" | "executedAt">>;
   assetClass?: AssetClass;
+  /** Source identity and reconstruction facts; `id` and `group` are part of the dedup hash. */
   importMetadata?: ImportMetadata;
+  /**
+   * Reconstruction facts (trade grouping, order among fills at the same instant,
+   * reported P&L) for formats whose fills were deduplicated by their economics
+   * alone before these facts existed. The journal stores them like
+   * `importMetadata`, but they stay out of the dedup hash, so files imported
+   * earlier still match the rows they saved. Ignored when `importMetadata` is set.
+   */
+  reconstruction?: ReconstructionFacts;
   /** Untrusted export labels are resolved to saved source IDs by the import review. */
   ninjaTrader?: {
     sourceKey: string;
@@ -24,6 +39,17 @@ export interface ImportedExecution {
     reportedFee?: number;
   };
 }
+
+/** Import facts that shape trade reconstruction without being part of a fill's identity. */
+export type ReconstructionFacts = Omit<ImportMetadata, "id" | "ninjaTrader">;
+
+/** Stored `id` of reconstruction facts, which carry no source identity of their own. */
+export const RECONSTRUCTED_ID = "reconstructed";
+
+/** The import metadata a journal stores for an imported fill (source metadata or reconstruction facts). */
+export const storedImportMetadata = (execution: ImportedExecution): ImportMetadata | undefined =>
+  execution.importMetadata ??
+  (execution.reconstruction ? { id: RECONSTRUCTED_ID, ...execution.reconstruction } : undefined);
 
 /**
  * Trade-level exports (TradeZella, MetaTrader statements) don't carry fills, so

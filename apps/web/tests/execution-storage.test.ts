@@ -90,6 +90,50 @@ describe("execution storage preserves a coherent journal", () => {
     expect(db.select().from(trades).all()[0]?.netPnl).toBe(20);
   });
 
+  it("keeps reconstruction facts out of a fill's identity, so earlier imports still deduplicate", () => {
+    expect(insertExecutions("test", rows, "import")).toMatchObject({ inserted: 2 });
+    const withFacts = rows.map((row, order) => ({ ...row, reconstruction: { group: "g", order } }));
+    expect(insertExecutions("test", withFacts, "import")).toMatchObject({
+      inserted: 0,
+      duplicates: 2,
+    });
+  });
+
+  it("stores reconstruction facts so overlapping reported trades stay separate", () => {
+    const overlapping: ImportedExecution[] = [
+      { ...rows[0]!, reconstruction: { group: "a", order: 0 } },
+      { ...rows[1]!, reconstruction: { group: "a", order: 1, reportedGrossPnl: 25 } },
+      {
+        ...rows[0]!,
+        price: 101,
+        executedAt: "2026-09-01T10:30:00Z",
+        reconstruction: { group: "b", order: 0 },
+      },
+      {
+        ...rows[1]!,
+        executedAt: "2026-09-01T12:00:00Z",
+        reconstruction: { group: "b", order: 1 },
+      },
+    ];
+    insertExecutions("test", overlapping, "import");
+    const saved = db.select().from(trades).all();
+    expect(saved.map((t) => [t.quantity, t.netPnl]).sort()).toEqual([
+      [10, 10],
+      [10, 25],
+    ]);
+  });
+
+  it("refuses a reimport over fills an earlier parser read differently", () => {
+    insertExecutions("test", rows, "import");
+    const before = db.select().from(executions).all();
+    const corrected = rows.map((row) => ({ ...row, quantity: 0.01, legacy: { quantity: 10 } }));
+    expect(() => insertExecutions("test", corrected, "import")).toThrow("older parser");
+    expect(db.select().from(executions).all()).toEqual(before);
+    // Where the earlier reading was never saved, the corrected fills import normally.
+    db.delete(executions).run();
+    expect(insertExecutions("test", corrected, "import")).toMatchObject({ inserted: 2 });
+  });
+
   it("saves Markdown notes with manual trades and preserves them through a rebuild and retry", async () => {
     const notes = "## Setup\n\nWaited for **confirmation**.\n- Followed the plan.";
     const response = await POST(
