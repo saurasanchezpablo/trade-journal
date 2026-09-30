@@ -48,9 +48,27 @@ export const thinkorswim: ImportFormat = {
       section.push(line);
     }
 
-    const records = toRecords(parseCsv(section.join("\n")));
+    // Option legs carry the underlying in Symbol and the contract in Exp,
+    // Strike and Type; the contract is the fill's symbol, so options never
+    // net against the stock. A leg without its expiry or strike is skipped.
+    let incompleteOptions = 0;
+    const optionSymbols = new Map<string, string>();
+    const records = toRecords(parseCsv(section.join("\n"))).map((row) => {
+      const type = (row["type"] ?? "").trim().toUpperCase();
+      if (type !== "CALL" && type !== "PUT") return row;
+      const exp = (row["exp"] ?? "").trim();
+      const strike = (row["strike"] ?? "").trim();
+      const underlying = (row["symbol"] ?? "").trim().toUpperCase();
+      if (!exp || !strike || !underlying) {
+        incompleteOptions++;
+        return { ...row, symbol: "" };
+      }
+      const symbol = [underlying, exp, strike, type].join(" ").replace(/\s+/g, " ").toUpperCase();
+      optionSymbols.set(symbol, underlying);
+      return { ...row, symbol };
+    });
     const {
-      executions,
+      executions: fills,
       skippedRows,
       warnings: numberWarnings,
     } = rowsToFills(
@@ -64,6 +82,16 @@ export const thinkorswim: ImportFormat = {
       },
       options,
     );
+    const executions = fills.map((fill) => {
+      const underlying = optionSymbols.get(fill.symbol);
+      if (underlying === undefined) return fill;
+      // The earlier parser saved option fills under the underlying's symbol.
+      return {
+        ...fill,
+        assetClass: "option" as const,
+        legacy: { ...fill.legacy, symbol: underlying },
+      };
+    });
     const warnings = [
       ...(executions.length > 0
         ? [
@@ -71,6 +99,11 @@ export const thinkorswim: ImportFormat = {
           ]
         : []),
       ...numberWarnings,
+      ...(incompleteOptions
+        ? [
+            `${incompleteOptions} option row(s) have no expiry or strike and were skipped; the contract is never guessed.`,
+          ]
+        : []),
     ];
     return { format: "thinkorswim", executions, skippedRows, warnings };
   },

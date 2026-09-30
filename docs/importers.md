@@ -70,6 +70,10 @@ selections beyond the defaults.
   conversion), explicit offsets and a `UTC`/`GMT` suffix honored as-is. Other zone
   abbreviations (`EST`, `CDT`, ...) are ambiguous, so they are stripped and the statement's
   timezone applies. A date such as `01-05-2026` without a time is a date, never an offset
+- ThinkorSwim option legs (Type `CALL`/`PUT`) are their own contract, named from Symbol,
+  Exp, Strike and Type (`AAPL 17 JAN 26 190 CALL`), never netted with the stock; set the
+  contract multiplier (usually 100) for that symbol in **Settings → Journal**. A leg without
+  its expiry or strike is skipped with a warning
 - Sides: `Buy`/`B`/`BOT`/`Bid`/`BC`/`Cover`/`Buy to cover` are buys, `Sell`/`S`/`SLD`/`Ask`/
   `SS`/`Short Sell`/`Sell short` are sells. A fill row with any other side is skipped and the
   preview names the values
@@ -251,6 +255,9 @@ corrected history in a new account, or delete the affected trades first.
 
 - **Fills at the same second** in fill exports carry their file order as a reconstruction
   fact. Earlier imports deduplicate, and their tied fills keep the order they had.
+- **ThinkorSwim option fills** were saved under the underlying's symbol, merged with its
+  stock trades. They are a new identity now, and a re-import over those rows is refused;
+  delete the merged trades (or recover into a new account) before importing again.
 - **Decimal commas** such as `0,005` were read as thousands (`5`). Corrected quantities and
   prices are a new identity: re-importing a fill export over rows saved with the earlier
   reading is refused. History exports (TradingView strategy, MetaTrader, generic mapper)

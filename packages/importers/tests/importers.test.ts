@@ -234,6 +234,30 @@ AAPL,XFER,100,185.00,2026-01-05,09:45:00`)!;
     }
   });
 
+  it("ThinkorSwim option fills are their own contract, never merged into the stock", () => {
+    const result = parseAuto(`Account Trade History
+,Exec Time,Spread,Side,Qty,Pos Effect,Symbol,Exp,Strike,Type,Price,Net Price,Order Type
+,1/5/26 09:30:00,STOCK,BUY,+100,TO OPEN,AAPL,,,STOCK,185.50,185.50,LMT
+,1/5/26 09:31:00,SINGLE,BUY,+1,TO OPEN,AAPL,17 JAN 26,190,CALL,2.50,2.50,LMT
+,1/5/26 09:45:00,SINGLE,SELL,-1,TO CLOSE,AAPL,17 JAN 26,190,CALL,3.10,3.10,LMT
+,1/5/26 10:00:00,STOCK,SELL,-100,TO CLOSE,AAPL,,,STOCK,186.00,186.00,LMT
+`)!;
+    expect(result.format).toBe("thinkorswim");
+    expect(result.executions.map((e) => [e.symbol, e.assetClass])).toEqual([
+      ["AAPL", undefined],
+      ["AAPL 17 JAN 26 190 CALL", "option"],
+      ["AAPL 17 JAN 26 190 CALL", "option"],
+      ["AAPL", undefined],
+    ]);
+    // The earlier parser saved option fills under the stock symbol; a reimport over them is refused.
+    expect(result.executions[1]!.legacy).toEqual({ symbol: "AAPL" });
+    const trades = journalTrips(result.executions);
+    expect(trades.map((t) => [t.symbol, t.quantity])).toEqual([
+      ["AAPL", 100],
+      ["AAPL 17 JAN 26 190 CALL", 1],
+    ]);
+  });
+
   it("an unknown file is not guessed at — it goes to the column mapper instead", () => {
     const weird = `When,Ticker,Way,Amount,Cost
 2026-01-05 09:31:00,AAPL,bought,100,185.50`;
