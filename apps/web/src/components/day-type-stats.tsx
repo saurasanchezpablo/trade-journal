@@ -16,9 +16,18 @@ const PERIODS = [30, 90, 180, 365] as const;
 export function DayTypeStats() {
   const [days, setDays] = useState<(typeof PERIODS)[number] | null>(null);
   const [period, setPeriod] = useState<(typeof PERIODS)[number]>(90);
-  const { data, error, loading } = useApi<DayTypeBreakdown>(
+  const { data, error, loading, refresh } = useApi<DayTypeBreakdown>(
     days ? `/api/day-types?days=${days}` : null,
   );
+  // The breakdown covers every account: amounts show in their currency when all accounts
+  // share one, and not at all when they differ (a sum across currencies means nothing).
+  const { data: accountData } = useApi<{ accounts: { currency: string }[] }>(
+    days ? "/api/accounts" : null,
+  );
+  const currencies = accountData
+    ? [...new Set(accountData.accounts.map((a) => a.currency || "USD"))]
+    : null;
+  const currency = currencies?.length === 1 ? currencies[0] : null;
   return (
     <SectionCard
       id="journal-day-types"
@@ -43,7 +52,7 @@ export function DayTypeStats() {
           size="sm"
           variant="outline"
           disabled={loading}
-          onClick={() => setDays(period)}
+          onClick={() => (days === period ? refresh() : setDays(period))}
         >
           {data && days === period ? "Refresh" : "Show"}
         </Button>
@@ -80,7 +89,11 @@ export function DayTypeStats() {
                       {Math.round((row.wins / row.trades) * 100)}%
                     </td>
                     <td className="py-1 text-right">
-                      <Pnl value={row.netPnl} />
+                      {currency ? (
+                        <Pnl value={row.netPnl} currency={currency} />
+                      ) : (
+                        <span className="text-muted-foreground">–</span>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -88,8 +101,10 @@ export function DayTypeStats() {
             </table>
           )}
           <p className="text-xs text-muted-foreground">
-            Each trade counts once per group (shape, volatility, news). Totals add accounts without
-            converting currencies.
+            Each trade counts once per group (shape, volatility, news).
+            {currencies && currencies.length > 1
+              ? ` Your accounts use ${currencies.join(", ")}, so net P&L is not added across them.`
+              : ""}
             {data.symbols.some((s) => s.problem) &&
               ` Left out: ${data.symbols
                 .filter((s) => s.problem)
