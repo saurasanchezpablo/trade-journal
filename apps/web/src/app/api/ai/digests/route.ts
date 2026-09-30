@@ -14,7 +14,7 @@ const state = () => ({
 /** Scheduled digests: their settings, where they go, and the latest ones. */
 export const GET = handler(async () => ok(state()));
 
-const isDay = (n: unknown) => typeof n === "number" && Number.isInteger(n) && n >= 0 && n <= 6;
+const isWeekday = (n: unknown) => typeof n === "number" && Number.isInteger(n) && n >= 0 && n <= 6;
 const isObject = (v: unknown): v is Record<string, unknown> =>
   Boolean(v) && typeof v === "object" && !Array.isArray(v);
 
@@ -34,14 +34,14 @@ export const PUT = handler(async (request: Request) => {
       TIME.test(recap.time) &&
       Array.isArray(recap.weekdays) &&
       recap.weekdays.length <= 7 &&
-      recap.weekdays.every(isDay),
+      recap.weekdays.every(isWeekday),
     "Recap: choose a time (HH:MM) and weekdays",
   );
   requireValue(
     isObject(weekly) &&
       Object.keys(weekly).every((k) => ["enabled", "weekday", "time"].includes(k)) &&
       typeof weekly.enabled === "boolean" &&
-      isDay(weekly.weekday) &&
+      isWeekday(weekly.weekday) &&
       typeof weekly.time === "string" &&
       TIME.test(weekly.time),
     "Weekly review: choose a weekday and a time (HH:MM)",

@@ -245,11 +245,6 @@ export const messageCount = (conversationId: string): number =>
       .get(conversationId) as { n: number }
   ).n;
 
-export const renameConversation = (id: string, title: string): boolean =>
-  client()
-    .prepare("UPDATE ai_conversations SET title = ?, updated_at = ? WHERE id = ?")
-    .run(title, nowIso(), id).changes > 0;
-
 export function deleteConversation(id: string): boolean {
   const sql = client();
   sql.prepare("DELETE FROM ai_messages WHERE conversation_id = ?").run(id);

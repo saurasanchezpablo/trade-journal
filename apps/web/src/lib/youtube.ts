@@ -195,5 +195,3 @@ export function transcriptText(lines: readonly TranscriptLine[], every = 30): st
 export const videoUrl = (videoId: string) => `https://www.youtube.com/watch?v=${videoId}`;
 export const isVideoId = (value: unknown): value is string =>
   typeof value === "string" && VIDEO_ID.test(value);
-export const isChannelId = (value: unknown): value is string =>
-  typeof value === "string" && CHANNEL_ID.test(value);

@@ -62,10 +62,6 @@ export class ExternalScheduler {
       this.running = false;
     }
   }
-
-  get busy() {
-    return this.running;
-  }
 }
 
 const globalForExternal = globalThis as unknown as { __journalExternal?: ExternalScheduler };
@@ -78,5 +74,3 @@ export function startExternalScheduler(): ExternalScheduler {
   }
   return globalForExternal.__journalExternal;
 }
-
-export const runningExternalScheduler = () => globalForExternal.__journalExternal ?? null;
