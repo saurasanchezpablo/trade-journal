@@ -162,6 +162,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - Webhook notifications (such as ntfy) whose title has an emoji or non-Latin letters, like a YouTube channel name in Japanese, are sent again: the title is encoded instead of making the request fail silently
 - Background alerts: switching on a 26th analysis is refused with a message instead of silently stopping the oldest watch while the chart still says it is watched; an analysis deleted just before one of its alerts fires no longer leaves an unhandled error
 - AI chat: external opinions are handed to the AI as untrusted third-party text, and the chat is told never to follow instructions in them or put images and outside links in its answers; asking about one instrument finds its opinions even when more than 30 newer videos discuss others
+- Inserting a chart analysis into a day note no longer drops what was typed or added (a recap, a voice memo) while the day's snapshot was being pinned
 
 ## [0.1.0] - 2026-09-03
 

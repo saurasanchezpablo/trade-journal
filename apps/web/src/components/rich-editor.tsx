@@ -187,6 +187,10 @@ export function RichEditor({
     ),
     [error, setError] = useState("");
   const preview = mode ? mode === "preview" : localPreview;
+  // The latest text, for work that finishes after an await: typing, an AI recap or a voice
+  // memo can change the note meanwhile, and a stale `value` would write over them.
+  const latest = useRef(value);
+  latest.current = value;
   const setPreview = (next: boolean) => {
     setLocalPreview(next);
     onModeChange?.(next ? "preview" : "edit");
@@ -250,9 +254,13 @@ export function RichEditor({
         return;
       }
     }
-    const before = value.slice(0, at);
+    const now = latest.current;
+    // Keep the chosen spot while the text up to it is unchanged; otherwise the end is the
+    // only place that cannot split what was written meanwhile.
+    const spot = now.slice(0, at) === value.slice(0, at) ? at : now.length;
+    const before = now.slice(0, spot);
     const embed = `${before && !before.endsWith("\n") ? "\n\n" : before ? "\n" : ""}${markdown}\n`;
-    onChange(before + embed + value.slice(at));
+    onChange(before + embed + now.slice(spot));
     setPreview(true);
   }
   function formatInline(marker: "*" | "**") {
