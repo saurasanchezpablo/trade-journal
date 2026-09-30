@@ -171,6 +171,21 @@ describe("the server watches alerts while no page is open", () => {
     h.engine.stop();
   });
 
+  it("an analysis deleted between checks sends nothing and breaks nothing", async () => {
+    const { id } = await analysis();
+    const h = harness();
+    h.engine.check();
+    db.$client.prepare("DELETE FROM chart_analyses WHERE id = ?").run(id);
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    h.price("BTCUSDT", 99);
+    h.price("BTCUSDT", 101);
+    await flush();
+    expect(h.delivered).toEqual([]);
+    expect(logged).not.toHaveBeenCalled();
+    logged.mockRestore();
+    h.engine.stop();
+  });
+
   it("zones alert on entering and breaking; each alert waits a minute before repeating", async () => {
     await analysis();
     const h = harness();
@@ -367,6 +382,36 @@ describe("delivery", () => {
       json("/api/alerts/push", { subscription: { endpoint: "https://x.test/1" } }),
     );
     expect(refused.status).toBe(400);
+  });
+
+  it("switching on more analyses than the watcher follows is refused, never silently dropped", async () => {
+    const first = await analysis();
+    for (let i = 1; i < 25; i += 1) await analysis();
+    const created = await analysesRoute.POST(
+      json("/api/analyses", {
+        symbol: "ETHUSDT",
+        provider: "binance",
+        resolution: "1m",
+        rangeFrom: t0 - 86_400_000,
+        rangeTo: t0,
+        drawings: { version: 1, drawings: [hline("line-100", 100)] },
+      }),
+    );
+    const { analysis: extra } = (await created.json()) as { analysis: { id: string } };
+    const refused = await watchRoute.PUT(
+      json("/api/alerts/watch", { analysisId: extra.id, watched: true }, "PUT"),
+    );
+    expect(refused.status).toBe(400);
+    expect((await refused.json()).error).toMatch(/At most 25 analyses/);
+    const oldest = await (
+      await watchRoute.GET(get(`/api/alerts/watch?analysisId=${first.id}`))
+    ).json();
+    expect(oldest.watched).toBe(true);
+    // Switching one already on again is not refused.
+    const again = await watchRoute.PUT(
+      json("/api/alerts/watch", { analysisId: first.id, watched: true }, "PUT"),
+    );
+    expect(again.status).toBe(200);
   });
 
   it("switching an analysis on is refused for analyses that don't exist", async () => {

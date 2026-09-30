@@ -10,9 +10,11 @@ import type { AnalysisPlan } from "@/lib/analysis-plan";
 import { analysisAlertSource } from "../chart-analyses";
 import { listenLive } from "../market-data/live";
 import { connectionKey, providerFor } from "../market-data/connections";
+import { RequestError } from "../api";
 import { newId, nowIso } from "../ids";
 import { alertEvents, alertWatches, alertsDb } from "./store";
 import { deliver, type AlertNotification } from "./delivery";
+import { logFailure } from "./log";
 
 /**
  * Background alerts: the server keeps watching the line and zone alerts of analyses you
@@ -90,11 +92,26 @@ export const isWatched = (analysisId: string) =>
     alertsDb().select().from(alertWatches).where(eq(alertWatches.analysisId, analysisId)).get(),
   );
 
+/**
+ * Switch watching on or off. Switching on a watch beyond `MAX_WATCHES` is refused: the
+ * watcher only follows that many, so another would silently push the oldest out.
+ */
 export function setWatched(analysisId: string, watched: boolean) {
   const db = alertsDb();
-  if (watched)
+  if (watched) {
+    if (!isWatched(analysisId)) {
+      const count =
+        db
+          .select({ n: sql<number>`count(*)` })
+          .from(alertWatches)
+          .get()?.n ?? 0;
+      if (count >= MAX_WATCHES)
+        throw new RequestError(
+          `At most ${MAX_WATCHES} analyses can be watched in the background. Switch one off first.`,
+        );
+    }
     db.insert(alertWatches).values({ analysisId, createdAt: nowIso() }).onConflictDoNothing().run();
-  else db.delete(alertWatches).where(eq(alertWatches.analysisId, analysisId)).run();
+  } else db.delete(alertWatches).where(eq(alertWatches.analysisId, analysisId)).run();
   runningAlertEngine()?.check();
 }
 
@@ -305,11 +322,20 @@ export class AlertEngine {
         ),
       );
     }
-    for (const message of fired) void this.emit(watch, message);
+    for (const message of fired)
+      void this.emit(watch, message).catch((error: unknown) =>
+        logFailure(`recording an alert for analysis ${watch.analysisId}`, error),
+      );
   }
 
   private async emit(watch: Watch, message: AlertMessage) {
     const db = alertsDb();
+    // Deleted since the last check (its watch is dropped on the next one): nothing to alert
+    // for, and its event could not be logged against it.
+    const exists = db.get<{ one: number } | undefined>(
+      sql`SELECT 1 AS one FROM chart_analyses WHERE id = ${watch.analysisId}`,
+    );
+    if (!exists) return;
     const id = newId();
     db.insert(alertEvents)
       .values({

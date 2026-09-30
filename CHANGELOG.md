@@ -138,6 +138,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - A scheduled digest cut short by a server restart no longer stays "running" forever: it shows as failed, and **Send now** writes it again instead of answering that it is being written
 - External analysis: a video that waited for its captions still gets its retry an hour after a failed summary; a stream that still has not aired two days on stops being retried every two hours; the daily feed check is no longer lost when another check is running at that time; a channel whose first feed read failed no longer queues every recent video when a later read works; **Summarise now** and **Paste transcript** are refused while that video is being summarised instead of being overwritten by the run under way
 - Webhook notifications (such as ntfy) whose title has an emoji or non-Latin letters, like a YouTube channel name in Japanese, are sent again: the title is encoded instead of making the request fail silently
+- Background alerts: switching on a 26th analysis is refused with a message instead of silently stopping the oldest watch while the chart still says it is watched; an analysis deleted just before one of its alerts fires no longer leaves an unhandled error
 
 ## [0.1.0] - 2026-09-03
 

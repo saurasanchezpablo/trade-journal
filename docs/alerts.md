@@ -15,7 +15,8 @@ with no page open and notifies you.
   chart's pace, at least every 20 seconds.
 - The watcher reads analyses as the journal saves them and checks every 5 seconds for new saves,
   so editing lines or zones updates the watch without any change to how the journal saves.
-  Deleting an analysis stops its watch. At most 25 analyses are watched.
+  Deleting an analysis stops its watch. At most 25 analyses are watched: switching on another
+  is refused with a message until one is switched off.
 
 ## What an alert says
 
