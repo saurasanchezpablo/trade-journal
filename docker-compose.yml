@@ -1,6 +1,10 @@
 services:
   journal:
-    build: .
+    build:
+      context: .
+      # For the update notice: JOURNAL_BUILD_COMMIT=$(git rev-parse HEAD) docker compose build
+      args:
+        JOURNAL_BUILD_COMMIT: ${JOURNAL_BUILD_COMMIT:-}
     ports:
       - "3000:3000"
     volumes:

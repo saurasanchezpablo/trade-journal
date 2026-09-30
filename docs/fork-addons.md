@@ -38,6 +38,8 @@ touches as little as possible.
 | `apps/web/src/components/shell.tsx` (performance)                                        | `NavLink` prefetches on hover, focus or touch (`prefetch={false}` plus `router.prefetch`).                                                                        | Re-add the three handlers and `prefetch={false}`.                           |
 | `apps/web/src/components/shell.tsx` (external analysis)                                  | An "External analysis" entry in `NAV` (icon `MonitorPlay`).                                                                                                       | Re-add the entry and the icon import.                                       |
 | `apps/web/src/components/shell.tsx` (backtesting)                                        | A "Backtesting" entry in `NAV` after Charts (icon `FlaskConical`).                                                                                                | Re-add the entry and the icon import.                                       |
+| `apps/web/src/components/shell.tsx` (update notice)                                      | `<UpdateNotice />` at the end of the sidebar footer.                                                                                                              | Re-add the import and the element.                                          |
+| `Dockerfile`, `docker-compose.yml` (update notice)                                       | A `JOURNAL_BUILD_COMMIT` build argument, kept as an environment variable in the image.                                                                            | Re-add the `ARG`/`ENV` pair and the compose `build.args`.                   |
 | `packages/core/src/index.ts` (backtesting)                                               | `export * from "./backtest";` for the fork's `packages/core/src/backtest.ts`.                                                                                     | Re-add the export.                                                          |
 | `apps/web/src/app/journal/[date]/page.tsx` (external analysis)                           | `<ExternalOpinions>` above "Ask about this day", appending to the note like recaps.                                                                               | Re-add the import and the element.                                          |
 | `apps/web/src/server/market-data/http.ts`, `transport.ts`, `public-crypto.ts`            | Concurrent grid-aligned `windows()`, per-host `HOST_LIMITS`, hour-long cache for past pages, Binance symbol details beside the candles.                           | Keep upstream's adapters and re-add the pacing, paging and cache changes.   |
@@ -97,6 +99,8 @@ structure and re-apply the fix; each one has a test that fails without it.
   `components/ai-digests.tsx`, tests `ai-digests.test.ts` and `ai-provider-fixtures.ts`; the
   scheduler starts from `instrumentation-node.ts`.
 - Explained alerts: `lib/alert-explain.ts`, test `alert-explain.test.ts`.
+- Update notice (docs/updates.md): `server/update-check.ts`, `app/api/update/route.ts`,
+  `components/update-notice.tsx`, test `update-check.test.ts`.
 - Backtesting (docs/backtesting.md): `packages/core/src/backtest.ts` (the fill engine and
   report), `lib/backtest-session.ts`, `lib/backtest-replay.ts`, `lib/backtest-strategies.ts`,
   `server/backtest/*` (its `backtest_sessions` table), `app/api/backtests/**`,

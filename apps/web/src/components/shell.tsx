@@ -32,6 +32,7 @@ import { LuxAlgoMark } from "@/components/luxalgo-mark";
 import { PrivacyToggle } from "./privacy";
 import { ThemeToggle } from "./theme";
 import { SignOutButton } from "./sign-out";
+import { UpdateNotice } from "./update-notice";
 import { PageTransition } from "./page-transition";
 import { Button } from "./ui/button";
 import { HoverHint } from "./ui/tooltip";
@@ -206,6 +207,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         </a>
       </div>
       <div>Not investment advice.</div>
+      <UpdateNotice />
     </div>
   );
   return (

@@ -12,6 +12,10 @@ RUN pnpm --filter web build
 
 FROM node:22-slim AS runner
 ENV NODE_ENV=production
+# The commit the image is built from, for the sidebar's update notice (docs/updates.md):
+# docker build --build-arg JOURNAL_BUILD_COMMIT=$(git rev-parse HEAD) .
+ARG JOURNAL_BUILD_COMMIT=""
+ENV JOURNAL_BUILD_COMMIT=$JOURNAL_BUILD_COMMIT
 ENV JOURNAL_DATA_DIR=/data
 WORKDIR /app
 # Next standalone output bundles the server and pruned node_modules.
