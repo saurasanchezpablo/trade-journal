@@ -17,6 +17,7 @@ import {
 import { postJson, useApi } from "@/lib/use-api";
 import { NOT_A_NUMBER, parseDecimalInput } from "@/lib/number-input";
 import { fmtMoney } from "@/lib/utils";
+import { formatTimestamp } from "@/lib/timezone";
 import { MonetaryValue, MonetaryField } from "@/components/privacy";
 
 interface AccountRow {
@@ -42,14 +43,39 @@ export default function AccountsPage() {
   );
 }
 
+/** Money in the account's currency (USD when an old record holds an unknown code). */
+const accountMoney = (value: number, currency: string) => {
+  try {
+    return fmtMoney(value, currency);
+  } catch {
+    return fmtMoney(value);
+  }
+};
+
+const failureMessage = (error: unknown, fallback: string) =>
+  error instanceof Error ? error.message : fallback;
+
 function Accounts() {
-  const { data, refresh } = useApi<{ accounts: AccountRow[] }>("/api/accounts");
+  const { data, error, refresh } = useApi<{ accounts: AccountRow[]; timeZone?: string }>(
+    "/api/accounts",
+  );
   const [syncing, setSyncing] = useState<string | null>(null);
+  const timeZone = data?.timeZone ?? "UTC";
 
   const action = async <T = unknown,>(id: string, body: Record<string, unknown>) => {
     const result = await postJson<T>(`/api/accounts/${id}/actions`, body);
     refresh();
     return result;
+  };
+
+  /** Run a change and say so when it fails (the list reloads either way). */
+  const attempt = async (fallback: string, run: () => Promise<unknown>) => {
+    try {
+      await run();
+    } catch (cause) {
+      alert(failureMessage(cause, fallback));
+      refresh();
+    }
   };
 
   const sync = async (id: string) => {
@@ -73,6 +99,19 @@ function Accounts() {
     <div>
       <FilterBar title="Accounts" />
       <div className="grid gap-3 p-4 md:grid-cols-2">
+        {error && (
+          <div role="alert" className="col-span-full space-y-2 text-sm text-destructive">
+            <p>Could not load your accounts: {error}</p>
+            <Button variant="outline" onClick={refresh}>
+              Try again
+            </Button>
+          </div>
+        )}
+        {!data && !error && (
+          <p className="col-span-full py-16 text-center text-sm text-muted-foreground">
+            Loading accounts…
+          </p>
+        )}
         {data?.accounts.length === 0 && (
           <p className="col-span-full py-16 text-center text-sm text-muted-foreground">
             No accounts yet. Create one on the Import page.
@@ -111,9 +150,11 @@ function Accounts() {
                   className="h-8 w-8"
                   title={account.archivedAt ? "Unarchive" : "Archive"}
                   onClick={() =>
-                    void action(account.id, {
-                      action: account.archivedAt ? "unarchive" : "archive",
-                    })
+                    void attempt("Could not update the account.", () =>
+                      action(account.id, {
+                        action: account.archivedAt ? "unarchive" : "archive",
+                      }),
+                    )
                   }
                 >
                   {account.archivedAt ? <ArchiveRestore /> : <Archive />}
@@ -127,8 +168,10 @@ function Accounts() {
                     if (
                       confirm(`Delete "${account.name}" and ALL its trades? This cannot be undone.`)
                     ) {
-                      await postJson(`/api/accounts/${account.id}`, undefined, "DELETE");
-                      refresh();
+                      await attempt("Could not delete the account.", async () => {
+                        await postJson(`/api/accounts/${account.id}`, undefined, "DELETE");
+                        refresh();
+                      });
                     }
                   }}
                 >
@@ -141,11 +184,13 @@ function Accounts() {
                 <div className="text-sm">
                   Broker equity:{" "}
                   <span className="tnum font-medium">
-                    <MonetaryValue>{fmtMoney(account.snapshot.equity)}</MonetaryValue>
+                    <MonetaryValue>
+                      {accountMoney(account.snapshot.equity, account.currency)}
+                    </MonetaryValue>
                   </span>
                   <span className="ml-2 text-xs text-muted-foreground">
                     {account.snapshot.positions.length} open positions · synced{" "}
-                    {account.lastSyncAt?.slice(0, 16).replace("T", " ")}
+                    {account.lastSyncAt ? formatTimestamp(account.lastSyncAt, timeZone) : "never"}
                   </span>
                 </div>
               )}
@@ -199,14 +244,16 @@ function Accounts() {
                   </label>
                   <Select
                     value={account.profitCalcMethod}
-                    onValueChange={async (value) => {
-                      await postJson(
-                        `/api/accounts/${account.id}`,
-                        { profitCalcMethod: value },
-                        "PATCH",
-                      );
-                      refresh();
-                    }}
+                    onValueChange={(value) =>
+                      void attempt("Could not change the profit calculation.", async () => {
+                        await postJson(
+                          `/api/accounts/${account.id}`,
+                          { profitCalcMethod: value },
+                          "PATCH",
+                        );
+                        refresh();
+                      })
+                    }
                   >
                     <SelectTrigger id={`profit-calc-${account.id}`}>
                       <SelectValue />
@@ -225,7 +272,9 @@ function Accounts() {
                   size="sm"
                   onClick={async () => {
                     if (confirm(`Clear ALL trades from "${account.name}"? The account stays.`)) {
-                      await action(account.id, { action: "clear" });
+                      await attempt("Could not clear the account.", () =>
+                        action(account.id, { action: "clear" }),
+                      );
                     }
                   }}
                 >
@@ -241,8 +290,12 @@ function Accounts() {
                       `Transfer all data into which account?\n${others.map((candidate, index) => `${index + 1}. ${candidate.name}`).join("\n")}\n\nEnter a number:`,
                     );
                     const chosen = others[Number(target) - 1];
+                    if (target !== null && !chosen)
+                      return alert("Enter one of the listed numbers.");
                     if (chosen)
-                      await action(account.id, { action: "transfer", toAccountId: chosen.id });
+                      await attempt("Could not transfer the data.", () =>
+                        action(account.id, { action: "transfer", toAccountId: chosen.id }),
+                      );
                   }}
                 >
                   Transfer data
