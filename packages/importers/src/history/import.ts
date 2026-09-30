@@ -41,7 +41,7 @@ import {
   type ImportResult,
   type ImportedTrade,
 } from "./model";
-import type { SlashDateOrder } from "./timestamps";
+import { detectSlashDateOrder, type SlashDateOrder } from "./timestamps";
 
 /**
  * Registered source adapters, checked in order. The generic alias-mapped
@@ -463,6 +463,24 @@ export function importTradeHistory(rawText: string, options: ImportOptions = {})
       confidence: "exact",
       signals: match.signals,
     };
+  }
+
+  // Signature adapters read slash dates in the order the file proves; only a
+  // file that settles nothing is read month-first, and the user is told.
+  if (ctx.dateOrder === undefined && adapter.id !== genericCsvAdapter.id) {
+    const { order, proven } = detectSlashDateOrder(
+      records.slice(0, 500).flatMap((record) => record.cells),
+    );
+    if (proven) ctx.dateOrder = order!;
+    else if (order !== null)
+      issues.push(
+        issue(
+          "warning",
+          "date-order-assumed-mdy",
+          'Dates like "03/04/2025" are ambiguous between month-first and day-first, and no value in the ' +
+            "file settles it. Month-first (US) was assumed; check the dates in the preview.",
+        ),
+      );
   }
 
   const parsed: AdapterParseResult = adapter.parse(table, ctx);

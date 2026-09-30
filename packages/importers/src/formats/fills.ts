@@ -1,5 +1,5 @@
 import { hasHeaders, parseCsv, pick, toRecords, type Row } from "../csv";
-import { parseTimestamp, parseDateAndTime } from "../dates";
+import { legacyParseTimestamp, parseTimestamp, parseDateAndTime } from "../dates";
 import {
   decimalSeparatorOf,
   isAmbiguousNumber,
@@ -98,6 +98,20 @@ export const rowsToFills = (
       );
     }
 
+    // How the earlier timestamp parser read the same cells.
+    const legacyExecutedAt =
+      (columns.timestamp
+        ? legacyParseTimestamp(pick(row, columns.timestamp), options.timeZone)
+        : null) ??
+      (columns.date || columns.time
+        ? legacyParseTimestamp(
+            [pick(row, columns.date ?? []), pick(row, columns.time ?? [])]
+              .filter(Boolean)
+              .join(" "),
+            options.timeZone,
+          )
+        : null);
+
     if (
       !symbolRaw ||
       !side ||
@@ -132,6 +146,7 @@ export const rowsToFills = (
       price,
       fee,
       executedAt,
+      ...(legacyExecutedAt && legacyExecutedAt !== executedAt ? { legacyExecutedAt } : {}),
       ...(Object.keys(legacy).length ? { legacy } : {}),
     });
   }

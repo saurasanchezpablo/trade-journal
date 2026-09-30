@@ -295,6 +295,16 @@ U1234567,AAPL,20260105;101500,SELL,-100,187.25,-1.00,STK,C`;
     expect(result.executions[0]!.fee).toBe(1);
   });
 
+  it("a fill export's UTC timestamps stay UTC, and a reimport over the earlier reading is refused", () => {
+    const result = parseAuto(
+      `Symbol,Side,Type,Qty,Fill Price,Status,Commission,Closing Time
+NASDAQ:AAPL,Buy,Market,10,185.50,Filled,0,2026-01-05 14:31:00 UTC`,
+      { timeZone: "America/New_York" },
+    )!;
+    expect(result.executions[0]!.executedAt).toBe("2026-01-05T14:31:00.000Z");
+    expect(result.executions[0]!.legacyExecutedAt).toBe("2026-01-05T19:31:00.000Z");
+  });
+
   it("TradeZella time fields with a timezone abbreviation still parse", () => {
     expect(parseTimestamp("08/18/2026 09:31:00 EST", "America/New_York")).toBe(
       "2026-08-18T13:31:00.000Z",

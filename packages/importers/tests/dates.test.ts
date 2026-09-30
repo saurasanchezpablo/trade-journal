@@ -36,3 +36,18 @@ it.each([
 ])("rejects invalid or unsupported precision rather than changing timestamp %s", (input) => {
   expect(parseTimestamp(input)).toBeNull();
 });
+it("an explicit UTC or GMT suffix is honoured whatever the statement timezone", () => {
+  expect(parseTimestamp("2026-01-05 14:30:00 UTC", "America/New_York")).toBe(
+    "2026-01-05T14:30:00.000Z",
+  );
+  expect(parseTimestamp("2026-01-05 14:30:00 GMT", "Asia/Tokyo")).toBe("2026-01-05T14:30:00.000Z");
+  // Other abbreviations stay ambiguous: the statement timezone applies.
+  expect(parseTimestamp("2026-01-05 09:30:00 EST", "America/New_York")).toBe(
+    "2026-01-05T14:30:00.000Z",
+  );
+});
+it("a dash-separated date without a time is a date in the statement timezone, not an offset", () => {
+  expect(parseTimestamp("01-05-2026", "America/New_York")).toBe("2026-01-05T05:00:00.000Z");
+  expect(parseTimestamp("01-05-2026", "UTC")).toBe("2026-01-05T00:00:00.000Z");
+  expect(parseTimestamp("2026-01-05T09:30-05:00", "Asia/Tokyo")).toBe("2026-01-05T14:30:00.000Z");
+});

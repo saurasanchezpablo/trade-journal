@@ -153,23 +153,17 @@ const toNaive = (value: string): NaiveParts | null => {
 };
 
 /**
- * Parse a broker-export timestamp to ISO 8601 UTC.
- * A trailing offset/Z is honored; otherwise the timestamp is interpreted in `timeZone`.
- * Returns null when the value cannot be parsed.
+ * Timezone abbreviations some journal exports append ("09:31:00 EST") are
+ * ambiguous (EST/EDT are often written for either), so they are stripped and
+ * the wall clock is read in the caller's timezone: documented behavior. "UTC"
+ * and "GMT" name one zone and are honoured.
  */
-export const parseTimestamp = (value: string | undefined, timeZone = "UTC"): string | null => {
-  if (!value) return null;
-  // Some journal exports (TradeZella) append a timezone abbreviation to time
-  // fields ("09:31:00 EST"). Abbreviations are ambiguous, so we strip them and
-  // interpret the wall clock in the caller's timezone — documented behavior.
-  const text = value.trim().replace(/\s+(E[SD]T|C[SD]T|M[SD]T|P[SD]T|UTC|GMT)$/i, "");
-  if (text === "") return null;
+const ZONE_ABBREVIATION = /\s+(E[SD]T|C[SD]T|M[SD]T|P[SD]T)$/i;
+const UTC_SUFFIX = /\s+(UTC|GMT)$/i;
+/** An explicit offset or Z, only after a time of day ("01-05-2026" is a date, not "-2026"). */
+const OFFSET = /\d{1,2}:\d{2}(?::\d{2}(?:\.\d+)?)?\s*(Z|[+-]\d{2}:?\d{2})$/i;
 
-  if (/(Z|[+-]\d{2}:?\d{2})$/.test(text)) {
-    const ms = Date.parse(text);
-    return Number.isNaN(ms) ? null : new Date(ms).toISOString();
-  }
-
+const naiveToIso = (text: string, timeZone: string): string | null => {
   const naive = toNaive(text);
   if (!naive) return null;
   const naiveUtcMs = Date.UTC(
@@ -194,6 +188,48 @@ export const parseTimestamp = (value: string | undefined, timeZone = "UTC"): str
     return null;
   const utcMs = timeZone === "UTC" ? naiveUtcMs : naiveToUtc(naiveUtcMs, timeZone);
   return new Date(utcMs).toISOString();
+};
+
+/**
+ * Parse a broker-export timestamp to ISO 8601 UTC.
+ * A trailing offset/Z (after a time of day) or UTC/GMT is honored; otherwise
+ * the timestamp is interpreted in `timeZone`. Returns null when the value
+ * cannot be parsed.
+ */
+export const parseTimestamp = (value: string | undefined, timeZone = "UTC"): string | null => {
+  if (!value) return null;
+  let text = value.trim();
+  let zone = timeZone;
+  if (UTC_SUFFIX.test(text)) {
+    text = text.replace(UTC_SUFFIX, "");
+    zone = "UTC";
+  } else text = text.replace(ZONE_ABBREVIATION, "");
+  if (text === "") return null;
+
+  if (OFFSET.test(text)) {
+    const ms = Date.parse(text);
+    return Number.isNaN(ms) ? null : new Date(ms).toISOString();
+  }
+  return naiveToIso(text, zone);
+};
+
+/**
+ * The reading of the importer before UTC/GMT suffixes were honoured and before
+ * an offset required a time of day, kept only to recognize fills an earlier
+ * import saved with it. Null when the value was unparseable then.
+ */
+export const legacyParseTimestamp = (
+  value: string | undefined,
+  timeZone = "UTC",
+): string | null => {
+  if (!value) return null;
+  const text = value.trim().replace(ZONE_ABBREVIATION, "").replace(UTC_SUFFIX, "");
+  if (text === "") return null;
+  if (/(Z|[+-]\d{2}:?\d{2})$/.test(text)) {
+    const ms = Date.parse(text);
+    return Number.isNaN(ms) ? null : new Date(ms).toISOString();
+  }
+  return naiveToIso(text, timeZone);
 };
 
 /** Combine separate date and time columns ("1/5/2026" + "14:30:05"). */

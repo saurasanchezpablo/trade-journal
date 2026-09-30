@@ -350,6 +350,33 @@ describe("history timestamps preserve journal timezone semantics", () => {
     );
     expect(ambiguous.issues.map((i) => i.code)).toContain("date-order-assumed-mdy");
   });
+  it("a TradingView export whose dates prove day-first is read day-first", () => {
+    const text = TV.replace(/2026-01-05 (\d\d:\d\d)/g, "04/03/2026 $1").replace(
+      "2,Exit short,04/03/2026",
+      "2,Exit short,14/03/2026",
+    );
+    const result = parse(text, { symbol: "AAPL" });
+    expect(result.executions.map((e) => e.executedAt.slice(0, 10)).sort()).toEqual([
+      "2026-03-04",
+      "2026-03-04",
+      "2026-03-04",
+      "2026-03-14",
+    ]);
+  });
+  it("a MetaTrader export with ambiguous slash dates says month-first was assumed", () => {
+    const text = MT5.replace(/2026\.01\.0(\d)/g, "01/0$1/2026");
+    const result = parse(text);
+    expect(result.executions[0]?.executedAt).toBe("2026-01-05T09:00:00.000Z");
+    expect(result.warnings.join(" ")).toContain("month-first");
+  });
+  it("an explicit UTC or GMT suffix is honoured whatever the statement timezone", () => {
+    expect(parseImportTimestamp("2026-01-05 14:30:00 UTC", "MDY", "America/New_York")).toBe(
+      Date.parse("2026-01-05T14:30:00Z"),
+    );
+    expect(parseImportTimestamp("2026-01-05 14:30:00 GMT", "MDY", "Asia/Tokyo")).toBe(
+      Date.parse("2026-01-05T14:30:00Z"),
+    );
+  });
   it("history timestamps accept EST suffixes and long-form dates exactly like the legacy importers", () => {
     expect(parseImportTimestamp("2026-01-05 09:31:00 EST", "MDY", "America/New_York")).toBe(
       Date.parse("2026-01-05T14:31:00Z"),

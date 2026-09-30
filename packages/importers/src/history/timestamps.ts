@@ -11,9 +11,10 @@ const SLASH_DATE =
 /**
  * Timezone abbreviations some journal exports append ("09:31:00 EST") are
  * ambiguous; like the journal parser, strip them and read the wall clock in
- * the caller's timezone.
+ * the caller's timezone. "UTC" and "GMT" name one zone and are honoured.
  */
 const TZ_ABBREVIATION = /\s+(E[SD]T|C[SD]T|M[SD]T|P[SD]T|UTC|GMT)$/i;
+const UTC_SUFFIX = /\s+(UTC|GMT)$/i;
 
 export function detectSlashDateOrder(samples: readonly string[]): {
   order: SlashDateOrder | null;
@@ -36,9 +37,11 @@ export function detectSlashDateOrder(samples: readonly string[]): {
 export function parseImportTimestamp(
   raw: string,
   slashOrder: SlashDateOrder = "MDY",
-  timeZone = "UTC",
+  statementTimeZone = "UTC",
 ): number {
-  const value = raw.trim().replace(/^"|"$/g, "").trim().replace(TZ_ABBREVIATION, "");
+  const unquoted = raw.trim().replace(/^"|"$/g, "").trim();
+  const timeZone = UTC_SUFFIX.test(unquoted) ? "UTC" : statementTimeZone;
+  const value = unquoted.replace(TZ_ABBREVIATION, "");
   if (/^\d{10}(\.\d+)?$/.test(value)) return Math.trunc(Number(value) * 1000);
   if (/^\d{13}$/.test(value)) return Number(value);
   let parts: number[];

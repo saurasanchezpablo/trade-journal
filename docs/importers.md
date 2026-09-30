@@ -67,7 +67,11 @@ selections beyond the defaults.
   other values (`185,50` proves decimal commas, `185.50` a decimal point), and when nothing
   in the file decides, it is read as thousands and the preview warns
 - Naive timestamps interpreted in the **statement's timezone** (DST-safe two-pass
-  conversion), explicit offsets honored as-is
+  conversion), explicit offsets and a `UTC`/`GMT` suffix honored as-is. Other zone
+  abbreviations (`EST`, `CDT`, ...) are ambiguous, so they are stripped and the statement's
+  timezone applies. A date such as `01-05-2026` without a time is a date, never an offset
+- Slash dates (`04/03/2026`) follow the order the file proves (a first number above 12 means
+  day-first); a file that settles nothing is read month-first with a warning
 - TradeZella P&L: the row's stated net P&L is kept exactly (commissions are the fee and the
   rest is the reported gross), so imported history agrees with the trader's old numbers to
   the cent with or without a contract multiplier; fees are never negative. Separate date
@@ -186,8 +190,8 @@ For example, use `Europe/Helsinki` for a Helsinki-based MT5 statement and
 [`mt5-timezone.html`](samples/mt5-timezone.html) has an entry at July 5, 2026, 04:00
 and an exit at 04:30 in Helsinki. These are stored as 01:00 and 01:30 UTC and appear
 as **July 4, 22:00 and 22:30** in Asunción, including in the trade list and journal.
-Timestamps with an explicit offset or `Z` retain that instant regardless of the
-statement timezone. Manual entry continues to use the device timezone.
+Timestamps with an explicit offset, `Z` or a `UTC`/`GMT` suffix retain that instant
+regardless of the statement timezone. Manual entry continues to use the device timezone.
 
 Existing installations initially use their previous timezone as the import
 default. Saving a display-only timezone change preserves that previous import
@@ -244,6 +248,14 @@ corrected history in a new account, or delete the affected trades first.
   reading is refused. History exports (TradingView strategy, MetaTrader, generic mapper)
   read `0,005` correctly too, but do not recognize rows saved with the earlier reading;
   delete those trades before importing the file again.
+
+- **Timestamps**: a `UTC`/`GMT` suffix used to be read in the statement timezone, and a
+  dash-separated date without a time (`01-05-2026`) in the server's own timezone. Both
+  now give a different instant when the statement timezone is not UTC; fill exports and
+  TradeZella refuse a re-import over rows saved with the earlier reading. TradingView
+  strategy and MetaTrader history files whose slash dates prove day-first were read
+  month-first (rows with a day above 12 were skipped); they now import correctly, but rows
+  saved earlier are not recognized, so delete those trades before importing again.
 
 ## Sample file
 

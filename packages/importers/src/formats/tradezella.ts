@@ -1,5 +1,5 @@
 import { hasHeaders, parseCsv, pick, toRecords, type Row } from "../csv";
-import { parseDateAndTime, parseTimestamp } from "../dates";
+import { legacyParseTimestamp, parseDateAndTime, parseTimestamp } from "../dates";
 import { parseMoney, parseQuantity } from "../numbers";
 import {
   tradeToExecutions,
@@ -65,11 +65,11 @@ export const tradezella: ImportFormat = {
       const openedAt = when(row, ["opendate", "entrydate"], ["opentime", "entrytime"]);
       const closedAt = when(row, ["closedate", "exitdate"], ["closetime", "exittime"]);
       // The earlier parser read only the first date-or-time column (a date alone is midnight).
-      const legacyOpenedAt = parseTimestamp(
+      const legacyOpenedAt = legacyParseTimestamp(
         pick(row, ["opendate", "opentime", "entrydate"]),
         options.timeZone,
       );
-      const legacyClosedAt = parseTimestamp(
+      const legacyClosedAt = legacyParseTimestamp(
         pick(row, ["closedate", "closetime", "exitdate"]),
         options.timeZone,
       );
