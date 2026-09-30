@@ -47,12 +47,13 @@ const listUrl = (target: ChatTarget) => {
   return `/api/ai/chat?${params}`;
 };
 
-const formatWhen = (iso: string) =>
+const formatWhen = (iso: string, timeZone: string) =>
   new Date(iso).toLocaleString(undefined, {
     month: "short",
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+    timeZone,
   });
 
 /**
@@ -87,7 +88,15 @@ export function JournalChat({
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [lastQuestion, setLastQuestion] = useState("");
+  // What Try again sends: the question, and the route it went to when a starter asked it.
+  const [last, setLast] = useState<{
+    question: string;
+    override?: { url: string; body: Record<string, unknown> };
+  }>({ question: "" });
+  const [removeError, setRemoveError] = useState<string | null>(null);
+  // Only the latest conversation asked for is shown: opening one, starting a new chat or
+  // sending makes any answer still on its way from an earlier open stale.
+  const openSeq = useRef(0);
   const [showHistory, setShowHistory] = useState(false);
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const abort = useRef<AbortController | null>(null);
@@ -108,6 +117,8 @@ export function JournalChat({
 
   const startNew = () => {
     if (busy) return;
+    openSeq.current++;
+    setLoadingId(null);
     setActive(null);
     setMessages([]);
     setError(null);
@@ -117,6 +128,8 @@ export function JournalChat({
   const open = useCallback(
     async (conversation: Conversation) => {
       if (busy) return;
+      const seq = ++openSeq.current;
+      const current = () => mounted.current && seq === openSeq.current;
       setLoadingId(conversation.id);
       setError(null);
       try {
@@ -127,15 +140,15 @@ export function JournalChat({
           error?: string;
         };
         if (!response.ok || !body.conversation) throw new Error(body.error ?? "Could not open it");
-        if (!mounted.current) return;
+        if (!current()) return;
         setActive(body.conversation);
         setMessages(body.messages ?? []);
         setShowHistory(false);
       } catch (cause) {
-        if (mounted.current)
+        if (current())
           setError(cause instanceof Error ? cause.message : "Could not open the conversation");
       } finally {
-        if (mounted.current) setLoadingId(null);
+        if (current()) setLoadingId(null);
       }
     },
     [busy],
@@ -150,9 +163,25 @@ export function JournalChat({
 
   const remove = async (conversation: Conversation) => {
     if (busy) return;
-    await fetch(`/api/ai/chat/${encodeURIComponent(conversation.id)}`, { method: "DELETE" });
-    if (active?.id === conversation.id) startNew();
-    history.refresh();
+    setRemoveError(null);
+    try {
+      const response = await fetch(`/api/ai/chat/${encodeURIComponent(conversation.id)}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) {
+        const body = (await response.json().catch(() => ({}))) as { error?: string };
+        throw new Error(body.error ?? `Request failed (${response.status})`);
+      }
+      if (!mounted.current) return;
+      if (active?.id === conversation.id) startNew();
+    } catch (cause) {
+      if (mounted.current)
+        setRemoveError(
+          `Could not delete the chat: ${cause instanceof Error ? cause.message : "the request failed."}`,
+        );
+    } finally {
+      if (mounted.current) history.refresh();
+    }
   };
 
   const send = async (raw: string, override?: { url: string; body: Record<string, unknown> }) => {
@@ -160,9 +189,11 @@ export function JournalChat({
     if (busy || !question) return;
     const controller = new AbortController();
     abort.current = controller;
+    openSeq.current++;
+    setLoadingId(null);
     setBusy(true);
     setError(null);
-    setLastQuestion(question);
+    setLast({ question, override });
     setInput("");
     const pending: ChatMessage = {
       id: `pending-${Date.now()}`,
@@ -256,7 +287,8 @@ export function JournalChat({
         if (!accepted) {
           // Refused before anything was saved: take the question back.
           setMessages((m) => m.filter((x) => x.id !== pending.id && x.id !== "pending-seed"));
-          setInput(question);
+          // A starter's label is not a question to edit; Try again runs the starter again.
+          if (!override) setInput(question);
         }
       }
     } finally {
@@ -302,6 +334,12 @@ export function JournalChat({
         </div>
       </div>
 
+      {removeError && (
+        <p role="alert" className="text-xs text-destructive">
+          {removeError}
+        </p>
+      )}
+
       {showHistory && (
         <div className="rounded-md border" role="region" aria-label="Saved chats">
           {conversations.length === 0 ? (
@@ -323,7 +361,8 @@ export function JournalChat({
                       {privateMode ? "Chat" : c.title}
                     </span>
                     <span className="block truncate text-xs text-muted-foreground">
-                      {formatWhen(c.updatedAt)} · {c.messages ?? 0} messages · {c.scopeLabel}
+                      {formatWhen(c.updatedAt, target.timeZone)} · {c.messages ?? 0} messages ·{" "}
+                      {c.scopeLabel}
                     </span>
                   </button>
                   <Button
@@ -331,7 +370,12 @@ export function JournalChat({
                     variant="ghost"
                     size="icon"
                     className="h-7 w-7 shrink-0"
-                    aria-label={`Delete chat ${c.title}`}
+                    // Privacy mode hides the title, also from screen readers.
+                    aria-label={
+                      privateMode
+                        ? `Delete chat from ${formatWhen(c.updatedAt, target.timeZone)}`
+                        : `Delete chat ${c.title}`
+                    }
                     onClick={() => void remove(c)}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -364,7 +408,8 @@ export function JournalChat({
       {error && (
         <AiNotice
           error={error}
-          onRetry={() => void send(lastQuestion)}
+          // Once the conversation exists, a retry is a follow-up in it.
+          onRetry={() => void send(last.question, active ? undefined : last.override)}
           onDismiss={() => setError(null)}
         />
       )}

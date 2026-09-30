@@ -178,6 +178,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - Weekly review: the week ends today in the journal's time zone (it could start from the UTC day before settings loaded), and leaving the page stops a review being written
 - Results by day type: **Refresh** reads the breakdown again (it did nothing), net P&L shows in your accounts' currency instead of always dollars, and is not added across accounts in different currencies
 - Habits on Reports: when the filtered trades mix currencies, amounts are hidden (as on the calendar) instead of being shown in the first account's currency
+- AI chat: **Try again** after a failed period review runs the review again (it sent the button's label as a chat question), clicking two saved chats quickly shows the one clicked last, a chat that could not be deleted says so, saved chat times show in the journal's time zone, and privacy mode keeps chat titles out of the delete buttons' screen reader names
 
 ## [0.1.0] - 2026-09-03
 
