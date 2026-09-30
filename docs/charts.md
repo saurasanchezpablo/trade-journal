@@ -595,7 +595,10 @@ copied into the analysis. `economic_events` holds the stored calendar.
   and shows a placeholder.
 - JSON export includes analyses and their day versions (source, drawings, layers, notes)
   without pictures, as it does for attachment binaries. Back up the data directory to keep
-  them.
+  them. Scenario grades (`chartPlanReviews`) and the trades taken from a plan
+  (`chartTradeLinks`) are exported too.
+- Plan links follow a trade when its account's data is transferred to another account, and
+  are removed with the trade when it is deleted or its account is cleared.
 
 ## Code map
 

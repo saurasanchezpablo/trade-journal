@@ -23,6 +23,8 @@ import {
   chartAnalyses,
   chartAnalysisSnapshots,
   chartScripts,
+  chartPlanReviews,
+  chartTradeLinks,
 } from "@/db";
 import { readFilters } from "@luxalgo/journal-core";
 import { parseDrawings } from "@/lib/chart-analysis";
@@ -39,6 +41,36 @@ import {
 import { handler, ok } from "@/server/api";
 import { getChartPreferences } from "@/server/chart-preferences";
 import { attachmentExportRecord, EXPORT_ATTACHMENTS_NOTE } from "@/lib/export-format";
+import { csvCell } from "@/lib/csv-cell";
+
+/** Monthly and quarterly review goals (their table appears with the first goal). */
+function reviewGoals() {
+  const exists = db.$client
+    .prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'review_goals'")
+    .get();
+  if (!exists) return [];
+  return (
+    db.$client.prepare("SELECT * FROM review_goals ORDER BY created_at, rowid").all() as {
+      id: string;
+      period_kind: string;
+      period: string;
+      metric: string | null;
+      comparator: string | null;
+      target: number | null;
+      text: string;
+      created_at: string;
+    }[]
+  ).map((row) => ({
+    id: row.id,
+    periodKind: row.period_kind,
+    period: row.period,
+    metric: row.metric,
+    comparator: row.comparator,
+    target: row.target,
+    text: row.text,
+    createdAt: row.created_at,
+  }));
+}
 
 /**
  * Full data export: your journal is yours. Credentials are deliberately
@@ -51,10 +83,6 @@ export const GET = handler(async (request: Request) => {
   if (format === "csv") {
     const header =
       "key,account_id,symbol,direction,status,opened_at,closed_at,quantity,avg_entry,avg_exit,gross_pnl,fees,net_pnl,tags,notes";
-    const escape = (value: unknown): string => {
-      const text = value === null || value === undefined ? "" : String(value);
-      return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
-    };
     const lines = queryTrades(readFilters(url.searchParams)).rows.map((row) =>
       [
         row.key,
@@ -63,23 +91,24 @@ export const GET = handler(async (request: Request) => {
         row.direction,
         row.status,
         row.openedAt,
-        row.closedAt ?? "",
+        row.closedAt,
         row.quantity,
         row.avgEntry,
-        row.avgExit ?? "",
+        row.avgExit,
         row.grossPnl,
         row.fees,
         row.netPnl,
         row.tagsJson ?? "[]",
         row.notes ?? "",
       ]
-        .map(escape)
+        .map(csvCell)
         .join(","),
     );
     return new Response([header, ...lines].join("\n"), {
       headers: {
         "Content-Type": "text/csv",
         "Content-Disposition": 'attachment; filename="trades.csv"',
+        "Cache-Control": "private, no-store",
       },
     });
   }
@@ -137,6 +166,10 @@ export const GET = handler(async (request: Request) => {
         hasSnapshot: image !== null,
       })),
     chartScripts: db.select().from(chartScripts).all(),
+    // How each plan scenario went, and which trades were taken from which plan.
+    chartPlanReviews: db.select().from(chartPlanReviews).all(),
+    chartTradeLinks: db.select().from(chartTradeLinks).all(),
+    reviewGoals: reviewGoals(),
     journalDefaults: getJournalDefaults(),
     settings: {
       timeZone: getTimeZone(),

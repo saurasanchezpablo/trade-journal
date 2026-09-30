@@ -67,7 +67,7 @@ Progress routines; nothing measured is stored. **Suggest goals** proposes up to 
 the period before; **Add** keeps one. **Write the review** has the AI chat write the review
 from the goals, the period against the one before, its weeks, flagged habits and recurring
 lessons. It is saved as a chat you can follow up on. Goals live in their own table
-(`review_goals`).
+(`review_goals`) and are included in the JSON export as `reviewGoals`.
 
 ## Memory
 
