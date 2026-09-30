@@ -3,14 +3,23 @@
 The journal is single-user and open by default: it is your data on your machine. Before you
 make it reachable from a network, turn on at least one way of signing in:
 
-- **Password**: set `JOURNAL_PASSWORD`. One shared password, sessions last 30 days, changing
-  the password signs everyone out.
+- **Password**: set `JOURNAL_PASSWORD`. One shared password, sessions last 30 days (the
+  server refuses an older one, whatever the browser keeps), changing the password signs
+  everyone out. The session cookie is signed with a key derived from the password and
+  `JOURNAL_SECRET`, so a copied cookie is slow to test passwords against. Five wrong
+  passwords in 15 minutes from one client pause its sign-in for a while.
 - **Single sign-on**: sign in through an OpenID Connect provider such as
   [Authentik](https://goauthentik.io), Keycloak, Zitadel, Authelia, Okta or Entra ID. Set
   `JOURNAL_OIDC_ISSUER` and the settings below.
 
 Both can be on at once; the login page then offers both. Either way the API checks the
 session on every request, and pages without a session redirect to `/login`.
+
+Whatever the sign-in, the API refuses a change (anything but a read) sent by another site's
+page: browsers mark where a request comes from (`Sec-Fetch-Site`, or `Origin` in older
+browsers, compared with the host, `X-Forwarded-Host` and `JOURNAL_PUBLIC_URL`). Without
+this, any page you visit could post to an open journal. Scripts and servers, which send
+neither header, are not affected.
 
 ## How single sign-on works
 

@@ -24,7 +24,27 @@ import {
   snapshotViewPath,
   type ChartAnalysisSummary,
 } from "@/lib/chart-analysis";
-export function Markdown({ children }: { children: string }) {
+/** The host of an image that would load from another site, or null for one of ours. */
+function externalHost(src: string | undefined): string | null {
+  if (!src || typeof window === "undefined") return null;
+  try {
+    const url = new URL(src, window.location.href);
+    if (url.protocol === "data:" || url.protocol === "blob:") return null;
+    return url.origin === window.location.origin ? null : url.host;
+  } catch {
+    return null;
+  }
+}
+
+export function Markdown({
+  children,
+  externalImages = "load",
+}: {
+  children: string;
+  /** "ask" for text the AI wrote: an image from another site waits for a click, as text it
+   *  read (a video summary, a note) could tell it to put journal data in an image URL. */
+  externalImages?: "load" | "ask";
+}) {
   return (
     <div className="journal-markdown">
       <ReactMarkdown
@@ -42,7 +62,11 @@ export function Markdown({ children }: { children: string }) {
               <a href={href}>{children}</a>
             ),
           img: ({ src, alt }) => (
-            <MarkdownImage src={typeof src === "string" ? src : undefined} alt={alt ?? ""} />
+            <MarkdownImage
+              src={typeof src === "string" ? src : undefined}
+              alt={alt ?? ""}
+              ask={externalImages === "ask"}
+            />
           ),
         }}
       >
@@ -55,9 +79,22 @@ export function Markdown({ children }: { children: string }) {
  * Images render inline. A saved chart analysis becomes a figure that opens the chart for
  * editing. Spans keep it valid inside the paragraph Markdown wraps images in.
  */
-function MarkdownImage({ src, alt }: { src?: string; alt: string }) {
+function MarkdownImage({ src, alt, ask }: { src?: string; alt: string; ask: boolean }) {
   const [failed, setFailed] = useState(false);
+  const [shown, setShown] = useState(false);
   const embed = analysisEmbedFromSrc(src);
+  const host = ask && !shown ? externalHost(src) : null;
+  if (host)
+    return (
+      <button
+        type="button"
+        className="text-xs text-muted-foreground underline"
+        onClick={() => setShown(true)}
+      >
+        Show image from {host}
+        {alt ? ` (${alt})` : ""}
+      </button>
+    );
   if (!embed) return <img src={src} alt={alt} loading="lazy" className="max-w-full rounded-md" />;
   const { id, day } = embed;
   const caption = alt.replace(/ chart analysis$/, "") || "Chart analysis";

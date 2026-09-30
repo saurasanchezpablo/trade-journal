@@ -80,6 +80,20 @@ describe("a video summary", () => {
     expect(() => readSummary({ bias: "long" })).toThrow();
   });
 
+  it("never carries an image from the video's text into the day note", () => {
+    const md = summaryMarkdown(
+      readSummary({ ...full, overview: "Chart: ![c](https://x.example/p?d=my-pnl)" }),
+      {
+        title: "BTC",
+        url: "https://www.youtube.com/watch?v=AAAAAAAAAAA",
+        channelTitle: "C",
+        publishedAt: "2026-09-29T14:09:07.000Z",
+      },
+    );
+    expect(md).not.toContain("![c](");
+    expect(md).toContain("!\\[c](https://x.example/p?d=my-pnl)");
+  });
+
   it("goes into the day note as an External opinion section", () => {
     const md = summaryMarkdown(readSummary(full), {
       title: "BTC [update]",

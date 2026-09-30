@@ -78,7 +78,7 @@ export function WeeklyReview({ timeZone }: { timeZone: string }) {
           aria-label="Review being written"
           aria-live="polite"
         >
-          <Markdown>{writing}</Markdown>
+          <Markdown externalImages="ask">{writing}</Markdown>
         </article>
       )}
       {review && !busy && (
@@ -86,7 +86,7 @@ export function WeeklyReview({ timeZone }: { timeZone: string }) {
           className="rounded-md border p-3"
           aria-label={`Review of ${review.from} to ${review.to}`}
         >
-          <Markdown>{review.review}</Markdown>
+          <Markdown externalImages="ask">{review.review}</Markdown>
         </article>
       )}
     </SectionCard>

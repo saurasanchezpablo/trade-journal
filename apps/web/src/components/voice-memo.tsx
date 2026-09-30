@@ -110,7 +110,7 @@ export function VoiceMemo({
           aria-label="Note preview"
           aria-live="polite"
         >
-          <Markdown>{note}</Markdown>
+          <Markdown externalImages="ask">{note}</Markdown>
         </article>
       )}
     </div>

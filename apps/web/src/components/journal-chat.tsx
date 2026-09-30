@@ -474,7 +474,7 @@ function Message({ message, privateMode }: { message: ChatMessage; privateMode: 
         {privateMode ? (
           <p className="text-muted-foreground">Answer hidden in privacy mode.</p>
         ) : (
-          <Markdown>{message.content}</Markdown>
+          <Markdown externalImages="ask">{message.content}</Markdown>
         )}
       </div>
       {message.status !== "done" && (
@@ -495,7 +495,7 @@ function DraftMessage({ draft, privateMode }: { draft: Draft; privateMode: boole
           {privateMode ? (
             <p className="text-muted-foreground">Answer hidden in privacy mode.</p>
           ) : (
-            <Markdown>{draft.text}</Markdown>
+            <Markdown externalImages="ask">{draft.text}</Markdown>
           )}
         </div>
       ) : (

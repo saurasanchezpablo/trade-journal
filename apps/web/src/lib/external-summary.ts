@@ -377,5 +377,7 @@ export function summaryMarkdown(
     );
   if (summary.caveats.length)
     out.push("", "**Caveats**", "", ...summary.caveats.map((c) => `- ${c}`));
-  return out.join("\n");
+  // The text comes from someone else's video: an image in it would load, unasked, from
+  // wherever it points (a tracking pixel carrying what the AI was told to put in its URL).
+  return out.join("\n").replace(/!\[/g, "!\\[");
 }
