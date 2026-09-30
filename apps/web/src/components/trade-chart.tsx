@@ -132,7 +132,6 @@ function PriceChart({
 
       let profitColor = dark ? "#0ca30c" : "#006300";
       const lossColor = "#d03b3b";
-      let entryColor = trade.direction === "long" ? profitColor : lossColor;
 
       // Engine-free trade painting: a per-mount native indicator that emits
       // arrow labels for each fill plus an entry→exit line with the P&L.
@@ -242,7 +241,6 @@ function PriceChart({
         if (dark === nextDark) return;
         dark = nextDark;
         profitColor = dark ? "#0ca30c" : "#006300";
-        entryColor = trade.direction === "long" ? profitColor : lossColor;
         chart.setTheme(dark ? "dark" : "light");
         // Repaint annotations without recreating the price chart or fetching candles.
         indicator.remove();

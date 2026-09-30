@@ -42,7 +42,6 @@ export const useFilters = () => {
     };
   }, [params, range, timeZone]);
 };
-export type Filters = ReturnType<typeof useFilters>;
 export function FilterBar({ title, actions }: { title: string; actions?: React.ReactNode }) {
   const router = useRouter(),
     pathname = usePathname(),
