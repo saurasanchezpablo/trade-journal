@@ -1,5 +1,5 @@
 import { readFilters } from "@luxalgo/journal-core";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { computeMetrics, dayKeyOf, intradayCurve } from "@luxalgo/journal-core";
 import { db, executions, journalDays } from "@/db";
 import { bad, handler, ok } from "@/server/api";
@@ -25,12 +25,16 @@ export const GET = handler(async (request: Request, { params }: Params) => {
     .filter(({ trade }) => trade.closedAt && dayKeyOf(trade.closedAt, timeZone) === date);
   const dayTrades = dayTradeIndexes.map(({ trade }) => trade);
 
-  // Intraday curve needs exit timestamps — one fetch per involved account.
+  // The intraday curve needs exit timestamps: read only the day's trades' own fills.
   const times = new Map<string, string>();
-  for (const accountId of new Set(dayTrades.map((trade) => trade.accountId))) {
-    const fills = db.select().from(executions).where(eq(executions.accountId, accountId)).all();
-    for (const fill of fills) times.set(fill.id, fill.executedAt);
-  }
+  const fillIds = [...new Set(dayTrades.flatMap((trade) => trade.executionIds))];
+  for (let i = 0; i < fillIds.length; i += 500)
+    for (const fill of db
+      .select({ id: executions.id, executedAt: executions.executedAt })
+      .from(executions)
+      .where(inArray(executions.id, fillIds.slice(i, i + 500)))
+      .all())
+      times.set(fill.id, fill.executedAt);
 
   const note = db.select().from(journalDays).where(eq(journalDays.date, date)).get();
   return ok({

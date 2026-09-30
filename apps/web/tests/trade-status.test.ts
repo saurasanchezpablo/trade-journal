@@ -14,6 +14,7 @@ const { chartOverlayData } = await import("../src/server/chart-overlays");
 const { dayTradesFor } = await import("../src/server/trade-links");
 const { weekContext } = await import("../src/server/journal-history");
 const { EMPTY_PLAN } = await import("../src/lib/analysis-plan");
+const { GET: journalDay } = await import("../src/app/api/journal/[date]/route");
 
 beforeAll(() => {
   vi.stubEnv("JOURNAL_PASSWORD", "");
@@ -71,5 +72,16 @@ describe("a trade inside the breakeven tolerance reads as breakeven everywhere",
 
   it("in the weekly review's win count", () => {
     expect(weekContext("2026-09-06", "UTC").text).toMatch(/2026-09-01: 1 trade \(ES\), 0 won/);
+  });
+});
+
+describe("the journal day", () => {
+  it("draws its intraday curve from the day's exits and lists the trade as breakeven", async () => {
+    const response = await journalDay(new Request("http://localhost/api/journal/2026-09-01"), {
+      params: Promise.resolve({ date: "2026-09-01" }),
+    });
+    const body = await response.json();
+    expect(body.intraday).toEqual([{ t: "2026-09-01T11:00:00.000Z", cumNetPnl: 2 }]);
+    expect(body.trades[0].status).toBe("breakeven");
   });
 });
