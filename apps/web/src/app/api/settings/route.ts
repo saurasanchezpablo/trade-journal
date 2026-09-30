@@ -14,6 +14,7 @@ import {
 } from "@/server/settings";
 import { AI_PROVIDERS, AI_PROVIDER_NAMES, isAiProvider, type AiProvider } from "@/lib/ai-settings";
 import { isTimeZone } from "@/lib/timezone";
+import { sameMultipliers } from "@/lib/multipliers";
 
 export const GET = handler(() =>
   ok({
@@ -74,18 +75,28 @@ export const PATCH = handler(async (request: Request) => {
     requireValue(
       body.multipliers &&
         typeof body.multipliers === "object" &&
-        Object.values(body.multipliers).every(
-          (n) => typeof n === "number" && Number.isFinite(n) && n > 0,
+        !Array.isArray(body.multipliers) &&
+        Object.keys(body.multipliers).length <= 1000 &&
+        Object.entries(body.multipliers).every(
+          ([symbol, n]) =>
+            symbol.trim().length > 0 &&
+            symbol.length <= 100 &&
+            typeof n === "number" &&
+            Number.isFinite(n) &&
+            n > 0,
         ),
       "Contract multipliers must be positive numbers.",
     );
+  // Every account is rebuilt when multipliers change, so only when they really do.
+  const multipliersChanged =
+    body.multipliers !== undefined && !sameMultipliers(body.multipliers, getMultipliers());
   db.transaction(() => {
     // A display-only change must not silently alter the legacy import default.
     if (body.timeZone !== undefined || body.importTimeZone !== undefined)
       setSetting("importTimeZone", body.importTimeZone ?? getImportTimeZone());
     if (body.timeZone !== undefined) setSetting("timeZone", body.timeZone);
   });
-  if (body.multipliers !== undefined)
+  if (multipliersChanged)
     db.transaction(() => {
       setSetting("multipliers", JSON.stringify(body.multipliers));
       for (const account of db.select({ id: accounts.id }).from(accounts).all())
@@ -99,5 +110,5 @@ export const PATCH = handler(async (request: Request) => {
     if (body.aiProvider !== undefined) setSetting("aiProvider", body.aiProvider);
     if (body.aiModel !== undefined) setSetting(aiModelSetting(provider), body.aiModel.trim());
   });
-  return ok({ saved: true });
+  return ok({ saved: true, rebuilt: multipliersChanged });
 });

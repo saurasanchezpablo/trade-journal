@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TimeZonePicker } from "@/components/timezone-picker";
 import { Label } from "@/components/ui/label";
 import { postJson, useApi } from "@/lib/use-api";
+import { formatMultipliers, parseMultipliers, sameMultipliers } from "@/lib/multipliers";
 
 interface SettingsPayload {
   timeZone: string;
@@ -38,26 +39,29 @@ function Settings() {
     if (data) {
       setTimeZone(data.timeZone);
       setImportTimeZone(data.importTimeZone);
-      setMultipliers(
-        Object.entries(data.multipliers)
-          .map(([symbol, multiplier]) => `${symbol}=${multiplier}`)
-          .join("\n"),
-      );
+      setMultipliers(formatMultipliers(data.multipliers));
     }
   }, [data]);
 
   const save = async () => {
-    const parsedMultipliers: Record<string, number> = {};
-    for (const line of multipliers.split("\n")) {
-      const [symbol, value] = line.split("=").map((part) => part.trim());
-      if (symbol && value && Number.isFinite(Number(value))) {
-        parsedMultipliers[symbol.toUpperCase()] = Number(value);
-      }
+    const parsed = parseMultipliers(multipliers);
+    if (parsed.invalid.length) {
+      // Never drop a line silently: saving would remove that multiplier and rebuild P&L.
+      setFailure(
+        `Fix ${parsed.invalid.length === 1 ? "this multiplier line" : "these multiplier lines"} before saving (use SYMBOL=number, for example ES=50): ${parsed.invalid.join(", ")}`,
+      );
+      return;
     }
+    // Only a changed map is sent: saving multipliers recalculates every trade.
+    const changed = !data || !sameMultipliers(parsed.multipliers, data.multipliers);
     try {
       await postJson(
         "/api/settings",
-        { timeZone, importTimeZone, multipliers: parsedMultipliers },
+        {
+          timeZone,
+          importTimeZone,
+          ...(changed ? { multipliers: parsed.multipliers } : {}),
+        },
         "PATCH",
       );
       setFailure("");
@@ -126,10 +130,11 @@ function Settings() {
                 htmlFor="contract-multipliers"
                 className="mb-1 block text-xs text-muted-foreground"
               >
-                Contract multipliers (futures/options), one per line: SYMBOL=multiplier
+                Contract multipliers (futures/options), one per line as SYMBOL=multiplier
               </Label>
               <textarea
                 id="contract-multipliers"
+                aria-invalid={failure.includes("multiplier line") || undefined}
                 value={multipliers}
                 onChange={(event) => setMultipliers(event.target.value)}
                 placeholder={"ES=50\nNQ=20\nMES=5"}
@@ -158,18 +163,18 @@ function Settings() {
             <CardTitle>Your data</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-2">
-            <a href="/api/export" download="trade-journal-export.json">
-              <Button variant="outline">
+            <Button variant="outline" asChild>
+              <a href="/api/export" download="trade-journal-export.json">
                 <Download />
                 Full backup (JSON)
-              </Button>
-            </a>
-            <a href="/api/export?format=csv" download>
-              <Button variant="outline">
+              </a>
+            </Button>
+            <Button variant="outline" asChild>
+              <a href="/api/export?format=csv" download>
                 <Download />
                 Trades (CSV)
-              </Button>
-            </a>
+              </a>
+            </Button>
           </CardContent>
         </Card>
       </div>
