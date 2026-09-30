@@ -169,6 +169,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - A trade's AI rule check is dropped when the trade moves to another playbook, and **Apply N suggestions** counts only that playbook's rules (applying verdicts on the old playbook's rules failed)
 - Folding the "levels not reached" list no longer empties a journal day's Day review, and privacy mode hides the entry price of the day's trades there (also from the plan link's screen reader name)
 - External analysis: the daily check time, maximum age and minimum length are saved when you leave the field or press Enter (typing no longer saves each keystroke and jumbles the value), an empty or out-of-range value is not saved and says what to type, a video's journal day follows the journal's time zone once it loads, and check and retry times show in the journal's time zone
+- Pine Script editor: pressing Ctrl/Cmd+S or Ctrl/Cmd+Enter twice quickly no longer saves two scripts or adds two indicators
 
 ## [0.1.0] - 2026-09-03
 

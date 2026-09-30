@@ -60,38 +60,50 @@ export function PineEditor({
 
   useEffect(() => code.current?.focus(), []);
 
-  const run = async () => {
-    setBusy(true);
-    setError("");
-    setStatus("Running…");
-    try {
-      const result = await onRun(current());
-      if (result.error) {
-        setError(result.error);
-        setStatus("");
-      } else {
-        if (result.chartIndicatorId) setChartIndicatorId(result.chartIndicatorId);
-        setStatus("Running on the chart.");
-      }
-    } finally {
-      setBusy(false);
-    }
-  };
-  const save = async () => {
+  // One run, save or delete at a time, also from the keyboard: `busy` only disables the
+  // buttons after a render, so a double Ctrl+S would otherwise save two scripts.
+  const inFlight = useRef(false);
+  const exclusive = async (work: () => Promise<void>) => {
+    if (inFlight.current) return;
+    inFlight.current = true;
     setBusy(true);
     setError("");
     try {
-      const result = await onSave(current());
-      if (result.error) setError(result.error);
-      else {
-        if (result.scriptId) setScriptId(result.scriptId);
-        if (!name.trim()) setName(current().name);
-        setStatus("Saved to My indicators.");
-      }
+      await work();
+    } catch (cause) {
+      setStatus("");
+      setError(cause instanceof Error ? cause.message : "It did not work.");
     } finally {
+      inFlight.current = false;
       setBusy(false);
     }
   };
+  const run = () =>
+    source.trim()
+      ? exclusive(async () => {
+          setStatus("Running…");
+          const result = await onRun(current());
+          if (result.error) {
+            setError(result.error);
+            setStatus("");
+          } else {
+            if (result.chartIndicatorId) setChartIndicatorId(result.chartIndicatorId);
+            setStatus("Running on the chart.");
+          }
+        })
+      : Promise.resolve();
+  const save = () =>
+    source.trim()
+      ? exclusive(async () => {
+          const result = await onSave(current());
+          if (result.error) setError(result.error);
+          else {
+            if (result.scriptId) setScriptId(result.scriptId);
+            if (!name.trim()) setName(current().name);
+            setStatus("Saved to My indicators.");
+          }
+        })
+      : Promise.resolve();
 
   return (
     <Card>
@@ -136,16 +148,18 @@ export function PineEditor({
               variant="ghost"
               className="text-destructive"
               disabled={busy}
-              onClick={async () => {
+              onClick={() => {
                 if (
                   !confirm(
                     "Delete this indicator from My indicators? Charts using it keep their copy.",
                   )
                 )
                   return;
-                await onDelete(scriptId);
-                setScriptId(null);
-                setStatus("Deleted from My indicators.");
+                void exclusive(async () => {
+                  await onDelete(scriptId);
+                  setScriptId(null);
+                  setStatus("Deleted from My indicators.");
+                });
               }}
             >
               <Trash2 /> Delete
