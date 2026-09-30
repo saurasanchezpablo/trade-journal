@@ -172,6 +172,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - Pine Script editor: pressing Ctrl/Cmd+S or Ctrl/Cmd+Enter twice quickly no longer saves two scripts or adds two indicators
 - Under `pnpm dev` a trade's page loads its candles by itself again (React Strict Mode cancelled the first lookup and never retried it)
 - Charts: enabling, refreshing or disabling the economic calendar says why when it fails instead of doing nothing
+- Chart appearance: typing a number such as 14 into Text size no longer snaps back on the first digit (a value out of range is brought into range when you leave the field), and every colour picker, including the Drawings tab and the grid colour, has a name for screen readers
 
 ## [0.1.0] - 2026-09-03
 

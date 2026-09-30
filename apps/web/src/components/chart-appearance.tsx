@@ -245,6 +245,7 @@ export function ChartAppearance({
                 </Field>
                 <Field label="Rising">
                   <ColorInput
+                    label="Rising colour"
                     value={value("candles.upColor")}
                     onChange={(c) =>
                       setMany([
@@ -259,6 +260,7 @@ export function ChartAppearance({
                 </Field>
                 <Field label="Falling">
                   <ColorInput
+                    label="Falling colour"
                     value={value("candles.downColor")}
                     onChange={(c) =>
                       setMany([
@@ -288,6 +290,7 @@ export function ChartAppearance({
                 />
                 <Field label="Line colour">
                   <ColorInput
+                    label="Line colour"
                     value={value("line.color")}
                     onChange={(c) =>
                       setMany([
@@ -299,6 +302,7 @@ export function ChartAppearance({
                 </Field>
                 <Field label="Line width">
                   <NumberInput
+                    label="Line width"
                     min={1}
                     max={6}
                     value={value("line.width")}
@@ -315,18 +319,21 @@ export function ChartAppearance({
               <Section title="Canvas">
                 <Field label="Background">
                   <ColorInput
+                    label="Background colour"
                     value={value("layout.background")}
                     onChange={(c) => set("layout.background", c)}
                   />
                 </Field>
                 <Field label="Text">
                   <ColorInput
+                    label="Text colour"
                     value={value("layout.textColor")}
                     onChange={(c) => set("layout.textColor", c)}
                   />
                 </Field>
                 <Field label="Text size">
                   <NumberInput
+                    label="Text size"
                     min={8}
                     max={18}
                     value={value("layout.fontSize")}
@@ -352,6 +359,7 @@ export function ChartAppearance({
                       Horizontal
                     </label>
                     <ColorInput
+                      label="Grid colour"
                       value={value("grid.horzLines.color")}
                       onChange={(c) =>
                         setMany([
@@ -365,6 +373,7 @@ export function ChartAppearance({
                 <Field label="Crosshair">
                   <span className="flex items-center gap-2">
                     <ColorInput
+                      label="Crosshair colour"
                       value={value("crosshair.color")}
                       onChange={(c) => set("crosshair.color", c)}
                     />
@@ -474,6 +483,7 @@ export function ChartAppearance({
                   <Field label="Colour tag">
                     <span className="flex items-center gap-2">
                       <ColorInput
+                        label="Colour tag"
                         value={symbolPrefs.color}
                         onChange={(c) => setSymbol({ color: c })}
                       />
@@ -580,6 +590,7 @@ export function ChartAppearance({
                         <td className="py-1 pr-2">{tool.label}</td>
                         <td>
                           <ColorInput
+                            label={`${tool.label} colour`}
                             value={style.lineColor}
                             onChange={(c) => setTool(tool.type, { lineColor: c })}
                           />
@@ -624,6 +635,7 @@ export function ChartAppearance({
                           {tool.fill && (
                             <span className="flex items-center gap-1">
                               <ColorInput
+                                label={`${tool.label} fill colour`}
                                 value={style.fillColor}
                                 onChange={(c) => setTool(tool.type, { fillColor: c })}
                               />
@@ -652,6 +664,7 @@ export function ChartAppearance({
                           {tool.text && (
                             <span className="flex items-center gap-1">
                               <ColorInput
+                                label={`${tool.label} text colour`}
                                 value={style.textColor}
                                 onChange={(c) => setTool(tool.type, { textColor: c })}
                               />
@@ -866,7 +879,16 @@ const hex = (value: unknown) => {
     : "#000000";
 };
 
-function ColorInput({ value, onChange }: { value: unknown; onChange: (color: string) => void }) {
+function ColorInput({
+  value,
+  label,
+  onChange,
+}: {
+  value: unknown;
+  /** The picker's name for screen readers: a table cell or a busy row has no label of its own. */
+  label: string;
+  onChange: (color: string) => void;
+}) {
   const unset = value === undefined;
   return (
     <span
@@ -880,6 +902,7 @@ function ColorInput({ value, onChange }: { value: unknown; onChange: (color: str
       )}
       <input
         type="color"
+        aria-label={label}
         value={hex(value)}
         onChange={(e) => onChange(e.target.value)}
         className="absolute inset-0 cursor-pointer opacity-0"
@@ -888,26 +911,55 @@ function ColorInput({ value, onChange }: { value: unknown; onChange: (color: str
   );
 }
 
+/**
+ * A number typed as text: a value in range applies as you type, and leaving the field (or
+ * Enter) applies what was typed brought into range. Typing "14" into a field whose minimum
+ * is 8 passes through "1", which must not snap back to the saved value.
+ */
 function NumberInput({
   value,
   min,
   max,
+  label,
   onChange,
 }: {
   value: unknown;
   min: number;
   max: number;
+  label: string;
   onChange: (n: number) => void;
 }) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const read = (text: string) => {
+    const n = Number(text.trim());
+    return text.trim() !== "" && Number.isFinite(n) ? n : null;
+  };
+  const commit = () => {
+    if (draft === null) return;
+    const n = read(draft);
+    setDraft(null);
+    if (n === null) return;
+    const clamped = Math.min(max, Math.max(min, n));
+    if (clamped !== value) onChange(clamped);
+  };
   return (
     <input
       type="number"
+      aria-label={label}
       min={min}
       max={max}
-      value={typeof value === "number" ? value : ""}
+      value={draft ?? (typeof value === "number" ? String(value) : "")}
       onChange={(e) => {
-        const n = Number(e.target.value);
-        if (Number.isFinite(n) && n >= min && n <= max) onChange(n);
+        setDraft(e.target.value);
+        const n = read(e.target.value);
+        if (n !== null && n >= min && n <= max) onChange(n);
+      }}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          commit();
+        }
       }}
       className="h-8 w-16 rounded-md border bg-background px-2 text-sm"
     />
