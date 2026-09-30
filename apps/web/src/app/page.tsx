@@ -67,6 +67,8 @@ interface StatsPayload {
     avgEntry: number;
   }[];
   recentTrades: { key: string; symbol: string; closedAt: string; netPnl: number; status: string }[];
+  /** The selected accounts' currencies; amounts are only added up within one. */
+  currencies: string[];
 }
 
 export default function DashboardPage() {
@@ -127,6 +129,8 @@ function DashboardContent({
       </div>
     );
   const { metrics: m, edgeScore } = data;
+  const currencies = data.currencies ?? [];
+  const currency = currencies[0] ?? "USD";
 
   if (m.totalTrades === 0)
     return query ? (
@@ -138,21 +142,30 @@ function DashboardContent({
     ) : (
       <EmptyState />
     );
+  if (currencies.length > 1)
+    return (
+      <div className="p-4">
+        <p className="rounded-lg border p-4 text-sm">
+          These accounts use different currencies ({currencies.join(", ")}). Select accounts with
+          the same currency in Filters to compare monetary results.
+        </p>
+      </div>
+    );
 
-  // Momentum: net P&L of the last 7 calendar days vs the 7 before them.
-  // Hidden when either window has no trading days (e.g. the 7D range).
+  // Momentum: net P&L of the last 7 calendar days (today included, in the journal's
+  // timezone) vs the 7 before them. Hidden when either window has no trading days.
   const weekDelta = (() => {
-    const now = Date.now();
+    const today = Date.parse(`${dayKeyOf(new Date().toISOString(), data.timeZone)}T00:00:00Z`);
     let last = 0;
     let prior = 0;
     let lastDays = 0;
     let priorDays = 0;
     for (const day of data.days) {
-      const ageDays = (now - Date.parse(`${day.date}T00:00:00Z`)) / 86_400_000;
-      if (ageDays <= 7) {
+      const ageDays = Math.round((today - Date.parse(`${day.date}T00:00:00Z`)) / 86_400_000);
+      if (ageDays < 7) {
         last += day.netPnl;
         lastDays++;
-      } else if (ageDays <= 14) {
+      } else if (ageDays < 14) {
         prior += day.netPnl;
         priorDays++;
       }
@@ -183,7 +196,11 @@ function DashboardContent({
                   hint="Realized profit and loss net of fees, over the selected range."
                 />
                 <CardContent>
-                  <Pnl value={m.netPnl} className="text-3xl font-semibold tracking-tight" />
+                  <Pnl
+                    currency={currency}
+                    value={m.netPnl}
+                    className="text-3xl font-semibold tracking-tight"
+                  />
                   {weekDelta !== null && (
                     <div
                       className={cn(
@@ -193,14 +210,14 @@ function DashboardContent({
                     >
                       {weekDelta >= 0 ? "▲" : "▼"}{" "}
                       <MonetaryValue>
-                        {fmtMoney(Math.abs(weekDelta)).replace("+", "")}
+                        {fmtMoney(Math.abs(weekDelta), currency).replace("+", "")}
                       </MonetaryValue>{" "}
                       vs prior 7d
                     </div>
                   )}
                   <div className="mt-1 text-xs text-muted-foreground">
                     {m.closedTrades} closed trades ·{" "}
-                    <MonetaryValue>{fmtMoney(m.fees)}</MonetaryValue> fees
+                    <MonetaryValue>{fmtMoney(m.fees, currency)}</MonetaryValue> fees
                   </div>
                 </CardContent>
               </Card>
@@ -311,7 +328,7 @@ function DashboardContent({
                       {m.avgWin === null ? (
                         "–"
                       ) : (
-                        <MonetaryValue>{fmtMoney(m.avgWin)}</MonetaryValue>
+                        <MonetaryValue>{fmtMoney(m.avgWin, currency)}</MonetaryValue>
                       )}
                     </span>
                     {" avg win · "}
@@ -319,7 +336,7 @@ function DashboardContent({
                       {m.avgLoss === null ? (
                         "–"
                       ) : (
-                        <MonetaryValue>{fmtMoney(-m.avgLoss)}</MonetaryValue>
+                        <MonetaryValue>{fmtMoney(-m.avgLoss, currency)}</MonetaryValue>
                       )}
                     </span>
                     {" avg loss"}
@@ -389,6 +406,7 @@ function DashboardContent({
                 </CardHeader>
                 <CardContent>
                   <EquityArea
+                    currency={currency}
                     data={data.dailyCumulative.map((p) => ({ t: p.t, cumNetPnl: p.cumNetPnl }))}
                   />
                   <RelativeDrawdownBars
@@ -414,6 +432,7 @@ function DashboardContent({
                 </CardHeader>
                 <CardContent className="dashboard-visual-card-content">
                   <DailyBars
+                    currency={currency}
                     data={data.days.map((d) => ({ date: d.date, netPnl: d.netPnl }))}
                     height="100%"
                   />
@@ -443,7 +462,7 @@ function DashboardContent({
                   </Link>
                 </CardHeader>
                 <CardContent>
-                  <CalendarPnl calendar={data.calendar} />
+                  <CalendarPnl calendar={data.calendar} currency={currency} />
                 </CardContent>
               </Card>
             ),
@@ -494,7 +513,7 @@ function DashboardContent({
                             <span className="text-xs text-muted-foreground">
                               {trade.closedAt && dayKeyOf(trade.closedAt, data.timeZone)}
                             </span>
-                            <Pnl value={trade.netPnl} />
+                            <Pnl currency={currency} value={trade.netPnl} />
                           </span>
                         </Link>
                       ))}
@@ -538,7 +557,7 @@ function DashboardContent({
                 />
                 <CardContent>
                   <div className="text-xl font-semibold tnum text-loss">
-                    <MonetaryValue>{fmtMoney(-m.maxDrawdown)}</MonetaryValue>
+                    <MonetaryValue>{fmtMoney(-m.maxDrawdown, currency)}</MonetaryValue>
                   </div>
                   <div className="mt-1 text-xs text-muted-foreground">
                     {m.maxDrawdownPct === null
@@ -593,7 +612,11 @@ function DashboardContent({
                   {m.expectancy === null ? (
                     "–"
                   ) : (
-                    <Pnl value={m.expectancy} className="text-xl font-semibold" />
+                    <Pnl
+                      currency={currency}
+                      value={m.expectancy}
+                      className="text-xl font-semibold"
+                    />
                   )}
                   <div className="mt-1 text-xs text-muted-foreground">
                     {m.avgRealizedR !== null && m.tradesWithRisk > 0
@@ -640,13 +663,21 @@ function DashboardContent({
                 <CardContent className="space-y-1">
                   {bestDay && (
                     <div className="flex flex-wrap items-baseline justify-between gap-x-2">
-                      <Pnl value={bestDay.netPnl} className="text-base font-semibold" />
+                      <Pnl
+                        currency={currency}
+                        value={bestDay.netPnl}
+                        className="text-base font-semibold"
+                      />
                       <span className="text-xs text-muted-foreground">{bestDay.date.slice(5)}</span>
                     </div>
                   )}
                   {worstDay && (
                     <div className="flex flex-wrap items-baseline justify-between gap-x-2">
-                      <Pnl value={worstDay.netPnl} className="text-base font-semibold" />
+                      <Pnl
+                        currency={currency}
+                        value={worstDay.netPnl}
+                        className="text-base font-semibold"
+                      />
                       <span className="text-xs text-muted-foreground">
                         {worstDay.date.slice(5)}
                       </span>
@@ -672,6 +703,7 @@ function DashboardContent({
                 </CardHeader>
                 <CardContent>
                   <TimeHeatmap
+                    currency={currency}
                     hours={data.buckets.hour.map((b) => ({
                       key: b.key,
                       netPnl: b.netPnl,
@@ -720,12 +752,15 @@ function Empty({ label }: { label: string }) {
 
 function EmptyState() {
   const [loadingDemo, setLoadingDemo] = useState(false);
+  const [demoError, setDemoError] = useState("");
   const loadDemo = async () => {
     setLoadingDemo(true);
+    setDemoError("");
     try {
       await postJson("/api/demo", {});
       window.location.reload();
-    } catch {
+    } catch (error) {
+      setDemoError(error instanceof Error ? error.message : "Could not load the demo data.");
       setLoadingDemo(false);
     }
   };
@@ -752,6 +787,11 @@ function EmptyState() {
             {loadingDemo ? "Loading…" : "Load demo data"}
           </button>
         </div>
+        {demoError && (
+          <p role="alert" className="text-sm text-destructive">
+            {demoError}
+          </p>
+        )}
         <p className="text-xs text-muted-foreground">
           Demo data lands in its own account; delete it anytime under Accounts.
         </p>

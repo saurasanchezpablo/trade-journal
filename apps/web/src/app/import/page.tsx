@@ -26,6 +26,7 @@ import { dayKeyOf } from "@luxalgo/journal-core";
 import { ImportReconciliation } from "@/components/import-reconciliation";
 import type { ImportReview, ImportReviewOptions } from "@/lib/import-review";
 import { TimeZonePicker } from "@/components/timezone-picker";
+import { cn } from "@/lib/utils";
 
 interface BrokerInfo {
   id: string;
@@ -145,8 +146,10 @@ function FileImport() {
   const [statementTimeZone, setStatementTimeZone] = useState<string | null>(null);
   const timeZone = statementTimeZone ?? settingsData?.importTimeZone ?? "";
   const validTimeZone = isTimeZone(timeZone);
+  const uploadDisabled = busy || !settingsData || !validTimeZone;
   const displayTimeZone = settingsData?.timeZone ?? "UTC";
 
+  const [dragging, setDragging] = useState(false);
   const onFile = async (file: File) => {
     if (!validTimeZone) return;
     setStatementTimeZone(timeZone);
@@ -331,21 +334,40 @@ function FileImport() {
               </p>
             )}
           </div>
-          <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed p-8 text-center hover:border-ring">
+          <label
+            className={cn(
+              "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed p-8 text-center hover:border-ring focus-within:ring-2 focus-within:ring-ring",
+              dragging && "border-ring bg-accent/40",
+            )}
+            onDragOver={(event) => {
+              event.preventDefault();
+              if (!uploadDisabled) setDragging(true);
+            }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={(event) => {
+              // Without this the browser opens the dropped file and leaves the page.
+              event.preventDefault();
+              setDragging(false);
+              const file = event.dataTransfer.files?.[0];
+              if (file && !uploadDisabled) void onFile(file);
+            }}
+          >
             <FileUp className="h-6 w-6 text-muted-foreground" />
             <span className="text-sm">{fileName || "Drop or choose a CSV / HTML statement"}</span>
             <span className="text-xs text-muted-foreground">
               Auto-detected:{" "}
-              {formatData?.formats.map((format) => format.label.split(" (")[0]).join(", ")} —
-              anything else via column mapping.
+              {formatData?.formats.map((format) => format.label.split(" (")[0]).join(", ")}.
+              Anything else goes to column mapping.
             </span>
             <input
               type="file"
               accept=".csv,.txt,.htm,.html,.tsv"
-              disabled={busy || !settingsData || !validTimeZone}
-              className="hidden"
+              disabled={uploadDisabled}
+              className="sr-only"
               onChange={(event) => {
                 const file = event.target.files?.[0];
+                // Cleared so choosing the same file again reads it again.
+                event.target.value = "";
                 if (file) void onFile(file);
               }}
             />
@@ -385,7 +407,7 @@ function FileImport() {
           {preview?.needsMapping && preview.headers && (
             <div className="space-y-2 rounded-md border p-3">
               <p className="text-sm">
-                Format not recognized — map your columns (nothing is guessed silently):
+                Format not recognized. Map your columns (nothing is guessed silently):
               </p>
               <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
                 {mappingFields.map((field) => (
@@ -584,7 +606,9 @@ function BrokerConnect() {
       </CardHeader>
       <CardContent className="space-y-3">
         <div>
-          <Label className="mb-1 block text-xs text-muted-foreground">Broker / exchange</Label>
+          <Label htmlFor="broker-select" className="mb-1 block text-xs text-muted-foreground">
+            Broker / exchange
+          </Label>
           <Select
             value={brokerId}
             onValueChange={(value) => {
@@ -592,7 +616,7 @@ function BrokerConnect() {
               setCredentials({});
             }}
           >
-            <SelectTrigger>
+            <SelectTrigger id="broker-select">
               <SelectValue placeholder="Choose a broker" />
             </SelectTrigger>
             <SelectContent>
@@ -610,8 +634,14 @@ function BrokerConnect() {
               {broker.readOnlySetup}
             </p>
             <div>
-              <Label className="mb-1 block text-xs text-muted-foreground">Account name</Label>
+              <Label
+                htmlFor="broker-account-name"
+                className="mb-1 block text-xs text-muted-foreground"
+              >
+                Account name
+              </Label>
               <Input
+                id="broker-account-name"
                 value={name}
                 onChange={(event) => setName(event.target.value)}
                 placeholder={broker.displayName}
@@ -619,8 +649,14 @@ function BrokerConnect() {
             </div>
             {broker.credentials.map((field) => (
               <div key={field.key}>
-                <Label className="mb-1 block text-xs text-muted-foreground">{field.label}</Label>
+                <Label
+                  htmlFor={`broker-credential-${field.key}`}
+                  className="mb-1 block text-xs text-muted-foreground"
+                >
+                  {field.label}
+                </Label>
                 <Input
+                  id={`broker-credential-${field.key}`}
                   type={field.secret ? "password" : "text"}
                   value={credentials[field.key] ?? ""}
                   onChange={(event) =>

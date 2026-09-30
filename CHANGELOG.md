@@ -80,6 +80,13 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Fixed
 
+- Searching or switching folders in the Notebook while writing no longer reloads the open note with older text
+- The dashboard shows amounts in the accounts' currency (not always dollars), says so when the selected accounts mix currencies instead of adding them up, and its "vs prior 7d" window follows the journal's timezone
+- A day's intraday P&L chart shows times in the journal's timezone instead of UTC
+- Playbooks: a double click no longer creates the playbook twice, and a failed save or load says why; Progress shows a placeholder while loading instead of empty routines; Load demo data reports a failure
+- Import: the statement picker can be reached with the keyboard, dropping a file on it works (the browser used to open the file and leave the page), and choosing the same file again reads it again
+- Manual trade entry refuses a partly filled execution instead of dropping it (an exit without its price saved the trade as still open)
+- The login page shows the real reason a sign-in failed and cannot be submitted twice
 - A journal opened over plain http on the local network (http://192.168.x.x) can add fee and risk rules, prop firm expenses and payouts again (they needed a browser feature only secure pages have)
 - Security: other sites' pages can no longer change the journal (a page you visit could post to an open journal); password sessions expire on the server after 30 days and their cookie no longer lets a thief test passwords quickly (sign in again once after updating); repeated wrong passwords pause sign-in; images in AI answers from other sites load only when you ask, and a video summary's text can no longer put an image in your notes
 - A malformed request body is answered as a bad request instead of a server error, and database errors no longer show their internals

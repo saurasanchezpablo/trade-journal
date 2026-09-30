@@ -28,26 +28,37 @@ export default function PlaybooksPage() {
 }
 
 function Playbooks() {
-  const { data, refresh } = useApi<{ playbooks: Playbook[] }>("/api/playbooks");
+  const { data, error, refresh } = useApi<{ playbooks: Playbook[] }>("/api/playbooks");
   const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [failure, setFailure] = useState("");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [rules, setRules] = useState("");
 
   const create = async () => {
-    await postJson("/api/playbooks", {
-      name,
-      description,
-      rules: rules
-        .split("\n")
-        .map((rule) => rule.trim())
-        .filter(Boolean),
-    });
-    setOpen(false);
-    setName("");
-    setDescription("");
-    setRules("");
-    refresh();
+    if (busy || !name.trim()) return;
+    setBusy(true);
+    setFailure("");
+    try {
+      await postJson("/api/playbooks", {
+        name: name.trim(),
+        description,
+        rules: rules
+          .split("\n")
+          .map((rule) => rule.trim())
+          .filter(Boolean),
+      });
+      setOpen(false);
+      setName("");
+      setDescription("");
+      setRules("");
+      refresh();
+    } catch (cause) {
+      setFailure(cause instanceof Error ? cause.message : "Could not create the playbook.");
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -62,9 +73,14 @@ function Playbooks() {
         }
       />
       <div className="grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-3">
+        {error && (
+          <p role="alert" className="col-span-full text-sm text-destructive">
+            {error}
+          </p>
+        )}
         {data?.playbooks.length === 0 && (
           <p className="col-span-full py-16 text-center text-sm text-muted-foreground">
-            A playbook is a setup you trade on purpose — name it, write its rules, then tag trades
+            A playbook is a setup you trade on purpose: name it, write its rules, then tag trades
             with it and let Reports tell you if it actually pays.
           </p>
         )}
@@ -128,18 +144,27 @@ function Playbooks() {
           <DialogHeader>
             <DialogTitle>New playbook</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3">
+          <form
+            className="space-y-3"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void create();
+            }}
+          >
             <Input
+              aria-label="Playbook name"
               value={name}
               onChange={(event) => setName(event.target.value)}
               placeholder="Name (e.g. Opening range breakout)"
             />
             <Input
+              aria-label="Description"
               value={description}
               onChange={(event) => setDescription(event.target.value)}
               placeholder="One-line description"
             />
             <Textarea
+              aria-label="Rules, one per line"
               value={rules}
               onChange={(event) => setRules(event.target.value)}
               placeholder={
@@ -147,10 +172,15 @@ function Playbooks() {
               }
               className="min-h-32"
             />
-            <Button onClick={create} disabled={!name}>
-              Create
+            {failure && (
+              <p role="alert" className="text-sm text-destructive">
+                {failure}
+              </p>
+            )}
+            <Button type="submit" disabled={busy || !name.trim()}>
+              {busy ? "Creating…" : "Create"}
             </Button>
-          </div>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

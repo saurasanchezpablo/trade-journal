@@ -41,7 +41,10 @@ export default function NotebookPage() {
 function Notebook() {
   const [folder, setFolder] = useState("all");
   const [search, setSearch] = useState("");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // The open note is kept apart from the list: searching or switching folders reloads the
+  // list, and an editor rebuilt from that reload could bring back older text.
+  const [selected, setSelected] = useState<NoteRow | null>(null);
+  const creating = useRef(false);
   const [folderOpen, setFolderOpen] = useState(false);
   const [folderName, setFolderName] = useState("");
   const [folderError, setFolderError] = useState("");
@@ -49,15 +52,25 @@ function Notebook() {
   const { data, refresh } = useApi<{ notes: NoteRow[]; folders: FolderRow[] }>(
     `/api/notes?folder=${folder}&q=${encodeURIComponent(search)}`,
   );
-  const selected = data?.notes.find((note) => note.id === selectedId) ?? null;
-
   const createNote = async () => {
-    const result = await postJson<{ id: string }>("/api/notes", {
-      folderId: folder === "all" ? "my-notes" : folder,
-      title: "Untitled",
-    });
-    refresh();
-    setSelectedId(result.id);
+    if (creating.current) return;
+    creating.current = true;
+    const folderId = folder === "all" ? "my-notes" : folder;
+    try {
+      const result = await postJson<{ id: string }>("/api/notes", { folderId, title: "Untitled" });
+      refresh();
+      setSelected({
+        id: result.id,
+        folderId,
+        title: "Untitled",
+        content: "",
+        updatedAt: new Date().toISOString(),
+      });
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Could not create the note.");
+    } finally {
+      creating.current = false;
+    }
   };
 
   const createFolder = async () => {
@@ -67,7 +80,7 @@ function Notebook() {
     try {
       const result = await postJson<{ id: string }>("/api/folders", { name: folderName });
       setFolder(result.id);
-      setSelectedId(null);
+      setSelected(null);
       setSearch("");
       refresh();
       setFolderOpen(false);
@@ -147,6 +160,7 @@ function Notebook() {
                 ? "bg-accent font-medium"
                 : "text-muted-foreground hover:bg-accent/60",
             )}
+            aria-pressed={folder === "all"}
             onClick={() => setFolder("all")}
           >
             All notes
@@ -162,6 +176,7 @@ function Notebook() {
                     ? "bg-accent font-medium"
                     : "text-muted-foreground hover:bg-accent/60",
                 )}
+                aria-pressed={folder === f.id}
                 onClick={() => setFolder(f.id)}
               >
                 {f.name}
@@ -231,9 +246,10 @@ function Notebook() {
               key={note.id}
               className={cn(
                 "block w-full border-b px-3 py-2.5 text-left hover:bg-accent/40",
-                selectedId === note.id && "bg-accent/60",
+                selected?.id === note.id && "bg-accent/60",
               )}
-              onClick={() => setSelectedId(note.id)}
+              aria-current={selected?.id === note.id ? "true" : undefined}
+              onClick={() => setSelected(note)}
             >
               <div className="truncate text-sm font-medium">{note.title || "Untitled"}</div>
               <div className="truncate text-xs text-muted-foreground">
@@ -250,14 +266,22 @@ function Notebook() {
               variant="ghost"
               size="sm"
               className="mb-3 md:hidden"
-              onClick={() => setSelectedId(null)}
+              onClick={() => setSelected(null)}
             >
               <ArrowLeft />
               Back to notes
             </Button>
           )}
           {selected ? (
-            <NoteEditor key={selected.id} note={selected} onChanged={refresh} />
+            <NoteEditor
+              key={selected.id}
+              note={selected}
+              onChanged={refresh}
+              onDeleted={() => {
+                setSelected(null);
+                refresh();
+              }}
+            />
           ) : (
             <p className="py-24 text-center text-sm text-muted-foreground">
               Select or create a note.
@@ -269,7 +293,15 @@ function Notebook() {
   );
 }
 
-function NoteEditor({ note, onChanged }: { note: NoteRow; onChanged: () => void }) {
+function NoteEditor({
+  note,
+  onChanged,
+  onDeleted,
+}: {
+  note: NoteRow;
+  onChanged: () => void;
+  onDeleted: () => void;
+}) {
   const [title, setTitle] = useState(note.title);
   const [content, setContent] = useState(note.content);
   const [mode, setMode] = useState<"edit" | "preview">(note.content.trim() ? "preview" : "edit");
@@ -293,6 +325,7 @@ function NoteEditor({ note, onChanged }: { note: NoteRow; onChanged: () => void 
             }}
             className="notebook-editor-title border-0 px-0 text-lg font-semibold shadow-none focus-visible:ring-0"
             placeholder="Title"
+            aria-label="Note title"
           />
           <Button
             type="button"
@@ -315,9 +348,12 @@ function NoteEditor({ note, onChanged }: { note: NoteRow; onChanged: () => void 
             size="sm"
             className="text-destructive"
             onClick={async () => {
-              if (confirm("Delete this note?")) {
+              if (!confirm("Delete this note?")) return;
+              try {
                 await postJson(`/api/notes/${note.id}`, undefined, "DELETE");
-                onChanged();
+                onDeleted();
+              } catch (error) {
+                alert(error instanceof Error ? error.message : "Could not delete the note.");
               }
             }}
           >

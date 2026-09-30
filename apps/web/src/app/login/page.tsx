@@ -43,15 +43,25 @@ function Login() {
   const { data: methods } = useApi<AuthMethods>("/api/auth");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [signingIn, setSigningIn] = useState(false);
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (signingIn) return;
+    setSigningIn(true);
+    setError(null);
     try {
       await postJson("/api/auth", { password });
       router.push(next);
       router.refresh();
-    } catch {
-      setError("Wrong password");
+    } catch (cause) {
+      // The server's own words: a wrong password, a pause after several, or sign-in off.
+      setError(
+        cause instanceof Error && !(cause instanceof TypeError)
+          ? cause.message
+          : "Could not reach the journal. Try again.",
+      );
+      setSigningIn(false);
     }
   };
 
@@ -106,9 +116,18 @@ function Login() {
                 aria-label="Password"
                 autoFocus={!sso}
               />
-              {error && <p className="text-center text-xs text-loss">{error}</p>}
-              <Button type="submit" className="w-full" variant={sso ? "outline" : "default"}>
-                Unlock
+              {error && (
+                <p role="alert" className="text-center text-xs text-loss">
+                  {error}
+                </p>
+              )}
+              <Button
+                type="submit"
+                className="w-full"
+                variant={sso ? "outline" : "default"}
+                disabled={signingIn}
+              >
+                {signingIn ? "Unlocking…" : "Unlock"}
               </Button>
             </form>
           )}

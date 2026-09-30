@@ -40,10 +40,23 @@ export function ManualTradeEntry({ onSaved }: { onSaved: () => void }) {
   const setLeg = (index: number, patch: Partial<ManualLeg>) =>
     setLegs((current) => current.map((leg, i) => (i === index ? { ...leg, ...patch } : leg)));
 
-  const valid =
-    accountId &&
-    symbol &&
-    legs.some((leg) => leg.datetime && Number(leg.quantity) > 0 && leg.price !== "");
+  // A leg left blank is ignored; one filled in part stops the save instead of being dropped
+  // (an exit without its price would save the trade as still open).
+  const complete = (leg: ManualLeg) => {
+    const quantity = Number(leg.quantity);
+    const fee = leg.fee === "" ? 0 : Number(leg.fee);
+    return (
+      Boolean(leg.datetime) &&
+      Number.isFinite(quantity) &&
+      quantity > 0 &&
+      leg.price.trim() !== "" &&
+      Number.isFinite(Number(leg.price)) &&
+      Number.isFinite(fee)
+    );
+  };
+  const blank = (leg: ManualLeg) => !leg.datetime && !leg.quantity && !leg.price && !leg.fee;
+  const incomplete = legs.flatMap((leg, i) => (blank(leg) || complete(leg) ? [] : [i + 1]));
+  const valid = accountId && symbol && legs.some(complete) && incomplete.length === 0;
 
   const save = async () => {
     if (!valid || busy) return;
@@ -53,16 +66,14 @@ export function ManualTradeEntry({ onSaved }: { onSaved: () => void }) {
       await postJson("/api/executions", {
         accountId,
         ...(notes.trim() ? { notes } : {}),
-        executions: legs
-          .filter((leg) => leg.datetime && Number(leg.quantity) > 0 && leg.price !== "")
-          .map((leg) => ({
-            symbol,
-            side: leg.side,
-            quantity: Number(leg.quantity),
-            price: Number(leg.price),
-            fee: leg.fee === "" ? 0 : Number(leg.fee),
-            executedAt: new Date(leg.datetime).toISOString(),
-          })),
+        executions: legs.filter(complete).map((leg) => ({
+          symbol,
+          side: leg.side,
+          quantity: Number(leg.quantity),
+          price: Number(leg.price),
+          fee: leg.fee === "" ? 0 : Number(leg.fee),
+          executedAt: new Date(leg.datetime).toISOString(),
+        })),
       });
       onSaved();
     } catch (cause) {
@@ -188,6 +199,13 @@ export function ManualTradeEntry({ onSaved }: { onSaved: () => void }) {
           {busy ? "Saving…" : "Save trade"}
         </Button>
       </div>
+      {incomplete.length > 0 && (
+        <p role="alert" className="text-xs text-destructive">
+          {incomplete.length === 1 ? "Execution" : "Executions"} {incomplete.join(", ")}{" "}
+          {incomplete.length === 1 ? "is" : "are"} incomplete: fill in the time, quantity and price
+          (numbers with a dot for decimals), or clear {incomplete.length === 1 ? "it" : "them"}.
+        </p>
+      )}
       <p className="text-xs text-muted-foreground">
         Dates and times use your device’s timezone. Executions matching an open position on{" "}
         {symbol || "the symbol"} are stitched into round trips automatically (

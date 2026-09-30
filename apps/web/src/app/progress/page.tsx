@@ -11,6 +11,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ReviewExport } from "@/components/review-export";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useApi, postJson } from "@/lib/use-api";
 import { scheduledRules, progressScore, type Routine, type RoutineCheck } from "@/lib/progress";
 const STAGES = ["Before trading", "During trading", "After trading"];
@@ -59,6 +60,17 @@ function Progress() {
       setBusy(false);
     }
   }
+  // Loading: not the empty "no routines" states, which would read as your answer.
+  if (!data && !error)
+    return (
+      <div>
+        <FilterBar title="Progress" />
+        <div className="space-y-4 p-4">
+          <Skeleton className="h-40" />
+          <Skeleton className="h-64" />
+        </div>
+      </div>
+    );
   return (
     <div>
       <FilterBar

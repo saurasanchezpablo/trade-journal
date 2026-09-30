@@ -6,6 +6,7 @@ import { SimilarPast } from "@/components/note-search";
 import { ExternalOpinions } from "@/components/external-opinions";
 import { analysesUsedMarkdown } from "@/components/ai-charts-option";
 import { DayAnalyses } from "@/components/day-analyses";
+import { formatTimestamp } from "@/lib/timezone";
 import { dayKeyOf } from "@luxalgo/journal-core";
 
 import Link from "next/link";
@@ -152,7 +153,7 @@ function JournalDay({ date }: { date: string }) {
               <CardContent>
                 <EquityArea
                   data={data.intraday.map((p) => ({
-                    t: p.t.slice(11, 16),
+                    t: formatTimestamp(p.t, timeZone).slice(11, 16),
                     cumNetPnl: p.cumNetPnl,
                   }))}
                   height={200}
