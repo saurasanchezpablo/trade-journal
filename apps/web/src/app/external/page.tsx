@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useId, useRef, useState } from "react";
 import { ExternalLink, Plus, RefreshCw, Sparkles, Trash2 } from "lucide-react";
 import { dayKeyOf } from "@luxalgo/journal-core";
 import type { ExternalSummary } from "@/lib/external-summary";
@@ -104,17 +104,20 @@ function ExternalAnalysis() {
     return () => clearInterval(timer);
   }, [working, refresh]);
 
+  /** Run a change, report it, and reload; true when it worked. */
   const act = async (label: string, run: () => Promise<unknown>, done?: string) => {
     setBusy(label);
     setMessage(null);
     try {
       await run();
       if (done) setMessage({ text: done, error: false });
+      return true;
     } catch (cause) {
       setMessage({
         text: cause instanceof Error ? cause.message : "It did not work.",
         error: true,
       });
+      return false;
     } finally {
       setBusy(null);
       refresh();
@@ -273,7 +276,7 @@ function ExternalAnalysis() {
                     {c.checkError
                       ? `Last check failed: ${c.checkError}`
                       : c.checkedAt
-                        ? `Checked ${new Date(c.checkedAt).toLocaleString()}`
+                        ? `Checked ${new Date(c.checkedAt).toLocaleString(undefined, { timeZone })}`
                         : "Not checked yet"}
                   </p>
                 </li>
@@ -290,13 +293,12 @@ function ExternalAnalysis() {
               <>
                 <label className="flex flex-wrap items-center gap-2">
                   Check every day at
-                  <input
+                  <SettingInput
                     type="time"
-                    aria-label="Daily check time"
+                    label="Daily check time"
                     value={data.settings.checkTime}
-                    onChange={(e) =>
-                      e.target.value && void saveSettings({ checkTime: e.target.value })
-                    }
+                    read={readTime}
+                    onCommit={(checkTime) => saveSettings({ checkTime })}
                     className="h-8 rounded-md border bg-background px-2"
                   />
                   <span className="text-xs text-muted-foreground">({timeZone})</span>
@@ -316,29 +318,25 @@ function ExternalAnalysis() {
                 </label>
                 <label className="flex flex-wrap items-center gap-2">
                   Summarise videos up to
-                  <input
+                  <SettingInput
                     type="number"
                     min={1}
                     max={30}
-                    aria-label="Maximum age in days"
+                    label="Maximum age in days"
                     value={data.settings.maxAgeDays}
-                    onChange={(e) =>
-                      Number(e.target.value) >= 1 &&
-                      void saveSettings({ maxAgeDays: Number(e.target.value) })
-                    }
+                    read={wholeNumber(1, 30)}
+                    onCommit={(maxAgeDays) => saveSettings({ maxAgeDays })}
                     className="h-8 w-16 rounded-md border bg-background px-2"
                   />
                   days old, skipping those under
-                  <input
+                  <SettingInput
                     type="number"
                     min={0}
                     max={60}
-                    aria-label="Minimum length in minutes"
+                    label="Minimum length in minutes"
                     value={data.settings.minMinutes}
-                    onChange={(e) =>
-                      Number(e.target.value) >= 0 &&
-                      void saveSettings({ minMinutes: Number(e.target.value) })
-                    }
+                    read={wholeNumber(0, 60)}
+                    onCommit={(minMinutes) => saveSettings({ minMinutes })}
                     className="h-8 w-16 rounded-md border bg-background px-2"
                   />
                   minutes
@@ -417,6 +415,96 @@ function ExternalAnalysis() {
   );
 }
 
+const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
+type Read<T> = (text: string) => { value: T } | { problem: string };
+const readTime: Read<string> = (text) =>
+  TIME.test(text.trim()) ? { value: text.trim() } : { problem: "Enter a time, like 08:00." };
+const wholeNumber =
+  (min: number, max: number): Read<number> =>
+  (text) => {
+    const value = Number(text.trim());
+    return text.trim() !== "" && Number.isInteger(value) && value >= min && value <= max
+      ? { value }
+      : { problem: `Enter a whole number from ${min} to ${max}.` };
+  };
+
+/**
+ * A daily check setting typed as a draft and saved when you leave the field or press Enter,
+ * so each keystroke is not a save (a slow save would put the old value back under your
+ * cursor). Text that is not a valid value stays in the field with what to type; Escape
+ * puts the saved value back.
+ */
+function SettingInput<T extends string | number>({
+  label,
+  value,
+  read,
+  onCommit,
+  ...input
+}: {
+  label: string;
+  value: T;
+  read: Read<T>;
+  onCommit: (value: T) => Promise<boolean>;
+  type: "time" | "number";
+  min?: number;
+  max?: number;
+  className: string;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  // A saved draft stays on screen until the page reloads the setting, so the old value never
+  // flashes back: `from` is the value it replaces.
+  const [saving, setSaving] = useState<{ from: T } | null>(null);
+  if (saving && saving.from !== value) {
+    setSaving(null);
+    setDraft(null);
+  }
+  const id = useId();
+  const commit = async () => {
+    if (draft === null || saving) return;
+    const result = read(draft);
+    if ("problem" in result) return setProblem(result.problem);
+    setProblem(null);
+    if (result.value === value) return setDraft(null);
+    setSaving({ from: value });
+    if (!(await onCommit(result.value))) {
+      // The page says why; the field shows what is saved.
+      setSaving(null);
+      setDraft(null);
+    }
+  };
+  return (
+    <>
+      <input
+        {...input}
+        aria-label={label}
+        aria-invalid={problem ? true : undefined}
+        aria-describedby={problem ? id : undefined}
+        value={draft ?? String(value)}
+        onChange={(e) => {
+          setDraft(e.target.value);
+          setProblem(null);
+        }}
+        onBlur={() => void commit()}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            void commit();
+          } else if (e.key === "Escape" && draft !== null) {
+            setDraft(null);
+            setProblem(null);
+          }
+        }}
+      />
+      {problem && (
+        <span id={id} role="alert" className="basis-full text-xs text-destructive">
+          {label}: {problem}
+        </span>
+      )}
+    </>
+  );
+}
+
 function VideoCard({
   video,
   timeZone,
@@ -433,7 +521,9 @@ function VideoCard({
   // Follows the page (the newest summary opens once it is ready) until you open or close it.
   const [chosen, setChosen] = useState<boolean | null>(null);
   const open = chosen ?? initiallyOpen;
-  const [day, setDay] = useState(() => dayKeyOf(video.publishedAt, timeZone));
+  // The publishing day in the journal's time zone (which loads after the page) until you pick one.
+  const [pickedDay, setDay] = useState<string | null>(null);
+  const day = pickedDay ?? dayKeyOf(video.publishedAt, timeZone);
   const [pasting, setPasting] = useState(false);
   const [transcript, setTranscript] = useState("");
   const [note, setNote] = useState<{ text: string; error: boolean } | null>(null);
@@ -494,7 +584,7 @@ function VideoCard({
             <p className="text-xs text-muted-foreground">
               {video.detail}
               {video.status === "waiting" && video.nextAttemptAt
-                ? ` Next try ${new Date(video.nextAttemptAt).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}.`
+                ? ` Next try ${new Date(video.nextAttemptAt).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", timeZone })}.`
                 : ""}
             </p>
           )}
