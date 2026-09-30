@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Sparkles } from "lucide-react";
 import { postJson } from "@/lib/use-api";
+import { acquireJson } from "@/lib/api-request";
 import { formatTimestamp } from "@/lib/timezone";
 import { Button } from "./ui/button";
 import { AiNotice } from "./ai-notice";
@@ -36,6 +37,58 @@ export const wholePatch = (s: LabelSuggestion): LabelPatch => ({
   ...(s.mistakes.length ? { mistakes: [...s.currentMistakes, ...s.mistakes] } : {}),
   ...(s.rating !== null && s.rating !== s.currentRating ? { rating: s.rating } : {}),
 });
+
+const labelList = (json: unknown): string[] => {
+  if (typeof json !== "string") return [];
+  try {
+    const parsed: unknown = JSON.parse(json);
+    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+};
+
+/** The trade's tags and mistakes as saved now, not as they were when the AI answered. */
+async function savedLabels(key: string): Promise<{ tags: string[]; mistakes: string[] }> {
+  const read = acquireJson<{ trade: { tagsJson?: unknown; mistakesJson?: unknown } }>(
+    `/api/trades/${encodeURIComponent(key)}`,
+    { fresh: true },
+  );
+  try {
+    const { trade } = await read.promise;
+    return { tags: labelList(trade.tagsJson), mistakes: labelList(trade.mistakesJson) };
+  } finally {
+    read.release();
+  }
+}
+
+/**
+ * A patch built from a suggestion, moved onto the labels the trade has now. A patch replaces
+ * the whole list, so it keeps what was added since the suggestion (a bulk tag action, an
+ * edit) and adds only what the suggestion adds.
+ */
+export function rebasePatch(
+  s: Pick<LabelSuggestion, "currentTags" | "currentMistakes">,
+  patch: LabelPatch,
+  saved: { tags: string[]; mistakes: string[] },
+): LabelPatch {
+  const merge = (now: string[], before: string[], wanted: string[]) => [
+    ...new Set([...now, ...wanted.filter((label) => !before.includes(label))]),
+  ];
+  return {
+    ...patch,
+    ...(patch.tags ? { tags: merge(saved.tags, s.currentTags, patch.tags) } : {}),
+    ...(patch.mistakes
+      ? { mistakes: merge(saved.mistakes, s.currentMistakes, patch.mistakes) }
+      : {}),
+  };
+}
+
+const rebased = async (key: string, s: LabelSuggestion, wanted: LabelPatch) =>
+  wanted.tags || wanted.mistakes ? rebasePatch(s, wanted, await savedLabels(key)) : wanted;
+
+const applyFailed = (cause: unknown) =>
+  cause instanceof Error ? cause.message : "Could not apply the labels";
 
 function Chips({
   suggestion,
@@ -114,8 +167,18 @@ export function TradeLabelSuggestions({
       setBusy(false);
     }
   };
-  const apply = async (patch: LabelPatch) => {
-    await onApply(patch);
+  const [applyError, setApplyError] = useState<string | null>(null);
+  const apply = async (wanted: LabelPatch) => {
+    if (!suggestion) return;
+    setApplyError(null);
+    let patch: LabelPatch;
+    try {
+      patch = await rebased(tradeKey, suggestion, wanted);
+      await onApply(patch);
+    } catch (cause) {
+      setApplyError(applyFailed(cause));
+      return;
+    }
     // What was applied is no longer suggested.
     setSuggestion((s) =>
       s
@@ -153,6 +216,11 @@ export function TradeLabelSuggestions({
       {error && (
         <AiNotice error={error} onRetry={() => void ask()} onDismiss={() => setError(null)} />
       )}
+      {applyError && (
+        <p role="alert" className="text-xs text-destructive">
+          {applyError}
+        </p>
+      )}
       {suggestion && <Chips suggestion={suggestion} onApply={(p) => void apply(p)} />}
     </div>
   );
@@ -182,17 +250,25 @@ export function BulkLabelSuggestions({
       setBusy(false);
     }
   };
-  const patch = async (s: LabelSuggestion, body: LabelPatch) => {
+  const [applyError, setApplyError] = useState<string | null>(null);
+  const send = async (s: LabelSuggestion, wanted: LabelPatch) => {
+    const body = await rebased(s.key, s, wanted);
     await postJson(`/api/trades/${encodeURIComponent(s.key)}`, body, "PATCH");
     setList((current) => current?.filter((x) => x.key !== s.key) ?? null);
-    onChanged();
   };
-  const applyAll = async () => {
-    for (const s of list ?? []) {
-      const body = wholePatch(s);
-      if (Object.keys(body).length) await patch(s, body);
+  /** Apply one trade's labels, or every trade's in turn, then reload the table. */
+  const patch = async (...items: [LabelSuggestion, LabelPatch][]) => {
+    setApplyError(null);
+    try {
+      for (const [s, body] of items) if (Object.keys(body).length) await send(s, body);
+    } catch (cause) {
+      setApplyError(applyFailed(cause));
+    } finally {
+      onChanged();
     }
   };
+  const applyAll = () =>
+    patch(...(list ?? []).map((s) => [s, wholePatch(s)] as [LabelSuggestion, LabelPatch]));
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-2">
@@ -216,6 +292,11 @@ export function BulkLabelSuggestions({
       {error && (
         <AiNotice error={error} onRetry={() => void ask()} onDismiss={() => setError(null)} />
       )}
+      {applyError && (
+        <p role="alert" className="text-xs text-destructive">
+          {applyError}
+        </p>
+      )}
       {list && (
         <ul className="divide-y rounded-md border" aria-label="Label suggestions">
           {list.map((s) => (
@@ -232,13 +313,13 @@ export function BulkLabelSuggestions({
                     type="button"
                     size="sm"
                     variant="ghost"
-                    onClick={() => void patch(s, wholePatch(s))}
+                    onClick={() => void patch([s, wholePatch(s)])}
                   >
                     Apply
                   </Button>
                 )}
               </div>
-              <Chips suggestion={s} onApply={(body) => void patch(s, body)} />
+              <Chips suggestion={s} onApply={(body) => void patch([s, body])} />
             </li>
           ))}
         </ul>

@@ -163,6 +163,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - Background alerts: switching on a 26th analysis is refused with a message instead of silently stopping the oldest watch while the chart still says it is watched; an analysis deleted just before one of its alerts fires no longer leaves an unhandled error
 - AI chat: external opinions are handed to the AI as untrusted third-party text, and the chat is told never to follow instructions in them or put images and outside links in its answers; asking about one instrument finds its opinions even when more than 30 newer videos discuss others
 - Inserting a chart analysis into a day note no longer drops what was typed or added (a recap, a voice memo) while the day's snapshot was being pinned
+- Applying suggested labels (one trade or **Apply all suggestions** on Trades) no longer removes tags and mistakes added to the trade after the AI answered, and a failed save says so
 
 ## [0.1.0] - 2026-09-03
 
