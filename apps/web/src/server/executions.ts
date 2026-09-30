@@ -6,6 +6,7 @@ import { rebuildAccount } from "./rebuild";
 import { getJournalDefaults } from "./settings";
 import { defaultFee } from "@/lib/journal-defaults";
 import { requireValue } from "./api";
+import { deleteTradeReferences } from "./trade-references";
 
 export interface InsertResult {
   inserted: number;
@@ -227,21 +228,57 @@ export const insertExecutions = (
   return { inserted, duplicates, skipped, skippedReasons };
 };
 
+/**
+ * Delete fills and rebuild their account. Trades that no longer exist afterwards take
+ * their rule checks, plan links, files and notebook anchors with them.
+ */
 export const deleteExecutionsForTrades = (accountId: string, executionIds: string[]): void => {
   if (executionIds.length === 0) return;
-  db.delete(executions)
-    .where(and(eq(executions.accountId, accountId), inArray(executions.id, executionIds)))
-    .run();
-  rebuildAccount(accountId);
+  db.transaction((tx) => {
+    const keysOf = () =>
+      tx
+        .select({ key: trades.key })
+        .from(trades)
+        .where(eq(trades.accountId, accountId))
+        .all()
+        .map((row) => row.key);
+    const before = keysOf();
+    for (let i = 0; i < executionIds.length; i += 500)
+      tx.delete(executions)
+        .where(
+          and(
+            eq(executions.accountId, accountId),
+            inArray(executions.id, executionIds.slice(i, i + 500)),
+          ),
+        )
+        .run();
+    rebuildAccount(accountId);
+    const after = new Set(keysOf());
+    deleteTradeReferences(before.filter((key) => !after.has(key)));
+  });
 };
 
-export const listExecutions = (accountId: string, ids?: string[]) => {
-  if (ids && ids.length > 0) {
-    return db
-      .select()
-      .from(executions)
-      .where(and(eq(executions.accountId, accountId), inArray(executions.id, ids)))
-      .all();
-  }
-  return db.select().from(executions).where(eq(executions.accountId, accountId)).all();
+/**
+ * An account's fills: all of them when `ids` is left out, only those listed otherwise (an
+ * empty list is no fills, never the whole account).
+ */
+export const listExecutions = (accountId: string, ids?: readonly string[]) => {
+  if (ids === undefined)
+    return db.select().from(executions).where(eq(executions.accountId, accountId)).all();
+  const unique = [...new Set(ids)];
+  const rows: (typeof executions.$inferSelect)[] = [];
+  for (let i = 0; i < unique.length; i += 500)
+    rows.push(
+      ...db
+        .select()
+        .from(executions)
+        .where(
+          and(
+            eq(executions.accountId, accountId),
+            inArray(executions.id, unique.slice(i, i + 500)),
+          ),
+        )
+        .all(),
+    );
+  return rows;
 };

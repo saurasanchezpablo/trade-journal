@@ -1,49 +1,38 @@
 import { eq } from "drizzle-orm";
-import { accounts, db, executions, trades } from "@/db";
-import { bad, handler, ok } from "@/server/api";
+import { accounts, db } from "@/db";
+import { bad, handler, ok, requireValue } from "@/server/api";
+import { readAccountFields } from "@/server/account-fields";
+import { clearAccountData } from "@/server/account-data";
 import { rebuildAccount } from "@/server/rebuild";
 
 type Params = { params: Promise<{ id: string }> };
-
-interface PatchBody {
-  name?: string;
-  broker?: string;
-  currency?: string;
-  initialBalance?: number;
-  profitCalcMethod?: "fifo" | "lifo" | "wavg";
-  autoSync?: boolean;
-}
 
 export const PATCH = handler(async (request: Request, { params }: Params) => {
   const { id } = await params;
   const account = db.select().from(accounts).where(eq(accounts.id, id)).get();
   if (!account) return bad("Account not found", 404);
 
-  const body = (await request.json()) as PatchBody;
-  const patch: Partial<typeof accounts.$inferInsert> = {};
-  if (body.name !== undefined) patch.name = body.name;
-  if (body.broker !== undefined) patch.broker = body.broker;
-  if (body.currency !== undefined) patch.currency = body.currency;
-  if (body.initialBalance !== undefined) patch.initialBalance = body.initialBalance;
-  if (body.autoSync !== undefined) patch.autoSync = body.autoSync;
-  if (body.profitCalcMethod !== undefined) patch.profitCalcMethod = body.profitCalcMethod;
+  const body = (await request.json()) as unknown;
+  requireValue(
+    body && typeof body === "object" && !Array.isArray(body),
+    "Enter valid account settings.",
+  );
+  const patch = readAccountFields(body as Record<string, unknown>);
 
-  if (Object.keys(patch).length > 0) {
-    db.update(accounts).set(patch).where(eq(accounts.id, id)).run();
-  }
-  // A new profit-calc method changes per-exit attribution — recompute.
-  if (body.profitCalcMethod && body.profitCalcMethod !== account.profitCalcMethod) {
-    rebuildAccount(id);
-  }
+  db.transaction(() => {
+    if (Object.keys(patch).length > 0) {
+      db.update(accounts).set(patch).where(eq(accounts.id, id)).run();
+    }
+    // A new profit-calc method changes per-exit attribution, so recompute.
+    if (patch.profitCalcMethod && patch.profitCalcMethod !== account.profitCalcMethod) {
+      rebuildAccount(id);
+    }
+  });
   return ok({ updated: true });
 });
 
 export const DELETE = handler(async (_request: Request, { params }: Params) => {
   const { id } = await params;
-  db.transaction((tx) => {
-    tx.delete(trades).where(eq(trades.accountId, id)).run();
-    tx.delete(executions).where(eq(executions.accountId, id)).run();
-    tx.delete(accounts).where(eq(accounts.id, id)).run();
-  });
+  clearAccountData(id, { deleteAccount: true });
   return ok({ deleted: true });
 });

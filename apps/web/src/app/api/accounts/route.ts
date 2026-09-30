@@ -1,8 +1,10 @@
 import { asc, eq } from "drizzle-orm";
 import { accounts, db } from "@/db";
-import { bad, handler, ok } from "@/server/api";
+import { bad, handler, ok, requireValue } from "@/server/api";
+import { ACCOUNT_KINDS, readAccountFields } from "@/server/account-fields";
 import { encryptJson } from "@/server/crypto";
 import { newId, nowIso } from "@/server/ids";
+import { getTimeZone } from "@/server/settings";
 import { syncAccount } from "@/server/sync";
 
 export const GET = handler((request: Request) => {
@@ -22,6 +24,7 @@ export const GET = handler((request: Request) => {
   }
   const rows = db.select().from(accounts).orderBy(asc(accounts.createdAt)).all();
   return ok({
+    timeZone: getTimeZone(),
     accounts: rows.map(({ credentialsEnc, ...safe }) => ({
       ...safe,
       connected: credentialsEnc !== null,
@@ -30,43 +33,51 @@ export const GET = handler((request: Request) => {
   });
 });
 
-interface CreateBody {
-  name?: string;
-  kind?: "sync" | "import" | "manual";
-  broker?: string;
-  currency?: string;
-  initialBalance?: number;
-  profitCalcMethod?: "fifo" | "lifo" | "wavg";
-  credentials?: Record<string, string>;
-  autoSync?: boolean;
-}
-
 export const POST = handler(async (request: Request) => {
-  const body = (await request.json()) as CreateBody;
-  if (!body.name || !body.kind) return bad("name and kind are required");
-  if (body.kind === "sync" && (!body.broker || !body.credentials)) {
-    return bad("sync accounts need a broker and credentials");
+  const raw = (await request.json()) as unknown;
+  requireValue(
+    raw && typeof raw === "object" && !Array.isArray(raw),
+    "Enter valid account details.",
+  );
+  const body = raw as Record<string, unknown>;
+  requireValue(
+    ACCOUNT_KINDS.includes(body.kind as (typeof ACCOUNT_KINDS)[number]),
+    "name and kind are required",
+  );
+  requireValue(body.name !== undefined, "name and kind are required");
+  const kind = body.kind as (typeof ACCOUNT_KINDS)[number];
+  const fields = readAccountFields(body);
+  const credentials = body.credentials;
+  if (kind === "sync") {
+    requireValue(
+      fields.broker &&
+        credentials &&
+        typeof credentials === "object" &&
+        !Array.isArray(credentials) &&
+        Object.values(credentials).every((value) => typeof value === "string"),
+      "sync accounts need a broker and credentials",
+    );
   }
 
   const id = newId();
   db.insert(accounts)
     .values({
       id,
-      name: body.name,
-      broker: body.broker ?? "",
-      kind: body.kind,
-      currency: body.currency ?? "USD",
-      initialBalance: body.initialBalance ?? 0,
-      profitCalcMethod: body.profitCalcMethod ?? "fifo",
-      credentialsEnc: body.kind === "sync" ? encryptJson(body.credentials) : null,
-      autoSync: body.autoSync ?? body.kind === "sync",
+      name: fields.name!,
+      broker: fields.broker ?? "",
+      kind,
+      currency: fields.currency ?? "USD",
+      initialBalance: fields.initialBalance ?? 0,
+      profitCalcMethod: fields.profitCalcMethod ?? "fifo",
+      credentialsEnc: kind === "sync" ? encryptJson(credentials) : null,
+      autoSync: fields.autoSync ?? kind === "sync",
       createdAt: nowIso(),
     })
     .run();
 
   // First sync happens right away so the account isn't born empty.
   let sync = null;
-  if (body.kind === "sync") {
+  if (kind === "sync") {
     try {
       sync = await syncAccount(id);
     } catch (error) {
