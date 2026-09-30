@@ -14,7 +14,7 @@ import {
   type ColumnDef,
 } from "@tanstack/react-table";
 import { ArrowUpDown, Check, Columns3, Download, Tag, Trash2 } from "lucide-react";
-import { dayKeyOf, type TradeMetrics } from "@luxalgo/journal-core";
+import { dayKeyOf, returnOnNotional, type TradeMetrics } from "@luxalgo/journal-core";
 import { FilterBar, useFilters } from "@/components/filter-bar";
 import { Pnl } from "@/components/pnl";
 import { MonetaryValue } from "@/components/privacy";
@@ -49,6 +49,7 @@ interface TradeRow {
   tags: string[];
   mistakes: string[];
   reviewed: boolean;
+  contractMultiplier: number | null;
 }
 
 const features = tableFeatures({
@@ -79,6 +80,8 @@ function Trades() {
   const router = useRouter();
   const timeZone = data?.timeZone ?? "UTC";
   const [tagInput, setTagInput] = useState("");
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkError, setBulkError] = useState("");
   const [showColumns, setShowColumns] = useState(false);
   const [page, setPage] = useState(0);
   const pageSize = 50;
@@ -127,7 +130,14 @@ function Trades() {
         header: "Symbol",
         cell: ({ row, getValue }) => (
           <span className="flex items-center gap-2 font-medium">
-            {getValue<string>()}
+            {/* A real link, so keyboard users and new tabs reach the trade too. */}
+            <Link
+              href={`/trades/${encodeURIComponent(row.original.key)}?${query}`}
+              onClick={(event) => event.stopPropagation()}
+              className="hover:underline focus-visible:underline"
+            >
+              {getValue<string>()}
+            </Link>
             <span className="text-xs text-muted-foreground">{row.original.direction}</span>
           </span>
         ),
@@ -182,7 +192,10 @@ function Trades() {
       {
         id: "roi",
         accessorFn: (row) =>
-          row.avgEntry * row.quantity > 0 ? row.netPnl / (row.avgEntry * row.quantity) : 0,
+          returnOnNotional({
+            ...row,
+            contractMultiplier: row.contractMultiplier ?? undefined,
+          }) ?? 0,
         header: "Net ROI",
         cell: ({ getValue }) => <span className="tnum">{fmtPercent(getValue<number>(), 2)}</span>,
       },
@@ -252,7 +265,7 @@ function Trades() {
           ),
       },
     ],
-    [timeZone],
+    [timeZone, query],
   );
 
   const table = useTable({
@@ -271,10 +284,22 @@ function Trades() {
   const pageCount = Math.max(1, Math.ceil(sortedRows.length / pageSize));
   const currentPage = Math.min(page, pageCount - 1);
   const visibleRows = sortedRows.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
-  const bulk = async (action: string, extra?: Record<string, unknown>) => {
-    await postJson("/api/trades/bulk", { keys: selectedKeys, action, ...extra });
-    table.resetRowSelection();
-    refresh();
+  /** Run a bulk action once at a time; true when it saved. */
+  const bulk = async (action: string, extra?: Record<string, unknown>): Promise<boolean> => {
+    if (bulkBusy) return false;
+    setBulkBusy(true);
+    setBulkError("");
+    try {
+      await postJson("/api/trades/bulk", { keys: selectedKeys, action, ...extra });
+      table.resetRowSelection();
+      refresh();
+      return true;
+    } catch (cause) {
+      setBulkError(cause instanceof Error ? cause.message : "The action failed.");
+      return false;
+    } finally {
+      setBulkBusy(false);
+    }
   };
 
   const m = data?.metrics;
@@ -284,12 +309,12 @@ function Trades() {
         title="Trades"
         actions={
           <div className="flex items-center gap-2">
-            <a href={`/api/export?format=csv&${query}`} download>
-              <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" asChild>
+              <a href={`/api/export?format=csv&${query}`} download>
                 <Download />
                 CSV
-              </Button>
-            </a>
+              </a>
+            </Button>
             <Button variant="outline" size="sm" onClick={() => setShowColumns((value) => !value)}>
               <Columns3 />
               Columns
@@ -369,15 +394,26 @@ function Trades() {
           <Card>
             <CardContent className="flex flex-wrap items-center gap-2 py-2">
               <span className="text-sm text-muted-foreground">{selectedKeys.length} selected</span>
-              <Button variant="outline" size="sm" onClick={() => bulk("review")}>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={bulkBusy}
+                onClick={() => void bulk("review")}
+              >
                 <Check />
                 Mark reviewed
               </Button>
-              <Button variant="outline" size="sm" onClick={() => bulk("unreview")}>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={bulkBusy}
+                onClick={() => void bulk("unreview")}
+              >
                 Unreview
               </Button>
               <div className="flex max-w-full flex-wrap items-center gap-1">
                 <Input
+                  aria-label="Tag to add"
                   value={tagInput}
                   onChange={(event) => setTagInput(event.target.value)}
                   placeholder="tag"
@@ -386,10 +422,9 @@ function Trades() {
                 <Button
                   variant="outline"
                   size="sm"
-                  disabled={!tagInput}
-                  onClick={() => {
-                    void bulk("tag", { tag: tagInput });
-                    setTagInput("");
+                  disabled={!tagInput.trim() || bulkBusy}
+                  onClick={async () => {
+                    if (await bulk("tag", { tag: tagInput.trim() })) setTagInput("");
                   }}
                 >
                   <Tag />
@@ -399,6 +434,7 @@ function Trades() {
               <Button
                 variant="destructive"
                 size="sm"
+                disabled={bulkBusy}
                 onClick={() => {
                   if (
                     confirm(
@@ -411,6 +447,11 @@ function Trades() {
                 <Trash2 />
                 Delete
               </Button>
+              {bulkError && (
+                <p role="alert" className="basis-full text-sm text-destructive">
+                  {bulkError}
+                </p>
+              )}
               <div className="basis-full">
                 <BulkLabelSuggestions
                   key={selectedKeys.join("|")}
