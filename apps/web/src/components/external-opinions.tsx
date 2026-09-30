@@ -5,6 +5,8 @@ import { useState } from "react";
 import { ExternalLink } from "lucide-react";
 import { summaryMarkdown, type ExternalSummary } from "@/lib/external-summary";
 import { useApi } from "@/lib/use-api";
+import { formatTimestamp } from "@/lib/timezone";
+import { useFilters } from "./filter-bar";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { DirectionChip, ExternalSummaryView } from "./external-summary-view";
@@ -36,6 +38,8 @@ export function ExternalOpinions({
   onAdd: (markdown: string) => void;
 }) {
   const { data } = useApi<{ videos: DayVideo[] }>(`/api/external/day?date=${date}`);
+  // Publishing times in the journal's time zone, which also decides "the day before".
+  const { timeZone } = useFilters();
   const [open, setOpen] = useState<string | null>(null);
   const videos = data?.videos ?? [];
   const summarized = videos.filter((v) => v.summary);
@@ -88,10 +92,7 @@ export function ExternalOpinions({
                     </span>
                     <span className="text-xs text-muted-foreground">
                       {v.day === date ? "this day" : "the day before"},{" "}
-                      {new Date(v.publishedAt).toLocaleTimeString(undefined, {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
+                      {formatTimestamp(v.publishedAt, timeZone).slice(11, 16)}
                     </span>
                   </div>
                   {v.summary!.mainScenario && (

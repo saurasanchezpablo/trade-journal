@@ -7,6 +7,8 @@ import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { DayReview } from "./day-review";
 import { postJson, useApi } from "@/lib/use-api";
+import { formatTimestamp } from "@/lib/timezone";
+import { useFilters } from "./filter-bar";
 import {
   analysisEditPath,
   analysisLabel,
@@ -35,6 +37,8 @@ export function DayAnalyses({
   const { data, error, refresh } = useApi<{ snapshots: AnalysisSnapshotSummary[] }>(
     `/api/analysis-snapshots?day=${date}`,
   );
+  // Save times in the journal's time zone, like the day itself.
+  const { timeZone } = useFilters();
   const [problem, setProblem] = useState("");
   const snapshots = data?.snapshots ?? [];
   const remove = async (s: AnalysisSnapshotSummary) => {
@@ -115,10 +119,7 @@ export function DayAnalyses({
                     <span className="shrink-0 text-muted-foreground">
                       {s.drawingCount} drawing{s.drawingCount === 1 ? "" : "s"} ·{" "}
                       {today ? "updated" : "last saved"}{" "}
-                      {new Date(s.updatedAt).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
+                      {formatTimestamp(s.updatedAt, timeZone).slice(11, 16)}
                     </span>
                   </div>
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1">

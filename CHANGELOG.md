@@ -180,6 +180,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - Habits on Reports: when the filtered trades mix currencies, amounts are hidden (as on the calendar) instead of being shown in the first account's currency
 - AI chat: **Try again** after a failed period review runs the review again (it sent the button's label as a chat question), clicking two saved chats quickly shows the one clicked last, a chat that could not be deleted says so, saved chat times show in the journal's time zone, and privacy mode keeps chat titles out of the delete buttons' screen reader names
 - Monthly and quarterly reviews: goals suggested for one period are no longer added under another after switching, **Try again** after a failed suggestion asks again (it only closed the message), and a goal that could not be removed says so
+- A journal day shows when its chart analyses were saved and when external opinions were published in the journal's time zone, not the browser's
 
 ## [0.1.0] - 2026-09-03
 
