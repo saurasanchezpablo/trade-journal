@@ -167,6 +167,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - A drafted day plan on Charts stays with its analysis: opening another analysis drops it, and a draft that arrives after the switch is not offered for the new one
 - Levels read from a screenshot are no longer added to a different chart after switching symbol or analysis
 - A trade's AI rule check is dropped when the trade moves to another playbook, and **Apply N suggestions** counts only that playbook's rules (applying verdicts on the old playbook's rules failed)
+- Folding the "levels not reached" list no longer empties a journal day's Day review, and privacy mode hides the entry price of the day's trades there (also from the plan link's screen reader name)
 
 ## [0.1.0] - 2026-09-03
 

@@ -13,6 +13,7 @@ import {
   type ScenarioReview,
 } from "@/lib/analysis-plan";
 import { Pnl } from "./pnl";
+import { MonetaryValue } from "./privacy";
 import { contextTags } from "@/lib/day-context";
 import type { DayPriceAction } from "@/server/day-price-action";
 import type { DayTrade } from "@/server/trade-links";
@@ -77,7 +78,8 @@ export function DayReview({ analysisId, date }: { analysisId: string; date: stri
     );
 
   return (
-    <details onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
+    // currentTarget: React passes on the toggle of the nested "levels not reached" list too.
+    <details onToggle={(e) => setOpen(e.currentTarget.open)}>
       <summary className="cursor-pointer select-none text-muted-foreground hover:text-foreground">
         Day review
         {action
@@ -272,17 +274,17 @@ function TradesSection({
         {trades.map((t) => {
           const mine = t.link?.analysisId === analysisId;
           const elsewhere = t.link && !mine;
+          const time = formatTimestamp(t.openedAt, timeZone).slice(11, 16);
           return (
             <li key={t.key} className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <span className="tnum">
-                {t.direction.toUpperCase()} {t.symbol} @ {fmtPrice(t.avgEntry)} ·{" "}
-                <Pnl value={t.netPnl} />{" "}
-                <span className="text-muted-foreground">
-                  {formatTimestamp(t.openedAt, timeZone).slice(11, 16)}
-                </span>
+                {t.direction.toUpperCase()} {t.symbol} @{" "}
+                <MonetaryValue>{fmtPrice(t.avgEntry)}</MonetaryValue> · <Pnl value={t.netPnl} />{" "}
+                <span className="text-muted-foreground">{time}</span>
               </span>
               <select
-                aria-label={`Plan link for the ${t.direction} trade at ${t.avgEntry}`}
+                // Named by its time, not its price: privacy mode hides trade prices.
+                aria-label={`Plan link for the ${t.direction} ${t.symbol} trade opened at ${time}`}
                 value={mine ? (t.link?.scenarioId ?? "plan") : ""}
                 onChange={(e) =>
                   e.target.value === ""
