@@ -11,13 +11,13 @@ until you apply it. Requests go only to the AI provider chosen in Settings.
 
 `detectBehaviours` in `packages/core` measures each habit against the rest of your trades:
 
-| Habit                           | Which trades                                                             |
-| ------------------------------- | ------------------------------------------------------------------------ |
-| Revenge trades                  | Opened within 15 minutes of a losing trade closing, on the same account. |
-| Trading on after losses         | Taken after two losses in a row on the same day (journal timezone).      |
-| Sizing up after a loss          | Larger than the previous trade on the same symbol, when that one lost.   |
-| Size creeping up                | The latest third of a symbol's trades is 25% or more larger than before. |
-| Results fading later in the day | A day's fourth trade on, against its first three.                        |
+| Habit                           | Which trades                                                              |
+| ------------------------------- | ------------------------------------------------------------------------- |
+| Revenge trades                  | Opened within 15 minutes of a losing trade closing, on the same account.  |
+| Trading on after losses         | Taken after two losses in a row on the same day (journal timezone).       |
+| Sizing up after a loss          | Larger than the last trade on the symbol closed before it opened, a loss. |
+| Size creeping up                | The latest third of a symbol's trades is 25% or more larger than before.  |
+| Results fading later in the day | A day's fourth trade on, against its first three.                         |
 
 A habit is flagged ("costing you") only with at least five trades on each side and a worse
 average result; its cost is what those trades lost against your usual result. Others read

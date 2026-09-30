@@ -59,10 +59,13 @@ export interface BehaviourReport {
   patterns: BehaviourPattern[];
 }
 
+/** Timestamps may carry different offsets, so they are ordered by instant, never as text. */
+const byInstant = (a: string, b: string) => Date.parse(a) - Date.parse(b);
+
 const closedOnly = (trades: AnnotatedTrade[]) =>
   trades
     .filter((t) => t.status !== "open" && t.closedAt)
-    .sort((a, b) => a.openedAt.localeCompare(b.openedAt) || a.key.localeCompare(b.key));
+    .sort((a, b) => byInstant(a.openedAt, b.openedAt) || a.key.localeCompare(b.key));
 
 export function sideStats(trades: AnnotatedTrade[]): SideStats {
   const net = trades.reduce((s, t) => s + t.netPnl, 0);
@@ -102,7 +105,7 @@ function pattern(
     cost: f.avgPnl !== null && b.avgPnl !== null ? (b.avgPnl - f.avgPnl) * f.trades : null,
     examples: flagged
       .slice()
-      .sort((x, y) => y.openedAt.localeCompare(x.openedAt))
+      .sort((x, y) => byInstant(y.openedAt, x.openedAt))
       .slice(0, 5)
       .map((t) => t.key),
   };
@@ -166,7 +169,7 @@ export function afterLossStreak(
       // The losses in a row among trades closed before this one opened.
       const before = list
         .filter((x) => x.key !== t.key && Date.parse(x.closedAt!) <= opened)
-        .sort((a, b) => a.closedAt!.localeCompare(b.closedAt!));
+        .sort((a, b) => byInstant(a.closedAt!, b.closedAt!));
       let run = 0;
       for (let i = before.length - 1; i >= 0 && before[i]!.status === "loss"; i -= 1) run += 1;
       if (run >= streak) flagged.add(t.key);
@@ -227,16 +230,35 @@ export function detectBehaviours(
     ),
   );
 
-  // Sizing up right after a loss, on the same symbol and account.
-  const previous = new Map<string, AnnotatedTrade>();
+  // Sizing up right after a loss, on the same symbol and account: the trade
+  // compared against is the last one that had closed when this one opened.
+  const bySymbolClose = new Map<string, AnnotatedTrade[]>();
+  for (const t of closed) {
+    const key = `${t.accountId}|${t.symbol}`;
+    bySymbolClose.set(key, [...(bySymbolClose.get(key) ?? []), t]);
+  }
+  for (const list of bySymbolClose.values())
+    list.sort((a, b) => byInstant(a.closedAt!, b.closedAt!) || a.key.localeCompare(b.key));
   const upAfterLoss: AnnotatedTrade[] = [];
   const otherNext: AnnotatedTrade[] = [];
   for (const t of closed) {
-    const key = `${t.accountId}|${t.symbol}`;
-    const last = previous.get(key);
+    const list = bySymbolClose.get(`${t.accountId}|${t.symbol}`)!;
+    const opened = Date.parse(t.openedAt);
+    // The last trade closed at or before this one opened (binary search).
+    let lo = 0;
+    let hi = list.length - 1;
+    let at = -1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (Date.parse(list[mid]!.closedAt!) <= opened) {
+        at = mid;
+        lo = mid + 1;
+      } else hi = mid - 1;
+    }
+    if (at >= 0 && list[at]!.key === t.key) at -= 1;
+    const last = at >= 0 ? list[at] : undefined;
     if (last)
       (last.status === "loss" && t.quantity > last.quantity ? upAfterLoss : otherNext).push(t);
-    previous.set(key, t);
   }
   patterns.push(
     pattern(

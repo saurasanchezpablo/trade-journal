@@ -131,6 +131,32 @@ describe("the behaviour report", () => {
     expect(up.flagged).toBe(true);
   });
 
+  it("sizing up counts only a loss that had already closed when the bigger trade opened", () => {
+    // The loss is still open when the bigger trade opens, so it cannot have prompted it.
+    const loss = trade(at(2, 14), -20, { quantity: 1, minutes: 120 });
+    const bigger = trade(at(2, 15), 10, { quantity: 3 });
+    const up = detectBehaviours([loss, bigger]).patterns.find((p) => p.kind === "size-after-loss")!;
+    expect(up.flaggedSide.trades).toBe(0);
+    // Once the loss has closed, the next bigger trade does count.
+    const after = trade(at(2, 17), 10, { quantity: 3 });
+    const later = detectBehaviours([loss, bigger, after]).patterns.find(
+      (p) => p.kind === "size-after-loss",
+    )!;
+    expect(later.examples).toEqual([after.key]);
+  });
+
+  it("orders trades by their moment in time, whatever offset their timestamps carry", () => {
+    // 10:00-05:00 (15:00 UTC) is later than 14:30Z although it sorts first as text.
+    const first = trade("2026-03-02T14:30:00.000Z", 10);
+    const second = trade("2026-03-02T10:00:00.000-05:00", -10, {
+      closedAt: "2026-03-02T10:10:00.000-05:00",
+    });
+    const third = trade("2026-03-02T16:00:00.000Z", 5);
+    expect(dayOrder([second, first, third]).get(second.key)).toBe(2);
+    // The last trade closed before the third one is the loss, so it follows a loss.
+    expect([...afterLossStreak([third, second, first], 1)]).toEqual([third.key]);
+  });
+
   it("ignores open trades", () => {
     const open = { ...trade(at(2, 14), 0), status: "open" as const, closedAt: undefined };
     expect(detectBehaviours([open]).trades).toBe(0);
