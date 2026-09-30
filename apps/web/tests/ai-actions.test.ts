@@ -142,7 +142,7 @@ describe("the playbook check", () => {
     });
     const asked = JSON.stringify(provider.body(0));
     expect(asked).toContain("1. Stop below the opening range");
-    expect(asked).toContain("2026-09-15T15:00:00Z sell 2 @ 90");
+    expect(asked).toContain("2026-09-15T15:00:00.000Z sell 2 @ 90");
     expect(
       db.select().from(tradeRuleChecks).where(eq(tradeRuleChecks.tradeKey, tradeKey())).all(),
     ).toEqual([]);

@@ -237,7 +237,7 @@ describe("searching a source's symbols", () => {
     const ask = (query: string) =>
       symbolsRoute.GET(new Request(`http://journal.test/api/market-data/symbols?${query}`));
     const refused = await ask("provider=bybit&dataset=linear&q=sol");
-    expect(refused.status).toBe(502);
+    expect(refused.status).toBe(400);
     expect((await refused.json()).error).toMatch(/Enable this public market data source/);
     saveConnection("bybit", "enabled");
     const found = await ask("provider=bybit&dataset=linear&q=sol");
