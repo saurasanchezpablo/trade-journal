@@ -67,7 +67,6 @@ export function TradeMarketData({
   type Selection = { provider: string; symbol: string; dataset: string; resolution: Resolution };
   // Candles chosen for you when the page opens (see `server/trade-market-source.ts`).
   const [auto, setAuto] = useState<{ note: string } | { reason: string } | null>(null);
-  const autoStarted = useRef(false);
   const load = async (
     selection: Selection = { provider, symbol, dataset, resolution },
     checked = { available: true },
@@ -111,9 +110,9 @@ export function TradeMarketData({
     }
   };
   // Open with the trade's candles when a source is known or an enabled exchange lists it.
+  // Once per trade: the cleanup aborts the lookup, so React Strict Mode's second mount (in
+  // development) starts it again instead of finding it already spent.
   useEffect(() => {
-    if (autoStarted.current) return;
-    autoStarted.current = true;
     const request = new AbortController();
     fetch(`/api/trades/${encodeURIComponent(trade.key)}/market-source`, { signal: request.signal })
       .then((response) => (response.ok ? response.json() : null))
@@ -162,7 +161,7 @@ export function TradeMarketData({
         // Without an automatic source the page works as before: choose one below.
       });
     return () => request.abort();
-    // Runs once per trade page.
+    // Runs once per trade (the source it finds becomes the selection).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trade.key]);
 
