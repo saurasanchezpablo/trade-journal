@@ -177,6 +177,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - Chart layers: the layer colour swatches in a layer's options menu can be reached with the arrow keys
 - Weekly review: the week ends today in the journal's time zone (it could start from the UTC day before settings loaded), and leaving the page stops a review being written
 - Results by day type: **Refresh** reads the breakdown again (it did nothing), net P&L shows in your accounts' currency instead of always dollars, and is not added across accounts in different currencies
+- Habits on Reports: when the filtered trades mix currencies, amounts are hidden (as on the calendar) instead of being shown in the first account's currency
 
 ## [0.1.0] - 2026-09-03
 

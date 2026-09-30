@@ -16,7 +16,16 @@ interface Payload extends BehaviourReport {
   examples: Record<string, { symbol: string; direction: string; openedAt: string; netPnl: number }>;
 }
 
-function Side({ label, stats, currency }: { label: string; stats: SideStats; currency: string }) {
+/** `currency` is null when the trades mix currencies: their amounts cannot be added. */
+function Side({
+  label,
+  stats,
+  currency,
+}: {
+  label: string;
+  stats: SideStats;
+  currency: string | null;
+}) {
   return (
     <div className="min-w-0">
       <div className="text-xs text-muted-foreground">{label}</div>
@@ -25,7 +34,11 @@ function Side({ label, stats, currency }: { label: string; stats: SideStats; cur
         {stats.winRate === null ? "–" : fmtPercent(stats.winRate, 0)} won
       </div>
       <div className="text-sm">
-        {stats.avgPnl === null ? "–" : <Pnl value={stats.avgPnl} currency={currency} />}{" "}
+        {stats.avgPnl === null || currency === null ? (
+          "–"
+        ) : (
+          <Pnl value={stats.avgPnl} currency={currency} />
+        )}{" "}
         <span className="text-xs text-muted-foreground">a trade</span>
       </div>
     </div>
@@ -46,8 +59,9 @@ export function BehaviourPatterns({ query }: { query: string }) {
       </p>
     );
   if (!data) return <Skeleton className="h-64" />;
-  const currency = data.currencies[0] ?? "USD";
   const mixed = data.currencies.length > 1;
+  // Like the calendar: with several currencies amounts are hidden rather than shown in one.
+  const currency = mixed ? null : (data.currencies[0] ?? "USD");
   return (
     <Card>
       <CardHeader>
@@ -55,7 +69,9 @@ export function BehaviourPatterns({ query }: { query: string }) {
         <p className="text-xs text-muted-foreground">
           {data.trades} closed trades, days in {data.timeZone}. A habit is flagged when it has at
           least five trades on each side and does worse than the rest.
-          {mixed ? " Accounts use different currencies; amounts are not converted." : ""}
+          {mixed
+            ? ` These trades use ${data.currencies.join(", ")}, so amounts are not shown. Select accounts with one currency to see them.`
+            : ""}
         </p>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -70,7 +86,7 @@ export function BehaviourPatterns({ query }: { query: string }) {
                     ? "TOO FEW TRADES"
                     : "NO HARM FOUND"}
               </Badge>
-              {p.flagged && p.cost !== null && p.cost > 0 && (
+              {p.flagged && p.cost !== null && p.cost > 0 && currency !== null && (
                 <span className="text-xs text-muted-foreground">
                   about <Pnl value={-p.cost} currency={currency} /> against your usual result
                 </span>
@@ -107,7 +123,7 @@ export function BehaviourPatterns({ query }: { query: string }) {
                       >
                         {t.symbol} {t.direction}{" "}
                         {formatTimestamp(t.openedAt, data.timeZone).slice(0, 16)}{" "}
-                        <Pnl value={t.netPnl} currency={currency} />
+                        {currency !== null && <Pnl value={t.netPnl} currency={currency} />}
                       </Link>
                     </li>
                   );
