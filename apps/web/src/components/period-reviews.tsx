@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Plus, Sparkles, Trash2 } from "lucide-react";
 import { dayKeyOf } from "@luxalgo/journal-core";
 import {
@@ -80,8 +80,17 @@ export function PeriodReviews({ timeZone }: { timeZone: string }) {
   const [comparator, setComparator] = useState<"atLeast" | "atMost">("atLeast");
   const [target, setTarget] = useState("");
   const [text, setText] = useState("");
+  // Goal changes fail with a plain message; the AI suggestion has its own notice and retry.
   const [error, setError] = useState<string | null>(null);
-  const [suggestions, setSuggestions] = useState<Suggestion[] | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
+  // Suggestions belong to the period they were asked for, and are only offered there.
+  const scope = `${kind}:${period.id}`;
+  const currentScope = useRef(scope);
+  currentScope.current = scope;
+  const [suggested, setSuggested] = useState<{ scope: string; goals: Suggestion[] } | null>(null);
+  const suggestions = suggested?.scope === scope ? suggested.goals : null;
+  const setSuggestions = (update: (goals: Suggestion[]) => Suggestion[]) =>
+    setSuggested((s) => (s ? { ...s, goals: update(s.goals) } : s));
   const [busy, setBusy] = useState(false);
 
   const percent = metric !== "" && GOAL_METRICS[metric].unit === "percent";
@@ -101,22 +110,26 @@ export function PeriodReviews({ timeZone }: { timeZone: string }) {
     }
   };
   const remove = async (id: string) => {
-    setSaved(await postJson<State>("/api/goals", { id, kind, period: period.id }, "DELETE"));
-  };
-  const suggest = async () => {
-    setBusy(true);
     setError(null);
     try {
-      setSuggestions(
-        (
-          await postJson<{ goals: Suggestion[] }>("/api/ai/suggest-goals", {
-            kind,
-            period: period.id,
-          })
-        ).goals,
-      );
+      setSaved(await postJson<State>("/api/goals", { id, kind, period: period.id }, "DELETE"));
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "No suggestions");
+      setError(cause instanceof Error ? cause.message : "Could not remove the goal");
+    }
+  };
+  const suggest = async () => {
+    const asked = scope;
+    setBusy(true);
+    setAiError(null);
+    try {
+      const { goals } = await postJson<{ goals: Suggestion[] }>("/api/ai/suggest-goals", {
+        kind,
+        period: period.id,
+      });
+      if (currentScope.current === asked) setSuggested({ scope: asked, goals });
+    } catch (cause) {
+      if (currentScope.current === asked)
+        setAiError(cause instanceof Error ? cause.message : "No suggestions");
     } finally {
       setBusy(false);
     }
@@ -142,7 +155,7 @@ export function PeriodReviews({ timeZone }: { timeZone: string }) {
             const next = e.target.value as PeriodKind;
             setKind(next);
             setPeriodId(periodOf(next, today).id);
-            setSuggestions(null);
+            setAiError(null);
           }}
           className="h-8 rounded-md border bg-background px-2 text-sm"
         >
@@ -154,7 +167,7 @@ export function PeriodReviews({ timeZone }: { timeZone: string }) {
           value={period.id}
           onChange={(e) => {
             setPeriodId(e.target.value);
-            setSuggestions(null);
+            setAiError(null);
           }}
           className="h-8 rounded-md border bg-background px-2 text-sm"
         >
@@ -327,7 +340,7 @@ export function PeriodReviews({ timeZone }: { timeZone: string }) {
                   variant="ghost"
                   onClick={() =>
                     void add(s).then(
-                      (ok) => ok && setSuggestions((list) => list?.filter((x) => x !== s) ?? null),
+                      (ok) => ok && setSuggestions((list) => list.filter((x) => x !== s)),
                     )
                   }
                 >
@@ -338,7 +351,16 @@ export function PeriodReviews({ timeZone }: { timeZone: string }) {
           </ul>
         )}
         {error && (
-          <AiNotice error={error} onRetry={() => setError(null)} onDismiss={() => setError(null)} />
+          <p role="alert" className="text-xs text-destructive">
+            {error}
+          </p>
+        )}
+        {aiError && (
+          <AiNotice
+            error={aiError}
+            onRetry={() => void suggest()}
+            onDismiss={() => setAiError(null)}
+          />
         )}
       </div>
 
