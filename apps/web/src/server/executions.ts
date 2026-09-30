@@ -50,9 +50,11 @@ export const executionProblem = (row: unknown, source: ExecutionSource): string 
       meta.id.length > 0 &&
       meta.id.length <= 2000 &&
       factsOk(meta));
-  const facts = r.reconstruction;
-  const factsValid = !facts || (source === "import" && typeof facts === "object" && factsOk(facts));
-  const legacy = r.legacy;
+  // Reconstruction facts and earlier readings belong to file imports; other
+  // sources ignore them.
+  const facts = source === "import" ? r.reconstruction : undefined;
+  const factsValid = !facts || (typeof facts === "object" && factsOk(facts));
+  const legacy = source === "import" ? r.legacy : undefined;
   const legacyOk =
     !legacy ||
     (typeof legacy === "object" &&
@@ -156,6 +158,7 @@ export const insertExecutions = (
     for (const row of usable) {
       const id = newId();
       const contentHash = executionHash(row);
+      const metadata = source === "import" ? storedImportMetadata(row) : row.importMetadata;
       const result = tx
         .insert(executions)
         .values({
@@ -165,15 +168,13 @@ export const insertExecutions = (
           side: row.side,
           quantity: row.quantity,
           price: row.price,
-          fee: storedImportMetadata(row)?.preserveFee
+          fee: metadata?.preserveFee
             ? row.fee
             : defaultFee(row.fee, row.quantity, accountId, row.symbol, defaults),
           executedAt: row.executedAt,
           assetClass: row.assetClass ?? null,
           source,
-          importMetadataJson: storedImportMetadata(row)
-            ? JSON.stringify(storedImportMetadata(row))
-            : null,
+          importMetadataJson: metadata ? JSON.stringify(metadata) : null,
           contentHash,
           createdAt,
         })
