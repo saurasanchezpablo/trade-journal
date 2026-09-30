@@ -139,11 +139,12 @@ export const parseHistory = (
         positions.set(symbol, Math.abs(next) < 1e-9 ? 0 : next);
       }
       // Fees are costs and never negative. A net credit (a swap larger than the
-      // commission) is folded into the reported gross so the net P&L is unchanged.
+      // commission) is folded into the reported gross so the net P&L is unchanged:
+      // net = gross - fee, so a negative fee raises the gross by its size.
       let fee = fill.fees ?? 0;
       let reportedGrossPnl = fill.reportedGrossPnl;
       if (fee < 0) {
-        if (reportedGrossPnl !== undefined) reportedGrossPnl += fee;
+        if (reportedGrossPnl !== undefined) reportedGrossPnl -= fee;
         else if (!creditNoted) {
           creditNoted = true;
           warnings.push(

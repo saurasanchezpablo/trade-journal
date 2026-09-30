@@ -159,6 +159,17 @@ describe("simulator history formats extend the journal import path", () => {
     ]);
     expect(roundTrips[0]?.exits.map((e) => e.grossPnl)).toEqual([20, -20]);
   });
+  it("a swap credit on an MT5 exit deal adds to the trade's net P&L", () => {
+    // Commission -2 on each leg, +12 swap and 100 profit on the exit: the balance gains 108.
+    const result =
+      parse(`Time,Deal,Symbol,Type,Direction,Volume,Price,Order,Commission,Fee,Swap,Profit
+2026.01.05 09:00,1,EURUSD,buy,in,1,1.1,101,-2,0,0,0
+2026.01.06 10:00,2,EURUSD,sell,out,1,1.101,102,-2,0,12,100`);
+    expect(result.executions.every((e) => e.fee >= 0)).toBe(true);
+    const [trade] = trips(result);
+    expect(trade?.netPnl).toBeCloseTo(108, 8);
+    expect(trade?.fees).toBe(2);
+  });
   it("does not turn an unmatched MT5 exit into an invented opposite position", () => {
     const lines = DEALS.split("\n");
     const result = parseAuto([lines[0], lines[3]].join("\n"))!;
