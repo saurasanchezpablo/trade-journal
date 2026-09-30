@@ -2437,6 +2437,8 @@ const ChartBoard = memo(function ChartBoard({
                 onReveal={(zone) => chart.current?.showTime(zone.start)}
               />
               <ScreenshotLevels
+                // Levels read for one chart are never offered for the next symbol or analysis.
+                key={board?.key ?? "none"}
                 symbol={board?.symbol ?? ""}
                 disabled={!board || Boolean(viewing)}
                 lastPrice={() => lastClose.current?.close ?? null}

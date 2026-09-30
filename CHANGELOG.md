@@ -165,6 +165,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - Inserting a chart analysis into a day note no longer drops what was typed or added (a recap, a voice memo) while the day's snapshot was being pinned
 - Applying suggested labels (one trade or **Apply all suggestions** on Trades) no longer removes tags and mistakes added to the trade after the AI answered, and a failed save says so
 - A drafted day plan on Charts stays with its analysis: opening another analysis drops it, and a draft that arrives after the switch is not offered for the new one
+- Levels read from a screenshot are no longer added to a different chart after switching symbol or analysis
 
 ## [0.1.0] - 2026-09-03
 
