@@ -5,7 +5,8 @@ import { isDay } from "@/server/ai-scope";
 import { nowIso } from "@/server/ids";
 import { summaryMarkdown } from "@/lib/external-summary";
 import { isVideoId } from "@/lib/youtube";
-import { processVideo } from "@/server/external-analysis/process";
+import { logFailure } from "@/server/background-alerts/log";
+import { processVideo, videoInFlight } from "@/server/external-analysis/process";
 import { getVideo, storedTranscript, updateVideo } from "@/server/external-analysis/store";
 
 type Params = { params: Promise<{ id: string }> };
@@ -22,6 +23,8 @@ export const GET = handler(async (_request: Request, { params }: Params) => {
 /**
  * `summarize`: summarise it now (again, if it was done). `transcript`: summarise from a
  * transcript you paste (a video without captions). Both run in the background; poll GET.
+ * While the video is being summarised both are refused (409): the run under way would
+ * overwrite what they save.
  * `add-to-day`: append the summary to a journal day's note as an "External opinion"
  * section (once: a note that already links the video is left as it is).
  */
@@ -56,13 +59,19 @@ export const POST = handler(async (request: Request, { params }: Params) => {
         body.text.length <= MAX_TRANSCRIPT,
       "Paste the transcript (at least a few sentences).",
     );
+  }
+  if (videoInFlight(id))
+    return bad("This video is being summarised right now. Try again when it is done.", 409);
+  if (body.action === "transcript")
     updateVideo(id, {
       source: "pasted",
       transcript: (body.text as string).trim(),
       status: "new",
       detail: "",
     });
-  } else updateVideo(id, { status: "new", detail: "" });
-  void processVideo(id, { force: true });
+  else updateVideo(id, { status: "new", detail: "" });
+  void processVideo(id, { force: true }).catch((error: unknown) =>
+    logFailure(`summarising video ${id}`, error),
+  );
   return ok({ video: getVideo(id) });
 });

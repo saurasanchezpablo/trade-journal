@@ -1,5 +1,6 @@
 import { bad, handler, ok, requireValue } from "@/server/api";
 import { YouTubeError, resolveChannel } from "@/server/external-analysis/youtube";
+import { logFailure } from "@/server/background-alerts/log";
 import { checkChannel, runCheck } from "@/server/external-analysis/process";
 import {
   MAX_CHANNELS,
@@ -34,7 +35,9 @@ export const POST = handler(async (request: Request) => {
   if (!known) {
     await checkChannel(channel);
     // Summaries take a while; the page shows them as they arrive.
-    void runCheck({ feeds: false });
+    void runCheck({ feeds: false }).catch((error: unknown) =>
+      logFailure("summarising a new channel's video", error),
+    );
   }
   return ok({
     channel: getChannel(channel.id),

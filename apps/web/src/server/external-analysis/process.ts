@@ -19,8 +19,10 @@ import { summarizeByWatching, summarizeTranscript } from "./summarize";
 
 /**
  * The work behind External analysis: read each channel's feed, note new videos, and turn each
- * into a summary. A video without captions yet (automatic captions can take hours) is tried
- * again every two hours for two days; a failed AI call is retried once an hour later.
+ * into a summary. A video without captions yet (automatic captions can take hours), or a
+ * stream that has not aired yet, is tried again every two hours for two days; a failed AI
+ * call is retried once an hour later. `attempts` counts failed summaries in a row, so time
+ * spent waiting for captions never uses up that retry.
  */
 
 const HOUR = 3_600_000;
@@ -52,8 +54,8 @@ export interface CheckReport {
 
 /**
  * Read one channel's feed and record the videos it has not seen. On the channel's first
- * check only its newest recent video is queued (the rest are listed, to summarise by hand),
- * so adding a busy channel does not summarise a week of videos at once.
+ * successful read only its newest recent video is queued (the rest are listed, to summarise
+ * by hand), so adding a busy channel does not summarise a week of videos at once.
  */
 export async function checkChannel(
   channel: ExternalChannel,
@@ -104,6 +106,8 @@ const shared = globalThis as unknown as {
 };
 const inFlight = (shared.__externalInFlight ??= new Set<string>());
 export const checkRunning = () => shared.__externalChecking === true;
+/** Whether a video is being summarised right now. */
+export const videoInFlight = (videoId: string) => inFlight.has(videoId);
 
 /**
  * Summarise one video. `force` summarises a skipped or finished one again. Returns the video
@@ -168,11 +172,15 @@ async function summarize(video: ExternalVideo, force: boolean, deps: ProcessDeps
     text = fetched.text;
     if (fetched.lengthSeconds) updateVideo(videoId, { lengthSeconds: fetched.lengthSeconds });
   }
+  const waited = now - Date.parse(video.publishedAt);
   if (fetched?.notAiredYet) {
+    const giveUp = waited >= WAIT_FOR_CAPTIONS_MS;
     updateVideo(videoId, {
-      status: "waiting",
-      detail: "Not aired yet.",
-      nextAttemptAt: later(now, WAIT_RETRY_MS),
+      status: giveUp ? "skipped" : "waiting",
+      detail: giveUp
+        ? "Not aired after two days. Summarise it now once it has aired."
+        : "Not aired yet.",
+      nextAttemptAt: giveUp ? null : later(now, WAIT_RETRY_MS),
     });
     return getVideo(videoId);
   }
@@ -187,14 +195,12 @@ async function summarize(video: ExternalVideo, force: boolean, deps: ProcessDeps
   }
   const watch = !text && getAiProvider() === "google";
   if (!text && !watch) {
-    const waited = now - Date.parse(video.publishedAt);
     const giveUp = waited >= WAIT_FOR_CAPTIONS_MS;
     updateVideo(videoId, {
       status: giveUp ? "no_transcript" : "waiting",
       detail: giveUp
         ? `No captions after two days (${fetched?.reason ?? "none"}). Paste the transcript, or use Google Gemini as the AI provider to have it watch the video.`
         : (fetched?.reason ?? "No captions yet."),
-      attempts: video.attempts + 1,
       nextAttemptAt: giveUp ? null : later(now, WAIT_RETRY_MS),
     });
     return getVideo(videoId);
@@ -210,7 +216,7 @@ async function summarize(video: ExternalVideo, force: boolean, deps: ProcessDeps
       transcript: text,
       language: fetched?.language ?? video.language,
       summary,
-      attempts: video.attempts + 1,
+      attempts: 0,
       nextAttemptAt: null,
     });
     if (settings.notify)
@@ -223,7 +229,8 @@ async function summarize(video: ExternalVideo, force: boolean, deps: ProcessDeps
         })
         .catch(() => 0);
   } catch (error) {
-    const attempts = video.attempts + 1;
+    // Failed summaries in a row: one after a success, a wait or a paste starts again at one.
+    const attempts = (video.status === "failed" ? video.attempts : 0) + 1;
     updateVideo(videoId, {
       status: "failed",
       detail: error instanceof Error ? error.message : "The summary failed.",

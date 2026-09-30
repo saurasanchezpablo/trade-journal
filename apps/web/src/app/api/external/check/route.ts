@@ -1,4 +1,5 @@
 import { bad, handler, ok, requireValue } from "@/server/api";
+import { logFailure } from "@/server/background-alerts/log";
 import { checkRunning, runCheck } from "@/server/external-analysis/process";
 import { getChannel, listChannels } from "@/server/external-analysis/store";
 
@@ -16,6 +17,6 @@ export const POST = handler(async (request: Request) => {
   const ids = body.channelId ? [body.channelId as string] : undefined;
   if (ids && !getChannel(ids[0]!)) return bad("Channel not found", 404);
   if (!listChannels().some((c) => c.enabled)) return bad("Follow a channel first.");
-  void runCheck({ channelIds: ids });
+  void runCheck({ channelIds: ids }).catch((error: unknown) => logFailure("check now", error));
   return ok({ started: true });
 });

@@ -11,15 +11,17 @@ Paste the channel's `@handle`, its link (`youtube.com/@…`, `/channel/UC…`, `
 its channel id, or a link to one of its videos, and select **Follow**. The journal reads the
 channel's public feed at once (no YouTube account or API key is used) and summarises its
 newest video from the last few days. The feed's other videos are listed as **Not summarised**,
-so following a busy channel does not summarise a week of videos at once; **Summarise now**
-does one by hand. **Daily** switches a channel's daily check off without forgetting it; the bin
+so following a busy channel does not summarise a week of videos at once (if that first read
+fails, the first one that works does the same); **Summarise now** does one by hand. **Daily** switches a channel's daily check off without forgetting it; the bin
 stops following it and removes its summaries. At most 30 channels.
 
 ## The daily check
 
 At the time you choose (journal timezone; 08:00 by default) the journal reads every followed
 channel's feed and summarises each new video, one at a time. If the server was off at that
-time, the check runs when it is next up that day. **Check now** runs it at once.
+time, the check runs when it is next up that day; if another check (**Check now**, a channel
+just followed) is running at that time, it runs a quarter of an hour later. **Check now** runs
+it at once.
 
 - **Captions.** A video is read from its captions (the author's in English or Spanish first,
   else YouTube's automatic ones), with time marks every half minute. Automatic captions can
@@ -30,8 +32,11 @@ time, the check runs when it is next up that day. **Check now** runs it at once.
   Gemini instead (this uses many more tokens than a transcript).
 - **Skipped** by themselves: videos older than the age you set when first seen (3 days by
   default), videos shorter than the length you set (Shorts; 3 minutes by default), and streams
-  that have not aired yet (tried again later). **Summarise now** does any of them.
-- **Failures.** A failed summary is retried once an hour later, then waits for you.
+  that have not aired yet (tried again every two hours, and skipped if they still have not
+  aired two days after they were listed). **Summarise now** does any of them.
+- **Failures.** A failed summary is retried once an hour later, then waits for you (time spent
+  waiting for captions does not count). **Summarise now** and **Paste transcript** are
+  refused while the video is being summarised; try again when it is done.
 - **Notifications.** Optionally, a notification when a summary is ready, through the
   browsers and webhook set up for background alerts ([alerts.md](alerts.md)).
 
@@ -88,7 +93,8 @@ stops it), `app/api/external/**`, `app/external/page.tsx`, and the components
   `DELETE` `{ id }`.
 - `POST /api/external/check` `{ channelId? }` runs a check in the background.
 - `GET /api/external/videos/{id}`; `POST` with `{ action: "summarize" }`,
-  `{ action: "transcript", text }` or `{ action: "add-to-day", date }`.
+  `{ action: "transcript", text }` (both 409 while the video is being summarised) or
+  `{ action: "add-to-day", date }`.
 - `GET /api/external/day?date=` lists a journal day's external opinions.
 
 ## Verification

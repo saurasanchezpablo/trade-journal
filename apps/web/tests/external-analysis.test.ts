@@ -12,7 +12,7 @@ const { journalTools } = await import("../src/server/ai-agent/tools");
 const { setSetting } = await import("../src/server/settings");
 const { youtubeTransport } = await import("../src/server/external-analysis/youtube");
 const store = await import("../src/server/external-analysis/store");
-const { runCheck, checkRunning, WAIT_RETRY_MS } =
+const { runCheck, checkRunning, processVideo, WAIT_RETRY_MS } =
   await import("../src/server/external-analysis/process");
 const { dailyDue, ExternalScheduler } = await import("../src/server/external-analysis/scheduler");
 const channelsRoute = await import("../src/app/api/external/channels/route");
@@ -35,6 +35,7 @@ type Fake = {
   upcoming?: boolean;
 };
 let videos: Fake[] = [];
+let feedDown = false;
 const requests: string[] = [];
 
 const feedXml = () =>
@@ -61,6 +62,7 @@ beforeEach(async () => {
   db.delete(journalDays).run();
   setSetting("timeZone", "UTC");
   requests.length = 0;
+  feedDown = false;
   videos = [
     { id: "NEWEST00001", hoursAgo: 2, title: "BTC: the next move", captions: true, minutes: 25 },
     { id: "RECENT00002", hoursAgo: 20, title: "Altcoin buys", captions: true, minutes: 30 },
@@ -72,7 +74,8 @@ beforeEach(async () => {
       return new Response(
         `<link rel="alternate" type="application/rss+xml" title="RSS" href="https://www.youtube.com/feeds/videos.xml?channel_id=${CHANNEL}">`,
       );
-    if (url.includes("feeds/videos.xml")) return new Response(feedXml());
+    if (url.includes("feeds/videos.xml"))
+      return feedDown ? new Response("unavailable", { status: 503 }) : new Response(feedXml());
     if (url.includes("youtubei/v1/player")) {
       const id = (JSON.parse(String(init.body)) as { videoId: string }).videoId;
       const video = videos.find((v) => v.id === id);
@@ -213,6 +216,24 @@ describe("following a channel", () => {
     }
   });
 
+  it("queues only its newest video on the first read that works, after a failed one", async () => {
+    const channel = store.addChannel({ channelId: CHANNEL, title: "Crypto Banter", url: "x" });
+    feedDown = true;
+    script();
+    const failed = await runCheck({ deps });
+    expect(failed.errors).toHaveLength(1);
+    expect(store.getChannel(channel.id)).toMatchObject({
+      checkedAt: null,
+      checkError: expect.any(String),
+    });
+    feedDown = false;
+    script(() => anthropicMessage(JSON.stringify(summary)));
+    await runCheck({ deps });
+    expect(store.getVideo("RECENT00002")).toMatchObject({ status: "skipped" });
+    expect(store.getChannel(channel.id)).toMatchObject({ checkError: null });
+    expect(store.getChannel(channel.id)!.checkedAt).not.toBeNull();
+  });
+
   it("refuses what is not a YouTube channel, and the same channel twice", async () => {
     const bad = await channelsRoute.POST(
       new Request("http://localhost", {
@@ -277,12 +298,61 @@ describe("a new video", () => {
     expect(Date.parse(video.nextAttemptAt!)).toBe(NOW + WAIT_RETRY_MS);
     // Not due yet: left alone.
     await runCheck({ feeds: false, deps: { ...deps, now: () => NOW + HOUR } });
-    expect(store.getVideo("NEWEST00001")!.attempts).toBe(1);
+    expect(store.getVideo("NEWEST00001")!.nextAttemptAt).toBe(video.nextAttemptAt);
     // Two days on, still nothing: it stops waiting.
     await runCheck({ feeds: false, deps: { ...deps, now: () => NOW + 49 * HOUR } });
     video = store.getVideo("NEWEST00001")!;
     expect(video).toMatchObject({ status: "no_transcript", nextAttemptAt: null });
     expect(video.detail).toMatch(/Paste the transcript/);
+  });
+
+  it("still gets its retry after a failed summary when it waited for captions first", async () => {
+    add();
+    videos = [{ ...videos[0]!, captions: false }];
+    script();
+    await runCheck({ deps });
+    expect(store.getVideo("NEWEST00001")!.status).toBe("waiting");
+    // The captions arrive, but the AI fails once: it is retried an hour later.
+    videos = [{ ...videos[0]!, captions: true }];
+    script(() => anthropicMessage("not json at all"));
+    await runCheck({ feeds: false, deps: { ...deps, now: () => NOW + 2 * HOUR } });
+    const video = store.getVideo("NEWEST00001")!;
+    expect(video).toMatchObject({ status: "failed", attempts: 1 });
+    expect(Date.parse(video.nextAttemptAt!)).toBe(NOW + 3 * HOUR);
+  });
+
+  it("is not summarised again, nor its pasted transcript lost, while it is being summarised", async () => {
+    add();
+    videos = [{ ...videos[0]!, captions: false }];
+    script();
+    await runCheck({ deps });
+    let answer: (value: Awaited<ReturnType<typeof fetchNothing>>) => void = () => {};
+    const fetchNothing = () =>
+      Promise.resolve({
+        text: null,
+        language: null,
+        automatic: false,
+        lengthSeconds: null,
+        notAiredYet: false,
+        description: "",
+        reason: "No captions yet.",
+      });
+    const running = processVideo("NEWEST00001", {
+      force: true,
+      deps: { ...deps, transcript: () => new Promise((resolve) => (answer = resolve)) },
+    });
+    const response = await videoRoute.POST(
+      new Request("http://localhost", {
+        method: "POST",
+        body: JSON.stringify({ action: "transcript", text: "Pasted words. ".repeat(30) }),
+      }),
+      { params: Promise.resolve({ id: "NEWEST00001" }) },
+    );
+    expect(response.status).toBe(409);
+    expect((await response.json()).error).toMatch(/being summarised/);
+    answer(await fetchNothing());
+    await running;
+    expect(store.storedTranscript("NEWEST00001")).toBeNull();
   });
 
   it("is summarised from a pasted transcript", async () => {
@@ -320,6 +390,13 @@ describe("a new video", () => {
     expect(store.getVideo("LIVE0000001")).toMatchObject({
       status: "waiting",
       detail: "Not aired yet.",
+    });
+    // A stream still not aired two days on stops being retried.
+    await runCheck({ feeds: false, deps: { ...deps, now: () => NOW + 49 * HOUR } });
+    expect(store.getVideo("LIVE0000001")).toMatchObject({
+      status: "skipped",
+      nextAttemptAt: null,
+      detail: expect.stringMatching(/Not aired after two days/),
     });
   });
 
@@ -419,6 +496,27 @@ describe("the scheduler", () => {
     now = Date.parse("2026-09-30T08:05:00Z");
     await scheduler.tick();
     expect(feeds()).toBe(2);
+  });
+
+  it("does not lose the day's feed check to another check running at that moment", async () => {
+    const channel = store.addChannel({ channelId: CHANNEL, title: "Crypto Banter", url: "x" });
+    store.markChannelChecked(channel.id, null);
+    videos = [videos[0]!];
+    script(() => anthropicMessage(JSON.stringify(summary)));
+    const scheduler = new ExternalScheduler({ deps });
+    const feeds = () => requests.filter((u) => u.includes("feeds/videos.xml")).length;
+    const shared = globalThis as unknown as { __externalChecking?: boolean };
+    shared.__externalChecking = true; // Check now, or a newly followed channel's summary
+    try {
+      await scheduler.tick();
+    } finally {
+      shared.__externalChecking = false;
+    }
+    expect(feeds()).toBe(0);
+    expect(store.lastDailyRun()).toBeNull();
+    await scheduler.tick();
+    expect(feeds()).toBe(1);
+    expect(store.lastDailyRun()).toBe("2026-09-29");
   });
 });
 

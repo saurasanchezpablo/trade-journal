@@ -179,12 +179,20 @@ export const setChannelEnabled = (id: string, enabled: boolean) =>
     .prepare("UPDATE external_channels SET enabled = ? WHERE id = ?")
     .run(enabled ? 1 : 0, id).changes > 0;
 
+/**
+ * Record a feed read. `checked_at` is the last successful read (null until the first one), so a
+ * channel whose first read failed still gets its first-read treatment; a failure only records
+ * its error.
+ */
 export function markChannelChecked(id: string, error: string | null, title?: string) {
-  client()
-    .prepare(
-      "UPDATE external_channels SET checked_at = ?, check_error = ?, title = COALESCE(?, title) WHERE id = ?",
-    )
-    .run(nowIso(), error, title ?? null, id);
+  if (error)
+    client().prepare("UPDATE external_channels SET check_error = ? WHERE id = ?").run(error, id);
+  else
+    client()
+      .prepare(
+        "UPDATE external_channels SET checked_at = ?, check_error = NULL, title = COALESCE(?, title) WHERE id = ?",
+      )
+      .run(nowIso(), title ?? null, id);
 }
 
 /** Removing a channel removes its videos and summaries too. */
@@ -202,10 +210,10 @@ export function removeChannel(id: string): boolean {
 // ── Videos ──
 
 /**
- * `new`: seen, waiting to be summarized. `waiting`: no captions yet (retried for two days).
- * `summarized`. `no_transcript`: gave up waiting (paste one, or use Gemini). `failed`: the AI
- * or YouTube failed (retried once, then by hand). `skipped`: too old when first seen, a Short,
- * or not aired yet; summarize it by hand if you want it.
+ * `new`: seen, waiting to be summarized. `waiting`: no captions yet, or not aired yet (retried
+ * for two days). `summarized`. `no_transcript`: gave up waiting (paste one, or use Gemini).
+ * `failed`: the AI or YouTube failed (retried once, then by hand). `skipped`: too old when
+ * first seen, a Short, or still not aired after two days; summarize it by hand if you want it.
  */
 export type VideoStatus = "new" | "waiting" | "summarized" | "no_transcript" | "failed" | "skipped";
 /** Where the summary's text came from. */

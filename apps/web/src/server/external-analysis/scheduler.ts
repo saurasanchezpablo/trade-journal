@@ -1,6 +1,6 @@
 import { clockTime, dayKeyOf } from "@luxalgo/journal-core";
 import { getTimeZone } from "../settings";
-import { runCheck, type ProcessDeps } from "./process";
+import { checkRunning, runCheck, type ProcessDeps } from "./process";
 import { getExternalSettings, lastDailyRun, listChannels, markDailyRun } from "./store";
 
 /**
@@ -51,6 +51,9 @@ export class ExternalScheduler {
         getExternalSettings().checkTime,
         lastDailyRun(),
       );
+      // Another check (Check now, a newly followed channel) is running: the daily one would be
+      // refused, so it waits for the next tick instead of being marked as done.
+      if (checkRunning()) return;
       if (due) markDailyRun(today);
       await runCheck({ feeds: due, deps: this.options.deps });
     } catch {

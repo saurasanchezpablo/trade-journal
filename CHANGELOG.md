@@ -136,6 +136,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - Smaller chart fixes: Title and Notes are read-only while viewing a day's version (typing there was discarded); an ink colour added from the colour picker is remembered after a reload; a script too deep for the indicator worker skips it on every chart, not only the one that found out; the day review shows when its plan or trades fail to load; a source that returns no candles says so instead of "Loading candles…"
 - The Template menu works from the keyboard: **D** stars the focused template and **Delete** deletes one of yours, and saving a look opens a small dialog (the name field inside the menu could not be reached with Tab)
 - A scheduled digest cut short by a server restart no longer stays "running" forever: it shows as failed, and **Send now** writes it again instead of answering that it is being written
+- External analysis: a video that waited for its captions still gets its retry an hour after a failed summary; a stream that still has not aired two days on stops being retried every two hours; the daily feed check is no longer lost when another check is running at that time; a channel whose first feed read failed no longer queues every recent video when a later read works; **Summarise now** and **Paste transcript** are refused while that video is being summarised instead of being overwritten by the run under way
 
 ## [0.1.0] - 2026-09-03
 
