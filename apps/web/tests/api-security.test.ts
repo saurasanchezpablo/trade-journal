@@ -21,7 +21,7 @@ const post = (headers: Record<string, string>, body = "{}") =>
   new Request("http://journal.local/api/demo", { method: "POST", headers, body });
 
 describe("changes from other sites", () => {
-  const action = vi.fn(async () => ok({ changed: true }));
+  const action = vi.fn(async (_request: Request) => ok({ changed: true }));
   const route = handler(action);
 
   it("a page on another site cannot change the journal", async () => {
