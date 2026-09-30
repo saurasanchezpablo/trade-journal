@@ -17,8 +17,30 @@ const parseJsonArray = (value: string | null): string[] => {
   }
 };
 
-const context = () => ({ multipliers: getMultipliers(), defaults: getJournalDefaults() });
-export const rowToTrade = (row: TradeRow, config = context()): AnnotatedTrade => {
+/** Settings that turn a stored trade into what the journal shows: multipliers and breakeven. */
+export type TradeStatusConfig = ReturnType<typeof tradeStatusConfig>;
+export const tradeStatusConfig = () => ({
+  multipliers: getMultipliers(),
+  defaults: getJournalDefaults(),
+});
+const context = tradeStatusConfig;
+
+/** The stored columns a trade's shown status depends on. */
+export type TradeStatusFields = Pick<
+  TradeRow,
+  "status" | "netPnl" | "avgEntry" | "quantity" | "symbol" | "assetClass"
+>;
+
+/**
+ * The status the journal shows: the stored status only says open or closed; a closed trade
+ * within the user's breakeven tolerance (an amount, or a percent of its notional) is
+ * breakeven. Every reader of trade rows uses this so lists, filters and reviews agree.
+ */
+export const tradeStatus = (
+  row: TradeStatusFields,
+  config: TradeStatusConfig = context(),
+): AnnotatedTrade["status"] => {
+  if (row.status === "open") return "open";
   const multiplier = config.multipliers[row.symbol];
   const defaults = config.defaults;
   const missingMultiplier =
@@ -30,14 +52,16 @@ export const rowToTrade = (row: TradeRow, config = context()): AnnotatedTrade =>
     defaults.breakevenMode === "percent"
       ? (notional * defaults.breakeven) / 100
       : defaults.breakeven;
-  const status =
-    row.status === "open"
-      ? "open"
-      : Math.abs(row.netPnl) <= Math.max(1e-9, tolerance)
-        ? "breakeven"
-        : row.netPnl > 0
-          ? "win"
-          : "loss";
+  return Math.abs(row.netPnl) <= Math.max(1e-9, tolerance)
+    ? "breakeven"
+    : row.netPnl > 0
+      ? "win"
+      : "loss";
+};
+
+export const rowToTrade = (row: TradeRow, config = context()): AnnotatedTrade => {
+  const multiplier = config.multipliers[row.symbol];
+  const status = tradeStatus(row, config);
   return {
     key: row.key,
     accountId: row.accountId,

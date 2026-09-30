@@ -4,6 +4,7 @@ import { matchKeys, symbolKey } from "@/lib/symbol-match";
 import { suggestScenario, type AnalysisPlan } from "@/lib/analysis-plan";
 import { dayWindow } from "@/lib/day-window";
 import { nowIso } from "./ids";
+import { tradeStatus, tradeStatusConfig } from "./trades-query";
 
 const DAY_MS = 86_400_000;
 
@@ -34,6 +35,7 @@ export function dayTradesFor(
 ): DayTrade[] {
   const { from, to } = dayWindow(day, timeZone);
   const keys = matchKeys(analysis.symbol);
+  const config = tradeStatusConfig();
   const rows = db
     .select({
       key: trades.key,
@@ -43,6 +45,8 @@ export function dayTradesFor(
       openedAt: trades.openedAt,
       avgEntry: trades.avgEntry,
       netPnl: trades.netPnl,
+      quantity: trades.quantity,
+      assetClass: trades.assetClass,
     })
     .from(trades)
     // A day either side in SQL (stored times vary in precision), exact in code.
@@ -56,7 +60,11 @@ export function dayTradesFor(
     .filter((t) => {
       const opened = Date.parse(t.openedAt);
       return opened >= from && opened < to && keys.has(symbolKey(t.symbol));
-    });
+    })
+    .map(({ quantity, assetClass, ...t }) => ({
+      ...t,
+      status: tradeStatus({ ...t, quantity, assetClass }, config),
+    }));
   const links = new Map(
     (rows.length
       ? db

@@ -2,6 +2,7 @@ import { and, desc, inArray, isNull } from "drizzle-orm";
 import { accounts, db, executions, missedTrades, trades } from "@/db";
 import type { ChartOverlayData, ChartTrade } from "@/lib/chart-overlays";
 import { matchingSymbols } from "@/lib/symbol-match";
+import { tradeStatus, tradeStatusConfig } from "./trades-query";
 
 const MAX_TRADES = 1000;
 const parseIds = (json: string) => {
@@ -55,6 +56,7 @@ export function chartOverlayData(chartSymbol: string, extra: string[] = []): Cha
       stopLoss: trades.stopLoss,
       profitTarget: trades.profitTarget,
       executionIdsJson: trades.executionIdsJson,
+      assetClass: trades.assetClass,
     })
     .from(trades)
     .where(inArray(trades.symbol, symbols))
@@ -62,6 +64,7 @@ export function chartOverlayData(chartSymbol: string, extra: string[] = []): Cha
     .limit(MAX_TRADES)
     .all()
     .map(({ executionIdsJson, ...row }) => ({ ...row, fillIds: parseIds(executionIdsJson) }));
+  const config = tradeStatusConfig();
   const fillIds = rows.flatMap((row) => row.fillIds);
   type Fill = Pick<typeof executions.$inferSelect, "executedAt" | "side" | "quantity" | "price">;
   const fills = new Map<string, Fill>();
@@ -84,7 +87,7 @@ export function chartOverlayData(chartSymbol: string, extra: string[] = []): Cha
     account: accountRows.get(row.accountId)?.name ?? "",
     symbol: row.symbol,
     direction: row.direction,
-    status: row.status,
+    status: tradeStatus(row, config),
     openedAt: row.openedAt,
     closedAt: row.closedAt,
     quantity: row.quantity,

@@ -11,6 +11,7 @@ import {
 import { candles, highImpactNews } from "./day-price-action";
 import type { MarketBar } from "@/lib/market-data";
 import { dailyBarAt } from "@/lib/day-window";
+import { tradeStatus, tradeStatusConfig } from "./trades-query";
 
 /**
  * Your closed trades split by the kind of day they closed on (trend or range, quiet or
@@ -36,12 +37,16 @@ export async function dayTypeBreakdown(
 ): Promise<DayTypeBreakdown> {
   const to = Date.now();
   const from = to - days * DAY_MS;
+  const config = tradeStatusConfig();
   const closed = db
     .select({
       symbol: trades.symbol,
       closedAt: trades.closedAt,
       netPnl: trades.netPnl,
       status: trades.status,
+      avgEntry: trades.avgEntry,
+      quantity: trades.quantity,
+      assetClass: trades.assetClass,
     })
     .from(trades)
     .where(
@@ -54,7 +59,17 @@ export async function dayTypeBreakdown(
     .all()
     .flatMap((t) => {
       const time = t.closedAt ? Date.parse(t.closedAt) : NaN;
-      return time >= from && time < to ? [{ ...t, time }] : [];
+      return time >= from && time < to
+        ? [
+            {
+              symbol: t.symbol,
+              closedAt: t.closedAt,
+              netPnl: t.netPnl,
+              status: tradeStatus(t, config),
+              time,
+            },
+          ]
+        : [];
     });
   const counts = new Map<string, number>();
   for (const t of closed) counts.set(t.symbol, (counts.get(t.symbol) ?? 0) + 1);

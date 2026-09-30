@@ -21,6 +21,7 @@ import { OUTCOME_LABELS, isOutcome, parsePlan, type ScenarioOutcome } from "@/li
 import { candles, highImpactNews } from "./day-price-action";
 import type { MarketBar } from "@/lib/market-data";
 import { barsOfDay, dailyBarAt, dayWindow, journalDayOf } from "@/lib/day-window";
+import { tradeStatus, tradeStatusConfig } from "./trades-query";
 
 /**
  * The journal's past, for AI reviews: earlier days like a given one (same symbol, same day
@@ -77,12 +78,16 @@ function tradesByDay(symbol: string, bars: readonly MarketBar[], timeZone: strin
   const first = bars[0];
   const last = bars.at(-1);
   if (!first || !last) return out;
+  const config = tradeStatusConfig();
   for (const t of db
     .select({
       symbol: trades.symbol,
       closedAt: trades.closedAt,
       netPnl: trades.netPnl,
       status: trades.status,
+      avgEntry: trades.avgEntry,
+      quantity: trades.quantity,
+      assetClass: trades.assetClass,
     })
     .from(trades)
     .where(
@@ -99,7 +104,7 @@ function tradesByDay(symbol: string, bars: readonly MarketBar[], timeZone: strin
     const day = journalDayOf(bar, timeZone);
     const row = out.get(day) ?? { trades: 0, wins: 0, netPnl: 0 };
     row.trades += 1;
-    if (t.status === "win") row.wins += 1;
+    if (tradeStatus(t, config) === "win") row.wins += 1;
     row.netPnl += t.netPnl;
     out.set(day, row);
   }
@@ -167,6 +172,7 @@ export async function similarPastDays(
 /** A week of journal days for the weekly review: trades, plans, day types and lessons. */
 export function weekContext(end: string, timeZone: string): { text: string; tradeCount: number } {
   const days = weekEnding(end);
+  const config = tradeStatusConfig();
   const closed = db
     .select({
       key: trades.key,
@@ -175,6 +181,9 @@ export function weekContext(end: string, timeZone: string): { text: string; trad
       netPnl: trades.netPnl,
       status: trades.status,
       direction: trades.direction,
+      avgEntry: trades.avgEntry,
+      quantity: trades.quantity,
+      assetClass: trades.assetClass,
     })
     .from(trades)
     .where(
@@ -186,7 +195,8 @@ export function weekContext(end: string, timeZone: string): { text: string; trad
       ),
     )
     .all()
-    .filter((t) => t.closedAt && days.includes(dayKeyOf(t.closedAt, timeZone)));
+    .filter((t) => t.closedAt && days.includes(dayKeyOf(t.closedAt, timeZone)))
+    .map((t) => ({ ...t, status: tradeStatus(t, config) }));
   const links = new Set(
     closed.length
       ? db
