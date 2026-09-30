@@ -18,6 +18,7 @@ import { eventSummary, type EconomicEvent } from "@/lib/economic-calendar";
 import { MARKET_SESSIONS, sessionEvents } from "@/lib/market-sessions";
 import { zoneStatsTracker, zoneSummary, type SrZone, type ZoneStats } from "@/lib/sr-zones";
 import { fmtMoney, fmtNumber } from "@/lib/utils";
+import { JOURNAL_OVERLAYS_TYPE } from "./vela-view-limits";
 
 type VelaModule = typeof import("@luxalgo/vela");
 
@@ -132,7 +133,7 @@ export function createChartOverlays(
   let state = initial;
   let ctx: { emit(out: object): void; bars(): readonly OHLCV[] } | null = null;
   let bars: readonly OHLCV[] = [];
-  const type = `journal-overlays-${(seq += 1)}-${Date.now().toString(36)}`;
+  const type = `${JOURNAL_OVERLAYS_TYPE}${(seq += 1)}-${Date.now().toString(36)}`;
   const dark = () => document.documentElement.classList.contains("dark");
   const step = () => vela.timeframeToMs(instance.market.timeframe ?? "60");
   /** Labels near the latest candle open to the left so the price axis never clips them. */

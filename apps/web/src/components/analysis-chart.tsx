@@ -44,6 +44,7 @@ import { markLegacyFibs } from "@/lib/fib-direction";
 import { liftDrawingDepth } from "@/lib/drawing-depth";
 import { keepDrawingsOverSeries } from "./vela-depth-fix";
 import { clipOffscreenDashes } from "./vela-dash-fix";
+import { limitChartView } from "./vela-view-limits";
 import {
   isColor,
   mergeStyle,
@@ -587,6 +588,8 @@ export function AnalysisChart({
       keepDrawingsOverSeries(instance);
       // Zoomed in, dashed lines with far-off ends drew millions of dashes a frame.
       clipOffscreenDashes(instance.renderer);
+      // Zoom stops before the chart slows down; the price fit leaves the journal overlays out.
+      limitChartView(instance.renderer);
       patchVisibleRangeProfile(instance.renderer);
       // Vela registers its native indicators on construction: give the VWAP its sessions again.
       patchNativeVwap(vela);

@@ -5,6 +5,7 @@ import { fmtMoney } from "@/lib/utils";
 import { usePrivacy } from "./privacy";
 import { EquityArea } from "./charts/equity-area";
 import { clipOffscreenDashes } from "./vela-dash-fix";
+import { limitChartView } from "./vela-view-limits";
 
 export interface ChartExecution {
   side: "buy" | "sell";
@@ -234,6 +235,7 @@ function PriceChart({
         data: pathPoints(sorted, closeMs),
       });
       clipOffscreenDashes(chart.renderer);
+      limitChartView(chart.renderer);
       let indicator = chart.addNativeIndicator(type);
       const themeObserver = new MutationObserver(() => {
         const nextDark = document.documentElement.classList.contains("dark");

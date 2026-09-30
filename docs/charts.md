@@ -154,6 +154,17 @@ of pixels: panning dropped from 60 to about 17 frames a second. The visible part
 with the dash moved by the length cut off, so the dashes sit exactly where they did
 (`lib/dash-clip.ts`, applied to Vela's painters by `components/vela-dash-fix.ts`).
 
+## Zoom limits and the price fit
+
+Zooming in stops before a chart slows down or stops being useful: at least 20 candles stay
+across the chart and no candle gets wider than 40 pixels (Vela alone let two candles fill
+it). Dragging the price axis stops once the price window is a fifth of the range of the
+candles on screen. The automatic price fit follows the candles and indicators only: your
+trades and support/resistance zones no longer stretch it, so a zone far above or below price
+is off screen until you scroll to it, as drawings are on TradingView. The limits are in
+`lib/chart-zoom.ts`, applied by `components/vela-view-limits.ts` to every chart (Charts and
+the trade page).
+
 ## Layers and folders
 
 Folders hold layers, and layers hold drawings. The **Layers** panel is docked beside the chart
@@ -328,6 +339,7 @@ every candle size.
   delete per zone, and **Show** scrolls to where the zone starts.
 - Zones save with the analysis (`zones_json`, at most 100) and are included in the snapshot
   and in AI reviews.
+- Zones do not widen the automatic price fit (see Zoom limits and the price fit).
 
 ## Market sessions
 
