@@ -32,7 +32,7 @@
     "drawdown"
   ],
   "scripts": {
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit -p tsconfig.test.json",
     "build": "tsup src/index.ts --format esm,cjs --dts --clean",
     "prepublishOnly": "pnpm build"
   },

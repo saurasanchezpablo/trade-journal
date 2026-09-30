@@ -62,7 +62,7 @@ describe("NinjaTrader execution identity", () => {
 
   it("keeps identities stable across reordering and insertion of unrelated records", () => {
     const [header, ...rows] = sample.trim().split(/\r?\n/);
-    expect(identity([header, ...rows.toReversed()].join("\n"))).toEqual(identity(sample));
+    expect(identity([header, ...[...rows].reverse()].join("\n"))).toEqual(identity(sample));
     expect(identity(sample.replace(/\r?\n/g, "\r\n"))).toEqual(identity(sample));
     const extra = "MNQZ6,Buy,9/16/2026 9:30,29400,Entry,TRADEIFY,1,ACCOUNT-1";
     const extended = identity([header, extra, ...rows].join("\n"));

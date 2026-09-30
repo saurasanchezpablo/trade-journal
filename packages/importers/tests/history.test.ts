@@ -97,7 +97,7 @@ describe("simulator history formats extend the journal import path", () => {
     expect(new Set(roundTrips.map((t) => t.key)).size).toBe(2);
     expect(
       buildRoundTrips(
-        result.executions.toReversed().map((e, i) => ({
+        [...result.executions].reverse().map((e, i) => ({
           ...e,
           id: String(i),
           accountId: "fixture",
