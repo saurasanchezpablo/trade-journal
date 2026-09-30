@@ -629,18 +629,16 @@ export const LayersPanel = memo(function LayersPanel({
                   >
                     <Layers className="size-3.5" /> Check its drawings
                   </DropdownMenuItem>
-                  <div className="px-2 py-1.5">
-                    <p className="mb-1 text-[11px] text-muted-foreground">Layer colour</p>
-                    <ColorRow
-                      value={layer.color}
-                      onPick={(color) => onChange(setLayerColor(layers, layer.id, color))}
-                      onClear={
-                        layer.color
-                          ? () => onChange(setLayerColor(layers, layer.id, null))
-                          : undefined
-                      }
-                    />
-                  </div>
+                  <MenuColorRow
+                    label="Layer colour"
+                    value={layer.color}
+                    onPick={(color) => onChange(setLayerColor(layers, layer.id, color))}
+                    onClear={
+                      layer.color
+                        ? () => onChange(setLayerColor(layers, layer.id, null))
+                        : undefined
+                    }
+                  />
                   <DropdownMenuItem
                     disabled={!layer.color || !inside.length}
                     onSelect={() =>
@@ -1520,6 +1518,92 @@ function ColorRow({
           None
         </button>
       )}
+    </div>
+  );
+}
+
+/**
+ * The colour swatches inside a menu, as menu items: the menu's arrow keys reach them (a
+ * plain button in a menu cannot be focused from the keyboard). Picking keeps the menu open.
+ */
+function MenuColorRow({
+  label,
+  value,
+  onPick,
+  onClear,
+}: {
+  label: string;
+  value?: string;
+  onPick: (color: string) => void;
+  onClear?: () => void;
+}) {
+  const any = useRef<HTMLInputElement>(null);
+  const swatch = "size-7 min-h-0 justify-center rounded-full p-0";
+  return (
+    <div role="group" aria-label={label} className="px-2 py-1.5">
+      <p aria-hidden="true" className="mb-1 text-[11px] text-muted-foreground">
+        {label}
+      </p>
+      <div className="flex flex-wrap items-center gap-0.5">
+        {SWATCHES.map((color) => (
+          <DropdownMenuItem
+            key={color}
+            aria-label={`Colour ${color}${value === color ? " (current)" : ""}`}
+            className={swatch}
+            onSelect={(e) => {
+              e.preventDefault();
+              onPick(color);
+            }}
+          >
+            <span
+              aria-hidden="true"
+              className={cn(
+                "size-5 rounded-full border-2",
+                value === color ? "border-foreground" : "border-transparent",
+              )}
+              style={{ backgroundColor: color }}
+            />
+          </DropdownMenuItem>
+        ))}
+        <DropdownMenuItem
+          aria-label="Pick any colour"
+          className={swatch}
+          onSelect={(e) => {
+            e.preventDefault();
+            const input = any.current;
+            if (!input) return;
+            try {
+              input.showPicker();
+            } catch {
+              input.click();
+            }
+          }}
+        >
+          <span className="flex size-5 items-center justify-center rounded-full border border-dashed">
+            <Plus className="size-3" aria-hidden="true" />
+          </span>
+        </DropdownMenuItem>
+        <input
+          ref={any}
+          type="color"
+          tabIndex={-1}
+          aria-hidden="true"
+          value={isHexColor(value) ? value : "#2962ff"}
+          onChange={(e) => onPick(e.target.value)}
+          className="pointer-events-none size-0 opacity-0"
+        />
+        {onClear && (
+          <DropdownMenuItem
+            className="ml-1 min-h-0 px-1.5 py-0.5 text-[11px] underline"
+            onSelect={(e) => {
+              e.preventDefault();
+              onClear();
+            }}
+          >
+            None
+          </DropdownMenuItem>
+        )}
+      </div>
     </div>
   );
 }
