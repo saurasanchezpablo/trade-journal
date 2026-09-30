@@ -13,6 +13,7 @@ import {
 import { Field, fieldClass } from "@/components/filter-fields";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { randomId } from "@/lib/random-id";
 export function JournalDefaultSettings() {
   const { data, error } = useApi<JournalDefaults>("/api/workspace/defaults"),
     { data: accounts } = useApi<{ accounts: { id: string; name: string }[] }>("/api/accounts");
@@ -149,7 +150,7 @@ export function JournalDefaultSettings() {
                 feeRules: [
                   ...draft.feeRules,
                   {
-                    id: crypto.randomUUID(),
+                    id: randomId(),
                     accountId: "",
                     symbol: "",
                     amount: 0,
@@ -234,7 +235,7 @@ export function JournalDefaultSettings() {
                 riskRules: [
                   ...draft.riskRules,
                   {
-                    id: crypto.randomUUID(),
+                    id: randomId(),
                     accountId: "",
                     symbol: "",
                     stop: 1,

@@ -21,6 +21,7 @@ import {
   type PropData,
   type PropAudit,
 } from "@/lib/prop-firms";
+import { randomId } from "@/lib/random-id";
 export type PropModal =
   | { kind: "account"; account?: PropAccount; parent?: PropAccount }
   | {
@@ -155,7 +156,7 @@ function AccountForm({
   refresh,
 }: Props & { modal: Extract<PropModal, { kind: "account" }> }) {
   const old = modal.account;
-  const [id] = useState(() => old?.id ?? crypto.randomUUID());
+  const [id] = useState(() => old?.id ?? randomId());
   const [values, set] = useState(() =>
     old
       ? {
@@ -341,7 +342,7 @@ function EntryForm({
 }: Props & { modal: Extract<PropModal, { kind: "entry" }> }) {
   const old = modal.entry,
     expense = modal.expense;
-  const [id] = useState(() => old?.id ?? crypto.randomUUID());
+  const [id] = useState(() => old?.id ?? randomId());
   const initialAccount = data.accounts.find(
     (a) => a.id === (old?.accountId ?? expense?.accountId ?? modal.accountId),
   );
@@ -509,7 +510,7 @@ function ReceiptForm({
   refresh,
 }: Props & { modal: Extract<PropModal, { kind: "receipt" }> }) {
   const { payout } = modal;
-  const [id] = useState(() => crypto.randomUUID());
+  const [id] = useState(() => randomId());
   const [values, set] = useState({
     kind: "receipt",
     amount: "",

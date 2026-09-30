@@ -25,6 +25,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { OptionSelect } from "./ui/option-select";
+import { randomId } from "@/lib/random-id";
 
 export function TradeMarketData({
   trade,
@@ -709,7 +710,7 @@ function ReplayChart({
       const { Vela, registerNativeIndicator, unregisterNativeIndicator } =
         await import("@luxalgo/vela");
       if (disposed || !host.current) return;
-      const type = `replay-fills-${crypto.randomUUID()}`;
+      const type = `replay-fills-${randomId()}`;
       registerNativeIndicator({
         type,
         title: "Recorded fills",

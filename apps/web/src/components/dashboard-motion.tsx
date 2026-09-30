@@ -9,6 +9,7 @@ import {
   type RefObject,
 } from "react";
 import { advanceCardSwing, cardSwingGeometry, STILL_CARD, type CardPoint } from "@/lib/card-swing";
+import { randomId } from "@/lib/random-id";
 
 export const DASHBOARD_MOVE_EASING = "cubic-bezier(0.22, 1, 0.36, 1)";
 
@@ -345,7 +346,7 @@ export function snapshotDashboardCard(surface: HTMLElement, event: Event): Dashb
 
   // SVG gradients and clip paths must refer to this snapshot, not to a live chart
   // whose dimensions may change as the surrounding grid reflows.
-  const prefix = `drag-${crypto.randomUUID()}`;
+  const prefix = `drag-${randomId()}`;
   const ids = new Map<string, string>();
   copy.querySelectorAll<HTMLElement>("[id]").forEach((node) => {
     const original = node.id;
