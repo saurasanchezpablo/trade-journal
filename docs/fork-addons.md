@@ -44,6 +44,38 @@ Nothing else upstream owns is changed: no database schema, bootstrap or upgrade 
 add-ons create their own tables), no `next.config.ts` or `layout.tsx` edits. The only
 dependencies added are single sign-on's (push uses Node's crypto).
 
+## Bug fixes in upstream code
+
+The September 2026 audit (branch `chore/audit`) fixed bugs in upstream-owned files. They are
+fixes, not add-ons, and are worth proposing upstream. On a merge conflict keep upstream's
+structure and re-apply the fix; each one has a test that fails without it.
+
+- **Security** (`server/api.ts`, `server/auth.ts`, `app/api/auth/route.ts`): cross-site
+  changes refused, signed and expiring password sessions, a sign-in pause, 400 for malformed
+  bodies, raw database errors kept out of responses. Tests: `api-security.test.ts`.
+- **Reads after writes** (`lib/api-request.ts`, `lib/use-api.ts`): a refresh never joins a
+  read started before it. Test: `api-request.test.ts`.
+- **Importers and core** (`packages/importers/src/**`, `packages/core/src/metrics.ts`):
+  MetaTrader 4 profit and swap, MT5 swap credits, decimal commas, TradeZella fees, sides and
+  times, DAS short sells, ThinkorSwim options, fill order at one instant, UTC suffixes and
+  dash dates, `returnOnNotional`. Hashes stay stable; see "Parsing fixes and earlier
+  imports" in `docs/importers.md`. Tests: the package test suites.
+- **Accounts, trades and data** (`app/api/accounts/**`, `app/api/trades/**`,
+  `app/api/playbooks/**`, `app/api/notes/**`, `app/api/journal/[date]`, `app/api/export`,
+  `app/api/executions`, `app/api/settings`, `server/executions.ts`,
+  `server/trades-query.ts`): transfers and deletes keep or clean every trade reference,
+  hand validation, manual fills stored as UTC instants, spreadsheet-safe CSV export,
+  multipliers rebuilt only when changed. Tests: `account-data`, `api-validation`,
+  `manual-fills`, `export-data`, `multipliers`, `trade-status`.
+- **Pages** (dashboard, trades, trade detail, notebook, playbooks, progress, import, login,
+  settings, accounts, reports; `components/manual-trade-entry.tsx`,
+  `import-reconciliation.tsx`, `prop-firm-*.tsx`, `report-market-estimates.tsx`,
+  `market-csv-settings.tsx`, `charts/daily-bars.tsx`): currency on the dashboard, labelled
+  fields, keyboard and drop import, partial legs refused, typed numbers never clearing a
+  value, the notebook's open note kept while searching, loading and error states, signed
+  P&L, ids that work over plain http (`lib/random-id.ts`). Tests: `ai-ui`,
+  `notebook-editor`, `random-id` and the page tests.
+
 ## Files the add-ons own
 
 - Installable app: `app/manifest.ts`, `app/icons/[name]/route.tsx`, `app/apple-icon.tsx`,
