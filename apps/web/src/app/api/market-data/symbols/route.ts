@@ -1,5 +1,5 @@
 import { bad, handler, ok, requireValue } from "@/server/api";
-import { connectionKey } from "@/server/market-data/connections";
+import { configuredKey } from "@/server/market-data/configured-key";
 import { requireDataset, requireProvider } from "@/server/market-data/request-checks";
 import { MarketDataError } from "@/server/market-data/provider";
 
@@ -14,9 +14,9 @@ export const GET = handler(async (request: Request) => {
   const query = (params.get("q") ?? "").trim();
   requireValue(query.length <= 40 && !/[\x00-\x1f]/.test(query), "Search for a shorter symbol.");
   if (!provider.symbols || !query) return ok({ symbols: [] });
+  // Same gate as history: a public source must be enabled in Settings first (400 if not).
+  const key = configuredKey(provider.id);
   try {
-    // Same gate as history: a public source must be enabled in Settings first.
-    const key = connectionKey(provider.id);
     return ok({ symbols: await provider.symbols(query, dataset, key, request.signal) });
   } catch (error) {
     if (error instanceof MarketDataError) return bad(error.message, 502);

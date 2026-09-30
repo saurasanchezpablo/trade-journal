@@ -1,7 +1,8 @@
 import { accounts, db } from "@/db";
 import { eq } from "drizzle-orm";
 import { bad, handler, ok, requireValue } from "@/server/api";
-import { connectionKey, providerFor } from "@/server/market-data/connections";
+import { providerFor } from "@/server/market-data/connections";
+import { configuredKey } from "@/server/market-data/configured-key";
 import { MarketDataError } from "@/server/market-data/provider";
 import { getTradeByKey, rowToTrade } from "@/server/trades-query";
 import { listExecutions } from "@/server/executions";
@@ -92,6 +93,7 @@ export const POST = handler(
           row.assetClass == null || ["forex", "cfd"].includes(row.assetClass),
           "OANDA supports forex and CFD instruments.",
         );
+      const sourceKey = configuredKey(provider.id);
       const trade = rowToTrade(row);
       const fingerprint = estimateFingerprint(trade);
       const history = await provider.history(
@@ -103,7 +105,7 @@ export const POST = handler(
           to,
           signal: request.signal,
         },
-        connectionKey(provider.id),
+        sourceKey,
       );
       const accountCurrency = db
         .select({ currency: accounts.currency })

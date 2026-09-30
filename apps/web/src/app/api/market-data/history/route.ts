@@ -1,5 +1,5 @@
 import { bad, handler, ok, requireValue } from "@/server/api";
-import { connectionKey } from "@/server/market-data/connections";
+import { configuredKey } from "@/server/market-data/configured-key";
 import {
   requireDataset,
   requireProvider,
@@ -21,6 +21,8 @@ type Source = {
   dataset?: string;
   resolution: Resolution;
   signal: AbortSignal;
+  /** The source's key, checked before any request (a source not set up answers 400). */
+  key: string;
 };
 
 const fetchWindow = (r: Source, from: number, to: number) =>
@@ -35,7 +37,7 @@ const fetchWindow = (r: Source, from: number, to: number) =>
       // A chart shows the candle still forming: its current price.
       forming: true,
     },
-    connectionKey(r.provider.id),
+    r.key,
   );
 
 /**
@@ -89,6 +91,7 @@ export const POST = handler(async (request: Request) => {
     dataset: dataset || undefined,
     resolution,
     signal: request.signal,
+    key: configuredKey(provider.id),
   };
   try {
     if (limit !== undefined) {
