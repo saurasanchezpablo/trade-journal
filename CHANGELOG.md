@@ -166,6 +166,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - Applying suggested labels (one trade or **Apply all suggestions** on Trades) no longer removes tags and mistakes added to the trade after the AI answered, and a failed save says so
 - A drafted day plan on Charts stays with its analysis: opening another analysis drops it, and a draft that arrives after the switch is not offered for the new one
 - Levels read from a screenshot are no longer added to a different chart after switching symbol or analysis
+- A trade's AI rule check is dropped when the trade moves to another playbook, and **Apply N suggestions** counts only that playbook's rules (applying verdicts on the old playbook's rules failed)
 
 ## [0.1.0] - 2026-09-03
 

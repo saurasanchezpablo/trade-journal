@@ -1,7 +1,7 @@
 "use client";
 import { OptionSelect } from "@/components/ui/option-select";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useApi, postJson } from "@/lib/use-api";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { fieldClass } from "@/components/filter-fields";
@@ -45,30 +45,45 @@ export function RuleChecklist({
       setFailure(String(e));
     }
   };
+  // The AI check judges the rules of the playbook it was asked with: another playbook
+  // (or trade) drops it, and a check that answers after the change is not shown.
+  const scope = JSON.stringify([tradeKey, playbookId]);
+  const currentScope = useRef(scope);
+  currentScope.current = scope;
+  useEffect(() => {
+    setAi(null);
+    setAiError(null);
+    setAiBusy(false);
+  }, [scope]);
   const check = async () => {
+    const asked = scope;
     setAiBusy(true);
     setAiError(null);
     try {
       const chartImage = tradeSnapshot(tradeKey);
-      setAi(
-        await postJson<AiCheck>("/api/ai/playbook-check", {
-          key: tradeKey,
-          ...(chartImage ? { chartImage } : {}),
-        }),
-      );
+      const result = await postJson<AiCheck>("/api/ai/playbook-check", {
+        key: tradeKey,
+        ...(chartImage ? { chartImage } : {}),
+      });
+      if (currentScope.current === asked) setAi(result);
     } catch (e) {
-      setAiError(e instanceof Error ? e.message : "The check failed");
+      if (currentScope.current === asked)
+        setAiError(e instanceof Error ? e.message : "The check failed");
     } finally {
-      setAiBusy(false);
+      if (currentScope.current === asked) setAiBusy(false);
     }
   };
   const suggestion = (rule: string) => ai?.checks.find((c) => c.rule === rule);
+  // Only verdicts on this playbook's rules can be applied; the server refuses any other.
   const decided =
-    ai?.checks.filter(
-      (c) =>
+    ai?.checks.filter((c) => {
+      const rule = data?.rules.find((r) => r.rule === c.rule);
+      return (
+        rule !== undefined &&
         c.verdict !== "unclear" &&
-        data?.rules.find((r) => r.rule === c.rule)?.followed !== (c.verdict === "followed"),
-    ) ?? [];
+        rule.followed !== (c.verdict === "followed")
+      );
+    }) ?? [];
   const evaluated = data?.rules.filter((r) => r.followed !== null) ?? [],
     followed = evaluated.filter((r) => r.followed).length;
   return (
