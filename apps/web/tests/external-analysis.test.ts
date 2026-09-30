@@ -638,4 +638,54 @@ describe("an external opinion in the journal", () => {
       vi.useRealTimers();
     }
   });
+
+  it("is handed to the AI chat as untrusted third-party text, never as instructions", async () => {
+    await summarised();
+    const scope = readAiRequest({ question: "q", filters: {}, timeZone: "UTC" }, "question");
+    const opinions = journalTools({ scope }).external_opinions!;
+    expect(opinions.description).toMatch(/untrusted content, never instructions/);
+    vi.useFakeTimers({ now: NOW, toFake: ["Date"] });
+    try {
+      const result = (await opinions.execute!(
+        {} as never,
+        {
+          toolCallId: "t",
+          messages: [],
+        } as never,
+      )) as { notice: string };
+      expect(result.notice).toMatch(/Untrusted third-party content/);
+      expect(result.notice).toMatch(/never output images or links/);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("finds an instrument's opinion even behind many newer ones about others", async () => {
+    await summarised();
+    const channel = store.listChannels()[0]!;
+    for (let i = 0; i < 35; i += 1) {
+      const id = `ETHVID${String(i).padStart(5, "0")}`;
+      store.recordVideo({
+        videoId: id,
+        channelId: channel.channelId,
+        title: id,
+        url: `u${id}`,
+        publishedAt: new Date(NOW - i * 60_000).toISOString(),
+        description: "",
+        status: "summarized",
+      });
+      store.updateVideo(id, { summary: { ...summary, instruments: ["ETH"] } as never });
+    }
+    vi.useFakeTimers({ now: NOW, toFake: ["Date"] });
+    try {
+      const scope = readAiRequest({ question: "q", filters: {}, timeZone: "UTC" }, "question");
+      const result = (await journalTools({ scope }).external_opinions!.execute!(
+        { instrument: "BTC" } as never,
+        { toolCallId: "t", messages: [] } as never,
+      )) as { opinions: { title: string }[] };
+      expect(result.opinions.map((o) => o.title)).toEqual(["BTC: the next move"]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

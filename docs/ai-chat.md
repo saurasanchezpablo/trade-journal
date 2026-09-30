@@ -49,6 +49,11 @@ The filters are the journal's filter fields (`symbol`, `tag`, `from`, `pnlMin`, 
 `entryAfter`, ...), checked like the page's: an unknown field or a malformed value is an error
 the AI sees and can correct.
 
+`external_opinions` reads the YouTube summaries from [External analysis](external-analysis.md).
+Their text comes from other people's videos, so the tool marks it as untrusted third-party
+content, and the chat is told never to follow instructions in it. Whatever a tool returns, the
+chat's answers carry no images and no links to other websites.
+
 `get_candles` needs to know where the symbol's candles come from: a chart you saved on that
 symbol (its source and dataset are used), or the trade's **Market data & replay** once loaded.
 Without either it answers that no source is known.

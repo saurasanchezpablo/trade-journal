@@ -73,7 +73,7 @@ condition, then summarised.
 - **From External analysis**, **Add to journal day** does the same for any day. A note that
   already links the video is left as it is.
 - **The AI chat** reads them with its `external_opinions` tool, as other people's opinions,
-  never as yours.
+  never as yours, and as untrusted text: instructions inside a video are never followed.
 
 ## Storage and code
 
