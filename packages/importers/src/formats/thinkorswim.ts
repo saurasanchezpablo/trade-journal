@@ -49,7 +49,11 @@ export const thinkorswim: ImportFormat = {
     }
 
     const records = toRecords(parseCsv(section.join("\n")));
-    const { executions, skippedRows } = rowsToFills(
+    const {
+      executions,
+      skippedRows,
+      warnings: numberWarnings,
+    } = rowsToFills(
       records,
       {
         symbol: ["symbol"],
@@ -60,12 +64,14 @@ export const thinkorswim: ImportFormat = {
       },
       options,
     );
-    const warnings =
-      executions.length > 0
+    const warnings = [
+      ...(executions.length > 0
         ? [
             "ThinkorSwim statements report commissions in a separate section; fees were not attached to fills.",
           ]
-        : [];
+        : []),
+      ...numberWarnings,
+    ];
     return { format: "thinkorswim", executions, skippedRows, warnings };
   },
 };

@@ -1,6 +1,13 @@
 import { hasHeaders, parseCsv, pick, toRecords, type Row } from "../csv";
 import { parseTimestamp, parseDateAndTime } from "../dates";
-import { parseMoney, parseQuantity } from "../numbers";
+import {
+  decimalSeparatorOf,
+  isAmbiguousNumber,
+  legacyParseMoney,
+  legacyParseQuantity,
+  parseMoney,
+  parseQuantity,
+} from "../numbers";
 import type { ImportFormat, ImportOptions, ImportedExecution, ParsedImport } from "../types";
 
 export interface FillsColumnMap {
@@ -50,9 +57,22 @@ export const rowsToFills = (
   columns: FillsColumnMap,
   options: ImportOptions,
   spec: Pick<FillsFormatSpec, "rowFilter" | "normalizeSymbol"> = {},
-): { executions: ImportedExecution[]; skippedRows: number } => {
+): { executions: ImportedExecution[]; skippedRows: number; warnings: string[] } => {
   const executions: ImportedExecution[] = [];
+  const warnings: string[] = [];
   let skippedRows = 0;
+  // The file's own values decide how an ambiguous "1,500" reads.
+  const numericCells = records.flatMap((row) => [
+    pick(row, columns.quantity),
+    pick(row, columns.price),
+    ...(columns.fees ?? []).map((aliases) => pick(row, aliases)),
+  ]);
+  const decimal = decimalSeparatorOf(numericCells);
+  const ambiguous = decimal ? undefined : numericCells.find(isAmbiguousNumber);
+  if (ambiguous)
+    warnings.push(
+      `Values such as "${ambiguous}" can mean a thousands separator or a decimal comma, and nothing else in the file tells which; they were read with a thousands separator. Check the quantities and prices in the preview.`,
+    );
 
   for (const row of records) {
     if (spec.rowFilter && !spec.rowFilter(row)) {
@@ -61,8 +81,10 @@ export const rowsToFills = (
     }
     const symbolRaw = pick(row, columns.symbol);
     const side = parseSide(pick(row, columns.side));
-    const quantity = parseQuantity(pick(row, columns.quantity));
-    const price = parseMoney(pick(row, columns.price));
+    const quantityText = pick(row, columns.quantity);
+    const priceText = pick(row, columns.price);
+    const quantity = parseQuantity(quantityText, decimal);
+    const price = parseMoney(priceText, decimal);
     // Try the single timestamp column first; fall back to separate date+time
     // columns (some exports put only a wall-clock time in their "time" field).
     let executedAt = columns.timestamp
@@ -89,14 +111,31 @@ export const rowsToFills = (
     }
 
     const fee = (columns.fees ?? [])
-      .map((aliases) => Math.abs(parseMoney(pick(row, aliases))))
+      .map((aliases) => Math.abs(parseMoney(pick(row, aliases), decimal)))
       .filter((value) => Number.isFinite(value))
       .reduce((total, value) => total + value, 0);
 
     const symbol = (spec.normalizeSymbol ?? ((s: string) => s.trim().toUpperCase()))(symbolRaw);
-    executions.push({ symbol, side, quantity, price, fee, executedAt });
+    // Earlier imports read some decimal commas as thousands separators.
+    const legacyQuantity = legacyParseQuantity(quantityText);
+    const legacyPrice = legacyParseMoney(priceText);
+    const legacy = {
+      ...(Number.isFinite(legacyQuantity) && legacyQuantity > 0 && legacyQuantity !== quantity
+        ? { quantity: legacyQuantity }
+        : {}),
+      ...(Number.isFinite(legacyPrice) && legacyPrice !== price ? { price: legacyPrice } : {}),
+    };
+    executions.push({
+      symbol,
+      side,
+      quantity,
+      price,
+      fee,
+      executedAt,
+      ...(Object.keys(legacy).length ? { legacy } : {}),
+    });
   }
-  return { executions, skippedRows };
+  return { executions, skippedRows, warnings };
 };
 
 /** Build an ImportFormat from a declarative column spec — the path for most broker CSVs. */
@@ -106,7 +145,7 @@ export const makeFillsFormat = (spec: FillsFormatSpec): ImportFormat => ({
   detect: (headers) => hasHeaders(headers, spec.required),
   parse: (content, options): ParsedImport => {
     const records = toRecords(parseCsv(content));
-    const { executions, skippedRows } = rowsToFills(records, spec.columns, options, spec);
-    return { format: spec.id, executions, skippedRows, warnings: [] };
+    const { executions, skippedRows, warnings } = rowsToFills(records, spec.columns, options, spec);
+    return { format: spec.id, executions, skippedRows, warnings };
   },
 });

@@ -267,8 +267,12 @@ export function parseNumericCell(raw: string): number {
   // dot group ("217.131") is ambiguous with a plain 3-decimal price (FX JPY
   // pairs), so dots read as thousands only when unambiguous: two or more
   // groups, or a decimal comma present.
-  if (/^[+-]?\d{1,3}(,\d{3})+(\.\d+)?$/.test(s)) s = s.replaceAll(",", "");
-  else if (/^[+-]?\d{1,3}(\.\d{3}){2,}(,\d+)?$/.test(s) || /^[+-]?\d{1,3}(\.\d{3})+,\d+$/.test(s)) {
+  // A leading "0," or "0." group is never a thousands group ("0,005" is a decimal).
+  if (/^[+-]?[1-9]\d{0,2}(,\d{3})+(\.\d+)?$/.test(s)) s = s.replaceAll(",", "");
+  else if (
+    /^[+-]?[1-9]\d{0,2}(\.\d{3}){2,}(,\d+)?$/.test(s) ||
+    /^[+-]?[1-9]\d{0,2}(\.\d{3})+,\d+$/.test(s)
+  ) {
     s = s.replaceAll(".", "").replace(",", ".");
   } else if (/^[+-]?\d+,\d+$/.test(s)) s = s.replace(",", ".");
   s = s.replaceAll(/\s/gu, "");

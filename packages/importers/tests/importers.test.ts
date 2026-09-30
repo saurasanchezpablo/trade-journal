@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { buildRoundTrips } from "@luxalgo/journal-core";
 import { detectFormat, parseAuto } from "../src/detect";
 import { parseWithMapping, readHeaders } from "../src/formats/generic";
-import { parseMoney } from "../src/numbers";
+import { parseMoney, parseQuantity } from "../src/numbers";
+import { parseNumericCell } from "../src/history/csv";
 import { parseTimestamp } from "../src/dates";
 import { storedImportMetadata, type ImportedExecution } from "../src/types";
 
@@ -201,6 +202,47 @@ describe("parsing primitives survive the mess real exports contain", () => {
     expect(parseMoney("(45.20)")).toBe(-45.2);
     expect(parseMoney("1.234,56")).toBe(1234.56);
     expect(parseMoney("-12.5")).toBe(-12.5);
+  });
+
+  it("a minus sign after the currency symbol still makes the value negative", () => {
+    expect(parseMoney("$-12.50")).toBe(-12.5);
+    expect(parseMoney("-$12.50")).toBe(-12.5);
+    expect(parseMoney("€ -3,5")).toBe(-3.5);
+  });
+
+  it("a comma that cannot be a thousands separator is a decimal comma", () => {
+    expect(parseMoney("0,005")).toBe(0.005);
+    expect(parseMoney("0,12345")).toBe(0.12345);
+    expect(parseMoney("42000,50")).toBe(42000.5);
+    expect(parseMoney("1.234,567")).toBe(1234.567);
+    expect(parseMoney("1,234,567")).toBe(1234567);
+    expect(parseQuantity("0,005")).toBe(0.005);
+    // "12,345" alone is ambiguous: thousands unless the file uses decimal commas.
+    expect(parseMoney("12,345")).toBe(12345);
+    expect(parseMoney("12,345", ",")).toBe(12.345);
+    expect(parseMoney("1.234", ",")).toBe(1234);
+    expect(parseNumericCell("0,005")).toBe(0.005);
+  });
+
+  it("a file that proves decimal commas reads its ambiguous values the same way", () => {
+    const result = parseAuto(`Date;Time;Symbol;Quantity;Price;Side
+2026-01-05;09:31:00;BTCUSD;0,005;42000,50;Buy
+2026-01-05;10:15:00;BTCUSD;1,005;42100,50;Buy`)!;
+    expect(result.format).toBe("tradervue");
+    expect(result.executions.map((e) => [e.quantity, e.price])).toEqual([
+      [0.005, 42000.5],
+      [1.005, 42100.5],
+    ]);
+    // The earlier parser read these quantities as 5 and 1005; a reimport over them is refused.
+    expect(result.executions.map((e) => e.legacy)).toEqual([{ quantity: 5 }, { quantity: 1005 }]);
+    expect(result.warnings).toEqual([]);
+  });
+
+  it("an ambiguous thousands comma in a file without decimals is read as thousands and flagged", () => {
+    const result = parseAuto(`Date,Time,Symbol,Quantity,Price,Side
+2026-01-05,09:31:00,AAPL,"1,500",185,Buy`)!;
+    expect(result.executions[0]!.quantity).toBe(1500);
+    expect(result.warnings.join(" ")).toContain("1,500");
   });
 
   it("naive timestamps are interpreted in the trader's timezone, not the server's", () => {

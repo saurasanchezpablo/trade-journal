@@ -61,7 +61,11 @@ selections beyond the defaults.
 
 - Quoted fields, embedded commas/newlines, BOM, `;`/tab delimiters (RFC 4180 parser,
   zero dependencies)
-- `$1,234.56`, `(45.20)` negatives, European `1.234,56` decimals
+- `$1,234.56`, `(45.20)` and `$-12.50` negatives, European `1.234,56` decimals. A comma
+  that cannot be a thousands separator is a decimal comma (`0,005`, `42000,50`,
+  `0,12345`). A value such as `1,500` reads either way: fill exports decide from their
+  other values (`185,50` proves decimal commas, `185.50` a decimal point), and when nothing
+  in the file decides, it is read as thousands and the preview warns
 - Naive timestamps interpreted in the **statement's timezone** (DST-safe two-pass
   conversion), explicit offsets honored as-is
 - TradeZella P&L: the row's stated net P&L is kept exactly (commissions are the fee and the
@@ -234,6 +238,12 @@ corrected history in a new account, or delete the affected trades first.
   their earlier P&L and merged trades. Where the export has separate date and time
   columns, the earlier parser saved midnight: the corrected timestamps are a new identity,
   and a re-import over those midnight rows is refused.
+
+- **Decimal commas** such as `0,005` were read as thousands (`5`). Corrected quantities and
+  prices are a new identity: re-importing a fill export over rows saved with the earlier
+  reading is refused. History exports (TradingView strategy, MetaTrader, generic mapper)
+  read `0,005` correctly too, but do not recognize rows saved with the earlier reading;
+  delete those trades before importing the file again.
 
 ## Sample file
 
