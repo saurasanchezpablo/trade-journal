@@ -75,7 +75,7 @@ function Accounts() {
       <div className="grid gap-3 p-4 md:grid-cols-2">
         {data?.accounts.length === 0 && (
           <p className="col-span-full py-16 text-center text-sm text-muted-foreground">
-            No accounts yet — create one on the Import page.
+            No accounts yet. Create one on the Import page.
           </p>
         )}
         {data?.accounts.map((account) => (

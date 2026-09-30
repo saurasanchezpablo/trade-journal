@@ -10,7 +10,7 @@ import { THEME_INIT_SCRIPT } from "@/lib/theme";
 export const metadata: Metadata = {
   title: "Trade Journal",
   description:
-    "The open-source trade journal — broker sync, deep analytics, daily journaling, and AI-native reflection. Self-hosted, free forever.",
+    "The open-source trade journal: broker sync, deep analytics, daily journaling, and AI-native reflection. Self-hosted, free forever.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

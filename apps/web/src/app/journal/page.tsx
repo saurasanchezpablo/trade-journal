@@ -84,7 +84,7 @@ function Journal() {
         ) : null}
         {data?.days.length === 0 && (
           <p className="py-16 text-center text-sm text-muted-foreground">
-            No trading days yet — import trades or write your first day note.
+            No trading days yet. Import trades or write your first day note.
           </p>
         )}
         {data?.days.slice(0, limit).map((day) => (

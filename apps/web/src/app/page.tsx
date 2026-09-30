@@ -372,7 +372,7 @@ function DashboardContent({
                 <CardContent className="dashboard-visual-card-content">
                   {edgeScore.score === null ? (
                     <p className="py-8 text-center text-sm text-muted-foreground">
-                      Needs 5+ closed trades. The formula is open —{" "}
+                      Needs 5+ closed trades. The formula is open:{" "}
                       <a
                         className="underline"
                         href="https://github.com/LuxAlgo/trade-journal/blob/main/docs/edge-score.md"
@@ -519,9 +519,7 @@ function DashboardContent({
                       ))}
                     </TabsContent>
                     <TabsContent value="open" className="space-y-1">
-                      {data.openPositions.length === 0 && (
-                        <Empty label="Flat — no open positions" />
-                      )}
+                      {data.openPositions.length === 0 && <Empty label="Flat: no open positions" />}
                       {data.openPositions.map((position) => (
                         <div
                           key={position.key}

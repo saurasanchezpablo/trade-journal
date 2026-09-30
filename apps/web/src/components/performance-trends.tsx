@@ -170,7 +170,7 @@ export function PerformanceTrendsReport({ query }: { query: string }) {
               <CardHeader>
                 <CardTitle>Largest winning and losing trade</CardTitle>
                 <p className="text-xs text-muted-foreground">
-                  Individual closed trades, after fees—not daily totals. Uses your journal’s
+                  Individual closed trades, after fees, not daily totals. Uses your journal’s
                   win/loss classification.
                 </p>
               </CardHeader>
@@ -272,7 +272,7 @@ export function PerformanceTrendsReport({ query }: { query: string }) {
           )}
           <p className="text-xs leading-relaxed text-muted-foreground">
             Only trades within your selection are used; earlier trades are not borrowed to fill a
-            window. Rolling windows overlap and describe recent results—not a forecast. Small
+            window. Rolling windows overlap and describe recent results, not a forecast. Small
             samples can change sharply.
           </p>
         </>

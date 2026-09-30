@@ -63,7 +63,7 @@ export function ImportReconciliation({
           </div>
           {review.multipliers.map((item) => (
             <p key={item.symbol} className="text-xs">
-              {item.symbol} multiplier: {item.value ?? "missing — configure in Settings"}
+              {item.symbol} multiplier: {item.value ?? "missing, set it in Settings"}
             </p>
           ))}
           {review.multipliers.some((item) => item.value === null) && (

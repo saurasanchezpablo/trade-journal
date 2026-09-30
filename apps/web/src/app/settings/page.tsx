@@ -126,7 +126,7 @@ function Settings() {
                 htmlFor="contract-multipliers"
                 className="mb-1 block text-xs text-muted-foreground"
               >
-                Contract multipliers (futures/options) — one per line, SYMBOL=multiplier
+                Contract multipliers (futures/options), one per line: SYMBOL=multiplier
               </Label>
               <textarea
                 id="contract-multipliers"
