@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { Vela } from "@luxalgo/vela";
+import type { BarRange, DataProvider, OHLCV, Vela } from "@luxalgo/vela";
 import {
   RESOLUTIONS,
   type MarketConnection,
@@ -11,7 +11,7 @@ import {
 } from "@/lib/market-data";
 import { providerInfo } from "@/lib/market-providers";
 import type { MarketCsvDataset } from "@/lib/market-csv";
-import { replayFrame } from "@/lib/trade-replay";
+import { formingBar, replayFrame } from "@/lib/trade-replay";
 import { VELA_TIMEFRAME } from "@/lib/chart-analysis";
 import { useApi } from "@/lib/use-api";
 import { fmtMoney, fmtNumber, fmtPercent } from "@/lib/utils";
@@ -529,16 +529,6 @@ function HistoricalReplay({
     setPlaying(false);
   }, [history]);
   useEffect(() => {
-    if (!playing || privacy) return;
-    const timer = window.setInterval(
-      () => {
-        if (!document.hidden) setCount((current) => Math.min(current + 1, history.bars.length));
-      },
-      1000 / Number(speed),
-    );
-    return () => window.clearInterval(timer);
-  }, [playing, privacy, speed, history.bars.length]);
-  useEffect(() => {
     if (count >= history.bars.length || privacy) setPlaying(false);
   }, [count, privacy, history.bars.length]);
   const complete = count === history.bars.length;
@@ -569,7 +559,15 @@ function HistoricalReplay({
                 prices; fill labels and MAE/MFE estimates are withheld. See the data limits below.
               </p>
             )}
-            <ReplayChart history={history} nextFrame={frame} tradeKey={trade.key} />
+            <ReplayChart
+              history={history}
+              fills={history.estimate.priceBasisMismatch ? [] : executions}
+              count={count}
+              playing={playing && !privacy}
+              speed={Number(speed)}
+              onAdvance={setCount}
+              tradeKey={trade.key}
+            />
             <div className="flex flex-wrap items-center gap-2">
               <Button
                 variant="outline"
@@ -613,9 +611,11 @@ function HistoricalReplay({
                 value={speed}
                 onValueChange={setSpeed}
               >
+                <option value="0.5">0.5×</option>
                 <option value="1">1×</option>
                 <option value="2">2×</option>
                 <option value="4">4×</option>
+                <option value="8">8×</option>
               </OptionSelect>
             </div>
             <input
@@ -632,8 +632,10 @@ function HistoricalReplay({
             />
             <p className="text-xs text-muted-foreground">
               {count} / {history.bars.length} candles · Through{" "}
-              {new Date(frame.through).toISOString()} (UTC). Candles are revealed at bar close; this
-              is not a tick-by-tick simulation.
+              {new Date(frame.through).toISOString()} (UTC). While playing, each candle is drawn
+              forming from open to close (through its low then high, or high then low for a down
+              candle); the real order inside a candle is not known, so this is not a tick-by-tick
+              simulation.
             </p>
           </>
         )}
@@ -684,23 +686,48 @@ function HistoricalReplay({
   );
 }
 
+/** Complete candles pushed a frame, at most: smooth enough, and light on the chart. */
+const FRAME_MS = 33;
+
+/**
+ * The replay's chart. While playing it runs as a live chart on a small "replay" source: each
+ * candle forms over its share of time (`formingBar`), so Vela glides the forming candle and
+ * scrolls along as candles appear. A jump (the slider, Restart, Next candle, Show all) redraws
+ * the revealed candles at once. Only revealed candles and fills ever reach the chart.
+ */
 function ReplayChart({
   history,
-  nextFrame,
+  fills,
+  count,
+  playing,
+  speed,
+  onAdvance,
   tradeKey,
 }: {
   history: TradeMarketResult;
-  nextFrame: ReturnType<typeof replayFrame<ChartExecution>>;
+  fills: ChartExecution[];
+  /** Complete candles revealed. */
+  count: number;
+  playing: boolean;
+  /** Candles a second. */
+  speed: number;
+  /** The animation finished a candle: this many are now revealed. */
+  onAdvance: (count: number) => void;
   /** The chart's picture goes with an AI critique of this trade while it is shown. */
   tradeKey: string;
 }) {
   const host = useRef<HTMLDivElement>(null);
-  const chart = useRef<Vela | null>(null);
-  const frame = useRef(nextFrame);
-  const latest = useRef(nextFrame);
-  latest.current = nextFrame;
-  const update = useRef<(() => void) | null>(null);
   const [error, setError] = useState("");
+  const wanted = useRef({ count, playing, speed });
+  wanted.current = { count, playing, speed };
+  const fillsRef = useRef(fills);
+  fillsRef.current = fills;
+  const advance = useRef(onAdvance);
+  advance.current = onAdvance;
+  /** The count the chart itself last reached, so its own progress is not taken for a jump. */
+  const reached = useRef(count);
+  const controls = useRef<{ jump(count: number): void; sync(): void } | null>(null);
+
   useEffect(() => {
     let disposed = false;
     let cleanup = () => {};
@@ -709,6 +736,25 @@ function ReplayChart({
       const { Vela, registerNativeIndicator, unregisterNativeIndicator } =
         await import("@luxalgo/vela");
       if (disposed || !host.current) return;
+      const bars = history.bars;
+      const step = RESOLUTIONS[history.resolution];
+      // Each redraw loads the replay source again under a new name: Vela takes the same
+      // symbol for no change and would neither reload nor subscribe again.
+      let generation = 0;
+      const symbol = () => `replay:${history.symbol}${generation ? `.${generation}` : ""}`;
+      let shown = wanted.current.count;
+      /** A candle part-formed when play paused, so resuming carries on from there. */
+      let partial: { index: number; progress: number } | null = null;
+      let push: ((bar: OHLCV) => void) | null = null;
+      let run = 0;
+      let frame = 0;
+      const through = () => {
+        const last = bars[shown - 1];
+        return last ? last.time + step : -Infinity;
+      };
+
+      let emitted = NaN;
+      let emitFills: (() => void) | null = null;
       const type = `replay-fills-${randomId()}`;
       registerNativeIndicator({
         type,
@@ -719,80 +765,175 @@ function ReplayChart({
         defaultInputs: () => ({}),
         create: () => ({
           start(ctx) {
-            ctx.emit({
-              labels: frame.current.fills.map((fill, index) => ({
-                id: `fill-${index}`,
-                paneId: "price",
-                xloc: "bar_time" as const,
-                x: Date.parse(fill.executedAt),
-                y: fill.price,
-                yloc: "price" as const,
-                text: `${fill.side.toUpperCase()} ${fill.quantity}`,
-                style: "label_left" as const,
-                color: fill.side === "buy" ? "#087f23" : "#bd2626",
-                textColor: "#ffffff",
-                size: "small" as const,
-                textAlign: "center" as const,
-                fontFamily: "default" as const,
-                overlay: true,
-              })),
-            });
+            emitFills = () => {
+              emitted = through();
+              ctx.emit({
+                labels: fillsRef.current
+                  .filter((fill) => Date.parse(fill.executedAt) <= emitted)
+                  .map((fill, index) => ({
+                    id: `fill-${index}`,
+                    paneId: "price",
+                    xloc: "bar_time" as const,
+                    x: Date.parse(fill.executedAt),
+                    y: fill.price,
+                    yloc: "price" as const,
+                    text: `${fill.side.toUpperCase()} ${fill.quantity}`,
+                    style: "label_left" as const,
+                    color: fill.side === "buy" ? "#087f23" : "#bd2626",
+                    textColor: "#ffffff",
+                    size: "small" as const,
+                    textAlign: "center" as const,
+                    fontFamily: "default" as const,
+                    overlay: true,
+                  })),
+              });
+            };
+            emitFills();
             ctx.setStatus("idle");
           },
-          onBars() {},
+          onBars() {
+            // Fills follow the revealed time, not every forming tick.
+            if (emitted !== through()) emitFills?.();
+          },
           onViewport() {},
           setInputs() {},
           suspend() {},
           resume() {},
-          stop() {},
+          stop() {
+            emitFills = null;
+          },
         }),
       });
+
+      const feed: DataProvider = {
+        info: () => ({
+          name: "replay",
+          capabilities: { enumerate: false, stream: true, symbolInfo: false },
+        }),
+        async getBars(_ticker: string, _timeframe: string, range: BarRange) {
+          return bars
+            .slice(0, shown)
+            .filter(
+              (bar) =>
+                (range.from == null || bar.time >= range.from) &&
+                (range.to == null || bar.time <= range.to),
+            );
+        },
+        subscribe(_ticker: string, _timeframe: string, onBar: (bar: OHLCV) => void) {
+          push = onBar;
+          return () => {
+            if (push === onBar) push = null;
+          };
+        },
+      };
       const dark = () => document.documentElement.classList.contains("dark");
       const instance = new Vela(host.current, {
-        symbol: history.symbol,
+        symbol: symbol(),
         timeframe: VELA_TIMEFRAME[history.resolution],
-        data: latest.current.bars,
-        live: false,
+        live: true,
         height: 420,
         theme: dark() ? "dark" : "light",
         priceStyle: "candles",
         volume: true,
         drawings: false,
+        // The forming candle glides toward each step instead of snapping.
+        animations: { liveBar: 60 },
       });
-      chart.current = instance;
+      instance.data.registerProvider("replay", feed);
       clipOffscreenDashes(instance.renderer);
       limitChartView(instance.renderer);
       const unregister = registerTradeSnapshot(tradeKey, () => instance.renderer.screenshot());
-      frame.current = latest.current;
       instance.addNativeIndicator(type);
-      let updating = false;
-      // Coalesce rapid scrubbing/ticks instead of queuing expensive Vela reloads.
-      const flush = async () => {
-        if (updating || disposed) return;
-        updating = true;
-        try {
-          do {
-            frame.current = latest.current;
-            await instance.setMarket({ data: frame.current.bars });
-          } while (!disposed && frame.current !== latest.current);
-        } catch {
-          if (!disposed) setError("The replay chart could not be updated.");
-        } finally {
-          updating = false;
-        }
+
+      const stop = () => {
+        run += 1;
+        cancelAnimationFrame(frame);
       };
-      update.current = () => {
-        void flush();
+      // Coalesce rapid scrubbing instead of queuing chart reloads.
+      let reloading = false;
+      let target = shown;
+      const jump = (count: number) => {
+        stop();
+        partial = null;
+        shown = count;
+        target = count;
+        if (reloading) return;
+        reloading = true;
+        void (async () => {
+          try {
+            do {
+              const next = target;
+              generation += 1;
+              push = null;
+              await instance.setMarket({ symbol: symbol() });
+              emitFills?.();
+              if (next === target) break;
+            } while (!disposed);
+          } catch {
+            if (!disposed) setError("The replay chart could not be updated.");
+          } finally {
+            reloading = false;
+            if (!disposed) sync();
+          }
+        })();
       };
+      const play = async (candlesPerSecond: number) => {
+        const token = ++run;
+        // Just after a redraw the source may not be subscribed yet.
+        for (let wait = 0; !push && wait < 60 && token === run && !disposed; wait++)
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        if (token !== run || disposed || !push) return;
+        const duration = 1000 / candlesPerSecond;
+        let index = shown;
+        let start =
+          performance.now() - (partial?.index === index ? partial.progress : 0) * duration;
+        let previous = performance.now();
+        let pushed = 0;
+        const tick = (now: number) => {
+          if (token !== run || disposed) return;
+          // Back from a hidden tab: carry on where it was rather than rushing to catch up.
+          if (now - previous > 250) start += now - previous - FRAME_MS;
+          previous = now;
+          const bar = bars[index];
+          if (!bar) return;
+          const progress = Math.min(1, (now - start) / duration);
+          if (progress >= 1 || now - pushed >= FRAME_MS) {
+            push?.(formingBar(bar, progress));
+            pushed = now;
+          }
+          partial = { index, progress };
+          if (progress >= 1) {
+            index += 1;
+            shown = index;
+            partial = null;
+            reached.current = index;
+            emitFills?.();
+            advance.current(index);
+            if (index >= bars.length) return;
+            start = now;
+          }
+          frame = requestAnimationFrame(tick);
+        };
+        frame = requestAnimationFrame(tick);
+      };
+      const sync = () => {
+        if (reloading) return;
+        stop();
+        const { playing, speed } = wanted.current;
+        if (playing && shown < bars.length) void play(speed);
+      };
+      controls.current = { jump, sync };
+      sync();
+
       const observer = new MutationObserver(() => instance.setTheme(dark() ? "dark" : "light"));
       observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
       cleanup = () => {
-        update.current = null;
+        stop();
+        controls.current = null;
         unregister();
         observer.disconnect();
         instance.destroy();
         unregisterNativeIndicator(type);
-        if (chart.current === instance) chart.current = null;
       };
     })().catch(() => {
       if (!disposed) setError("The historical chart could not be rendered.");
@@ -801,10 +942,16 @@ function ReplayChart({
       disposed = true;
       cleanup();
     };
-  }, [history]);
+  }, [history, tradeKey]);
+  // A count the chart did not reach itself is a jump.
   useEffect(() => {
-    update.current?.();
-  }, [nextFrame, history]);
+    if (count === reached.current) return;
+    reached.current = count;
+    controls.current?.jump(count);
+  }, [count]);
+  useEffect(() => {
+    controls.current?.sync();
+  }, [playing, speed]);
   return (
     <>
       {error && (

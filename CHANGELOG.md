@@ -6,6 +6,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
+- A trade's replay is animated: each candle forms from its open through its low and high to its close, the forming candle glides and the chart scrolls along as candles appear; pausing keeps a half-formed candle, and 0.5× and 8× join the speeds
 - Keyless market data for stocks, forex and more: Yahoo Finance (stocks and ETFs worldwide, indices, futures, currency pairs, crypto; unofficial, so it can be throttled), Nasdaq (daily US stocks and ETFs), Kraken (crypto and major currency pairs, its latest 720 candles) and OKX (crypto spot and perpetuals with deep history). Enable them under Settings → Market data; a forex, stock or futures trade then gets its candles by itself, as coins already did (see [docs/market-data.md](docs/market-data.md))
 - External analysis: follow YouTube channels (by @handle, link or one of their videos) and the AI summarises each new video every day into the author's main and secondary scenario with the reasons for each, their open trades, when they would go long or short with the stop loss and take profits, and their key levels; add a summary to a journal day as an External opinion (see [docs/external-analysis.md](docs/external-analysis.md))
 - Habits on Reports: revenge trades, trading on after losses, sizing up after a loss, size creeping up and results fading later in the day, each against the rest of your trades with what it cost; the AI chat reads the same numbers (see [docs/ai-coaching.md](docs/ai-coaching.md))
@@ -81,6 +82,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Fixed
 
+- A replay rewound or restarted no longer shows fill labels from later in the trade: the labels follow the revealed candles
 - Net P&L in Reports and playbook adherence is signed, so a gain is not told apart by colour alone; the market estimates dataset picker asks for a choice instead of starting blank; the prop tracker's section buttons say which one is shown; removing a market data CSV asks first
 - Searching or switching folders in the Notebook while writing no longer reloads the open note with older text
 - The dashboard shows amounts in the accounts' currency (not always dollars), says so when the selected accounts mix currencies instead of adding them up, and its "vs prior 7d" window follows the journal's timezone

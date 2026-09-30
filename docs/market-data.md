@@ -91,6 +91,13 @@ withheld. This catches conspicuous demo-data or price-basis mismatches; it is no
 a substitute for verifying the instrument and currency yourself.
 
 Replay reveals a completed candle at each step, with fills through its close time.
+While playing, each candle forms over its share of time (half a second at 2×): it opens,
+travels to its low then its high (its high first for a down candle) and settles on its
+close, its volume filling in, while the chart glides the forming candle and scrolls along as
+candles appear. The order of the high and low inside a candle is not known, so this path is
+an illustration. Pausing keeps a half-formed candle where it was. The slider, Restart, Next
+candle and Show all redraw the revealed candles at once. Speeds run from 0.5× to 8× (candles
+a second). The chart runs on a small "replay" source that serves only revealed candles.
 Unrevealed candles and future fill labels are not passed to Vela, and final excursion
 amounts are hidden while replaying. Boundary candles may include prices outside the
 holding period. This is trade-review playback, not tick simulation or a blind backtest;

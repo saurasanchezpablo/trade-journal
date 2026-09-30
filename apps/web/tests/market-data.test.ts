@@ -1,7 +1,7 @@
 import { createMarketTransport, marketTransport } from "../src/server/market-data/transport";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { estimateExcursions } from "../src/lib/excursions";
-import { replayFrame } from "../src/lib/trade-replay";
+import { formingBar, replayFrame } from "../src/lib/trade-replay";
 import { londonStrategicEdge, parseLseBars } from "../src/server/market-data/london-strategic-edge";
 import type { MarketHistory } from "../src/lib/market-data";
 
@@ -300,6 +300,45 @@ describe("replay without future chart data", () => {
     expect(replayFrame(history(), fills, 3).fills).toHaveLength(2);
     expect(replayFrame(history(), fills, 1).fills).toHaveLength(1);
     expect(replayFrame(history(), fills, 0).fills).toHaveLength(0);
+  });
+});
+
+describe("a replayed candle as it forms", () => {
+  const up = { time: start, open: 100, high: 110, low: 95, close: 105, volume: 40 };
+  const down = { time: start, open: 100, high: 104, low: 90, close: 92, volume: 40 };
+
+  it("starts at the open and ends exactly as the candle", () => {
+    expect(formingBar(up, 0)).toEqual({ ...up, high: 100, low: 100, close: 100, volume: 0 });
+    expect(formingBar(up, 1)).toEqual(up);
+  });
+
+  it("an up candle dips to its low before its high, its wicks growing on the way", () => {
+    // Path 100 → 95 → 110 → 105: 5 + 15 + 5 = 25 of distance.
+    const early = formingBar(up, 0.1);
+    expect(early.close).toBeCloseTo(97.5);
+    expect(early.low).toBeCloseTo(97.5);
+    expect(early.high).toBe(100);
+    const late = formingBar(up, 0.9);
+    expect(late.low).toBe(95);
+    expect(late.high).toBe(110);
+    expect(late.close).toBeCloseTo(107.5);
+    expect(late.volume).toBeCloseTo(36);
+  });
+
+  it("a down candle reaches its high first, and never leaves its range", () => {
+    expect(formingBar(down, 0.1).close).toBeGreaterThan(100);
+    for (let p = 0; p <= 1; p += 0.05) {
+      const bar = formingBar(down, p);
+      expect(bar.low).toBeGreaterThanOrEqual(down.low);
+      expect(bar.high).toBeLessThanOrEqual(down.high);
+      expect(bar.close).toBeGreaterThanOrEqual(bar.low);
+      expect(bar.close).toBeLessThanOrEqual(bar.high);
+    }
+  });
+
+  it("a flat candle stays flat", () => {
+    const flat = { time: start, open: 100, high: 100, low: 100, close: 100, volume: 2 };
+    expect(formingBar(flat, 0.5)).toEqual({ ...flat, volume: 1 });
   });
 });
 
