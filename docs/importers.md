@@ -64,10 +64,13 @@ selections beyond the defaults.
 - `$1,234.56`, `(45.20)` negatives, European `1.234,56` decimals
 - Naive timestamps interpreted in the **statement's timezone** (DST-safe two-pass
   conversion), explicit offsets honored as-is
-- TradeZella P&L reconciliation: when stated net P&L differs from price-implied gross
-  minus commissions, the difference is folded into fees so imported history agrees with
-  the trader's old numbers to the cent (skipped when a contract multiplier makes the
-  price-implied gross meaningless)
+- TradeZella P&L: the row's stated net P&L is kept exactly (commissions are the fee and the
+  rest is the reported gross), so imported history agrees with the trader's old numbers to
+  the cent with or without a contract multiplier; fees are never negative. Separate date
+  and time columns are combined. A row without a Long/Short side is skipped with a
+  warning, never assumed to be long
+- Trade-level rows (TradeZella, MetaTrader) each stay their own trade, even when two
+  trades on one symbol overlap in time
 - MetaTrader 4 HTML statements: each trade's gross P&L is the statement's own Profit (no
   contract size needed); Commission and Swap are signed, so a swap credit adds to the trade
   and a credit larger than the commission gives a zero fee, never a negative one. A
@@ -224,6 +227,13 @@ corrected history in a new account, or delete the affected trades first.
 - **MetaTrader 4 HTML statements** now read the statement's Profit, Commission and signed
   Swap. The fills keep the identity the earlier parser gave them, so earlier imports
   deduplicate; their trades keep the old price-based P&L and swap-as-fee until re-imported.
+
+- **TradeZella exports** keep the stated net P&L as reported P&L instead of folding a
+  difference into the fees (which could be negative), and overlapping trades on one symbol
+  stay separate. The fills keep their identity, so earlier imports deduplicate and keep
+  their earlier P&L and merged trades. Where the export has separate date and time
+  columns, the earlier parser saved midnight: the corrected timestamps are a new identity,
+  and a re-import over those midnight rows is refused.
 
 ## Sample file
 

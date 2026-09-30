@@ -73,6 +73,47 @@ describe("importers turn any platform's export into normalized executions", () =
     expect(tsla.direction).toBe("short");
   });
 
+  it("a TradeZella futures trade keeps its stated net P&L and never gets a negative fee", () => {
+    const result =
+      parseAuto(`Open Date,Close Date,Symbol,Side,Volume,Entry Price,Exit Price,Net P&L,Commissions
+2026-01-05 09:31:00,2026-01-05 10:15:00,ES,LONG,1,5000,5002,96,4`)!;
+    expect(result.executions.every((e) => e.fee >= 0)).toBe(true);
+    const [trade] = journalTrips(result.executions);
+    expect(trade!.fees).toBe(4);
+    expect(trade!.netPnl).toBe(96);
+  });
+
+  it("a TradeZella row without a side is skipped, never assumed to be long", () => {
+    const result = parseAuto(`Open Date,Close Date,Symbol,Volume,Entry Price,Exit Price,Net P&L
+2026-01-05 09:31:00,2026-01-05 10:15:00,AAPL,100,185.50,187.25,175`)!;
+    expect(result.executions).toHaveLength(0);
+    expect(result.skippedRows).toBe(1);
+    expect(result.warnings.join(" ")).toContain("side");
+  });
+
+  it("TradeZella's separate date and time columns keep the time of day", () => {
+    const result =
+      parseAuto(`Open Date,Open Time,Close Date,Close Time,Symbol,Side,Volume,Entry Price,Exit Price,Net P&L
+2026-01-05,09:31:00,2026-01-05,10:15:00,AAPL,LONG,100,185.50,187.25,175`)!;
+    expect(result.executions.map((e) => e.executedAt)).toEqual([
+      "2026-01-05T09:31:00.000Z",
+      "2026-01-05T10:15:00.000Z",
+    ]);
+    // What the earlier parser saved (midnight), so a reimport over it is refused.
+    expect(result.executions[0]!.legacyExecutedAt).toBe("2026-01-05T00:00:00.000Z");
+  });
+
+  it("overlapping TradeZella trades on one symbol stay separate trades", () => {
+    const result = parseAuto(`Open Date,Close Date,Symbol,Side,Volume,Entry Price,Exit Price,Net P&L
+2026-01-05 09:31:00,2026-01-05 10:15:00,AAPL,LONG,100,185.50,187.25,175
+2026-01-05 09:45:00,2026-01-05 10:30:00,AAPL,LONG,50,186.00,185.00,-50`)!;
+    const trades = journalTrips(result.executions);
+    expect(trades.map((t) => [t.quantity, t.netPnl]).sort()).toEqual([
+      [100, 175],
+      [50, -50],
+    ]);
+  });
+
   it("a Tradervue executions export imports fills with all three fee columns summed", () => {
     const result = parseAuto(TRADERVUE_CSV)!;
     expect(result.format).toBe("tradervue");
