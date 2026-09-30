@@ -222,6 +222,39 @@ describe("a scheduled digest", () => {
     });
     expect(box.sent).toHaveLength(2);
   });
+
+  it("cut short by a restart shows as failed and can be sent again right away", async () => {
+    // A row a previous server process was still writing when it stopped, a minute ago.
+    const now = new Date().toISOString();
+    db.$client
+      .prepare(
+        "INSERT INTO ai_digests (id, kind, period, status, created_at, updated_at) VALUES ('old', 'day', '2026-09-29', 'running', ?, ?)",
+      )
+      .run(now, now);
+    expect(listDigests()).toMatchObject([
+      { status: "failed", detail: expect.stringMatching(/Interrupted/) },
+    ]);
+    script(() => anthropic.text("A recap."));
+    const box = inbox();
+    expect(
+      await runDigest("day", "2026-09-29", { again: true, deps: { deliver: box.deliver } }),
+    ).toMatchObject({ status: "sent" });
+    expect(box.sent).toHaveLength(1);
+  });
+
+  it("left running by a restart is closed as failed by the scheduler", async () => {
+    const now = new Date().toISOString();
+    db.$client
+      .prepare(
+        "INSERT INTO ai_digests (id, kind, period, status, created_at, updated_at) VALUES ('old', 'week', '2026-09-25', 'running', ?, ?)",
+      )
+      .run(now, now);
+    await new DigestScheduler({ now: () => ny("2026-09-29", "09:00") }).tick();
+    const row = db.$client.prepare("SELECT status FROM ai_digests WHERE id = 'old'").get() as {
+      status: string;
+    };
+    expect(row.status).toBe("failed");
+  });
 });
 
 describe("digest settings", () => {

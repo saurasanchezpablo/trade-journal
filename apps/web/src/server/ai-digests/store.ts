@@ -29,6 +29,14 @@ const client = () => {
   return db.$client;
 };
 
+/**
+ * Digests this process is writing. A `running` row missing from it was cut short by a restart
+ * (the journal runs as one process): it is never left blocking "Send now" or the list. On
+ * globalThis because the scheduler and the API routes are separate module graphs in Next.js.
+ */
+const globalForDigests = globalThis as unknown as { __journalDigestsWriting?: Set<string> };
+const writing = (globalForDigests.__journalDigestsWriting ??= new Set<string>());
+
 const SETTINGS_KEY = "aiDigests";
 const KEEP = 120;
 
@@ -76,20 +84,25 @@ interface Row {
   updated_at: string;
 }
 
-const toDigest = (row: Row): Digest => ({
-  id: row.id,
-  kind: row.kind === "week" ? "week" : "day",
-  period: row.period,
-  status: (["running", "sent", "skipped", "failed"].includes(row.status)
-    ? row.status
-    : "failed") as DigestStatus,
-  conversationId: row.conversation_id,
-  title: row.title,
-  detail: row.detail,
-  delivered: row.delivered,
-  createdAt: row.created_at,
-  updatedAt: row.updated_at,
-});
+const INTERRUPTED = "Interrupted: the server stopped while writing it.";
+
+const toDigest = (row: Row): Digest => {
+  const interrupted = row.status === "running" && !writing.has(row.id);
+  return {
+    id: row.id,
+    kind: row.kind === "week" ? "week" : "day",
+    period: row.period,
+    status: (!interrupted && ["running", "sent", "skipped", "failed"].includes(row.status)
+      ? row.status
+      : "failed") as DigestStatus,
+    conversationId: row.conversation_id,
+    title: row.title,
+    detail: interrupted ? INTERRUPTED : row.detail,
+    delivered: row.delivered,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+};
 
 export const getDigest = (kind: DigestKind, period: string): Digest | null => {
   const row = client()
@@ -100,7 +113,7 @@ export const getDigest = (kind: DigestKind, period: string): Digest | null => {
 
 /**
  * Claim a digest for writing; null when it is already claimed. `again` (a manual "send now")
- * takes over a finished one, never one still being written.
+ * takes over a finished or interrupted one, never one this process is still writing.
  */
 export function claimDigest(kind: DigestKind, period: string, again = false): Digest | null {
   const sql = client();
@@ -129,7 +142,9 @@ export function claimDigest(kind: DigestKind, period: string, again = false): Di
       .run(KEEP);
     return id;
   })();
-  return claimed ? getDigest(kind, period) : null;
+  if (!claimed) return null;
+  writing.add(claimed);
+  return getDigest(kind, period);
 }
 
 export function finishDigest(
@@ -142,28 +157,35 @@ export function finishDigest(
     delivered?: number;
   },
 ) {
-  client()
-    .prepare(
-      "UPDATE ai_digests SET status = ?, conversation_id = ?, title = ?, detail = ?, delivered = ?, updated_at = ? WHERE id = ?",
-    )
-    .run(
-      result.status,
-      result.conversationId ?? null,
-      result.title ?? "",
-      result.detail ?? "",
-      result.delivered ?? 0,
-      nowIso(),
-      id,
-    );
+  try {
+    client()
+      .prepare(
+        "UPDATE ai_digests SET status = ?, conversation_id = ?, title = ?, detail = ?, delivered = ?, updated_at = ? WHERE id = ?",
+      )
+      .run(
+        result.status,
+        result.conversationId ?? null,
+        result.title ?? "",
+        result.detail ?? "",
+        result.delivered ?? 0,
+        nowIso(),
+        id,
+      );
+  } finally {
+    writing.delete(id);
+  }
 }
 
-/** A digest left `running` by a server that stopped mid-way can be claimed again. */
-export function releaseStale(olderThanMs: number) {
-  client()
-    .prepare(
-      "UPDATE ai_digests SET status = 'failed', detail = 'Interrupted: the server stopped while writing it.', updated_at = ? WHERE status = 'running' AND updated_at < ?",
-    )
-    .run(nowIso(), new Date(Date.now() - olderThanMs).toISOString());
+/** Mark as failed every digest left `running` by a server that stopped while writing it. */
+export function releaseInterrupted() {
+  const sql = client();
+  const running = sql.prepare("SELECT id FROM ai_digests WHERE status = 'running'").all() as {
+    id: string;
+  }[];
+  const update = sql.prepare(
+    "UPDATE ai_digests SET status = 'failed', detail = ?, updated_at = ? WHERE id = ? AND status = 'running'",
+  );
+  for (const { id } of running) if (!writing.has(id)) update.run(INTERRUPTED, nowIso(), id);
 }
 
 export const listDigests = (limit = 20): Digest[] =>

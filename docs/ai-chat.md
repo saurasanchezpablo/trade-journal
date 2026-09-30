@@ -93,7 +93,8 @@ the weekday you choose), in the journal's timezone. Both are off until you switc
   Each digest is sent once per day or week; **Send today's recap now** and **Send this
   week's review now** write one on demand (again if it was already sent).
 - The card lists the latest digests: sent (and to how many devices), skipped or failed, with
-  the reason. They are kept in their own table (`ai_digests`, created on first use); the most
+  the reason. A digest the server was writing when it stopped shows as failed (interrupted)
+  and can be sent again at once. They are kept in their own table (`ai_digests`, created on first use); the most
   recent 120 are kept. `JOURNAL_AI_DIGESTS=off` stops the check entirely.
 
 ## API

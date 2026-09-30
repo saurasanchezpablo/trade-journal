@@ -1,6 +1,6 @@
 import { getTimeZone } from "../settings";
 import { dueDigests } from "./schedule";
-import { getDigest, getDigestSettings, releaseStale } from "./store";
+import { getDigest, getDigestSettings, releaseInterrupted } from "./store";
 import { runDigest, type DigestDeps } from "./run";
 
 /**
@@ -9,8 +9,6 @@ import { runDigest, type DigestDeps } from "./run";
  * two settings and is cheap. One digest is written at a time.
  */
 const CHECK_MS = 60_000;
-/** A digest still `running` after this was cut short by a restart. */
-const STALE_MS = 15 * 60_000;
 
 export class DigestScheduler {
   private timer: ReturnType<typeof setInterval> | null = null;
@@ -19,7 +17,6 @@ export class DigestScheduler {
   constructor(private readonly options: { now?: () => number; deps?: Partial<DigestDeps> } = {}) {}
 
   start() {
-    releaseStale(STALE_MS);
     void this.tick();
     this.timer = setInterval(() => void this.tick(), CHECK_MS);
   }
@@ -34,6 +31,8 @@ export class DigestScheduler {
     if (this.busy) return;
     this.busy = true;
     try {
+      // A digest cut short by a restart shows as failed and can be sent again.
+      releaseInterrupted();
       const settings = getDigestSettings();
       if (!settings.recap.enabled && !settings.weekly.enabled) return;
       const now = (this.options.now ?? Date.now)();
