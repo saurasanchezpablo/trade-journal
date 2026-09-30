@@ -37,6 +37,8 @@ touches as little as possible.
 | `packages/core/src/index.ts`                                                             | `export * from "./behaviour";`                                                                                                                                    | Re-add the export.                                                          |
 | `apps/web/src/components/shell.tsx` (performance)                                        | `NavLink` prefetches on hover, focus or touch (`prefetch={false}` plus `router.prefetch`).                                                                        | Re-add the three handlers and `prefetch={false}`.                           |
 | `apps/web/src/components/shell.tsx` (external analysis)                                  | An "External analysis" entry in `NAV` (icon `MonitorPlay`).                                                                                                       | Re-add the entry and the icon import.                                       |
+| `apps/web/src/components/shell.tsx` (backtesting)                                        | A "Backtesting" entry in `NAV` after Charts (icon `FlaskConical`).                                                                                                | Re-add the entry and the icon import.                                       |
+| `packages/core/src/index.ts` (backtesting)                                               | `export * from "./backtest";` for the fork's `packages/core/src/backtest.ts`.                                                                                     | Re-add the export.                                                          |
 | `apps/web/src/app/journal/[date]/page.tsx` (external analysis)                           | `<ExternalOpinions>` above "Ask about this day", appending to the note like recaps.                                                                               | Re-add the import and the element.                                          |
 | `apps/web/src/server/market-data/http.ts`, `transport.ts`, `public-crypto.ts`            | Concurrent grid-aligned `windows()`, per-host `HOST_LIMITS`, hour-long cache for past pages, Binance symbol details beside the candles.                           | Keep upstream's adapters and re-add the pacing, paging and cache changes.   |
 
@@ -95,6 +97,10 @@ structure and re-apply the fix; each one has a test that fails without it.
   `components/ai-digests.tsx`, tests `ai-digests.test.ts` and `ai-provider-fixtures.ts`; the
   scheduler starts from `instrumentation-node.ts`.
 - Explained alerts: `lib/alert-explain.ts`, test `alert-explain.test.ts`.
+- Backtesting (docs/backtesting.md): `packages/core/src/backtest.ts` (the fill engine and
+  report), `lib/backtest-session.ts`, `lib/backtest-replay.ts`, `lib/backtest-strategies.ts`,
+  `server/backtest/*` (its `backtest_sessions` table), `app/api/backtests/**`,
+  `app/backtest/**`, `components/backtest/*`.
 - External analysis (docs/external-analysis.md): `lib/youtube.ts`, `lib/external-summary.ts`,
   `server/external-analysis/*` (its own tables; scheduler started from `instrumentation-node.ts`),
   `app/api/external/**`, `app/external/page.tsx`, components `external-summary-view.tsx` and
