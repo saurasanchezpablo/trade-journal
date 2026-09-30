@@ -48,6 +48,7 @@ import { ReviewExport } from "@/components/review-export";
 import { RuleChecklist } from "@/components/rule-checklist";
 import { useAutosave } from "@/lib/use-autosave";
 import { postJson, useApi } from "@/lib/use-api";
+import { NOT_A_NUMBER, parseDecimalInput } from "@/lib/number-input";
 import { fmtDuration, fmtMoney, fmtNumber, fmtPercent } from "@/lib/utils";
 import { tradeKeyFromSegment } from "@/lib/trade-links";
 import { formatTimestamp } from "@/lib/timezone";
@@ -271,7 +272,7 @@ function TradeView({ tradeKey }: { tradeKey: string }) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {executions
+                  {[...executions]
                     .sort((a, b) => a.executedAt.localeCompare(b.executedAt))
                     .map((execution) => (
                       <TableRow key={execution.id}>
@@ -436,46 +437,60 @@ function AnnotationsCard({
 
         <div className="grid grid-cols-2 gap-2">
           <div>
-            <label className="text-xs text-muted-foreground">Stop loss</label>
+            <label htmlFor="trade-stop-loss" className="text-xs text-muted-foreground">
+              Stop loss
+            </label>
             <MonetaryField>
               <Input
+                id="trade-stop-loss"
                 value={stopLoss}
                 onChange={(event) => {
                   setStopLoss(event.target.value);
-                  debounced({
-                    stopLoss: event.target.value === "" ? null : Number(event.target.value),
-                  });
+                  const value = parseDecimalInput(event.target.value);
+                  if (value !== undefined) debounced({ stopLoss: value });
                 }}
+                aria-invalid={parseDecimalInput(stopLoss) === undefined}
                 placeholder="planned stop"
                 inputMode="decimal"
               />
             </MonetaryField>
+            {parseDecimalInput(stopLoss) === undefined && (
+              <p className="mt-1 text-xs text-destructive">{NOT_A_NUMBER}</p>
+            )}
           </div>
           <div>
-            <label className="text-xs text-muted-foreground">Profit target</label>
+            <label htmlFor="trade-profit-target" className="text-xs text-muted-foreground">
+              Profit target
+            </label>
             <MonetaryField>
               <Input
+                id="trade-profit-target"
                 value={profitTarget}
                 onChange={(event) => {
                   setProfitTarget(event.target.value);
-                  debounced({
-                    profitTarget: event.target.value === "" ? null : Number(event.target.value),
-                  });
+                  const value = parseDecimalInput(event.target.value);
+                  if (value !== undefined) debounced({ profitTarget: value });
                 }}
+                aria-invalid={parseDecimalInput(profitTarget) === undefined}
                 placeholder="planned target"
                 inputMode="decimal"
               />
             </MonetaryField>
+            {parseDecimalInput(profitTarget) === undefined && (
+              <p className="mt-1 text-xs text-destructive">{NOT_A_NUMBER}</p>
+            )}
           </div>
         </div>
 
         <div>
-          <label className="text-xs text-muted-foreground">Playbook</label>
+          <label htmlFor="trade-playbook" className="text-xs text-muted-foreground">
+            Playbook
+          </label>
           <Select
             value={trade.playbookId ?? "none"}
             onValueChange={(value) => void onPatch({ playbookId: value === "none" ? null : value })}
           >
-            <SelectTrigger>
+            <SelectTrigger id="trade-playbook">
               <SelectValue placeholder="No playbook" />
             </SelectTrigger>
             <SelectContent>
@@ -490,8 +505,11 @@ function AnnotationsCard({
         </div>
 
         <div>
-          <label className="text-xs text-muted-foreground">Tags (comma-separated)</label>
+          <label htmlFor="trade-tags" className="text-xs text-muted-foreground">
+            Tags (comma-separated)
+          </label>
           <Input
+            id="trade-tags"
             value={tags}
             onChange={(event) => {
               setTags(event.target.value);
@@ -501,8 +519,11 @@ function AnnotationsCard({
           />
         </div>
         <div>
-          <label className="text-xs text-muted-foreground">Mistakes</label>
+          <label htmlFor="trade-mistakes" className="text-xs text-muted-foreground">
+            Mistakes
+          </label>
           <Input
+            id="trade-mistakes"
             value={mistakes}
             onChange={(event) => {
               setMistakes(event.target.value);

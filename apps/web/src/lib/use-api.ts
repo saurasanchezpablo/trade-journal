@@ -1,6 +1,6 @@
 "use client";
 
-import { startTransition, useCallback, useEffect, useState } from "react";
+import { startTransition, useCallback, useEffect, useRef, useState } from "react";
 import { acquireJson } from "./api-request";
 
 export interface ApiState<T> {
@@ -17,6 +17,7 @@ export const useApi = <T>(url: string | null): ApiState<T> => {
   const [loading, setLoading] = useState<boolean>(Boolean(url));
   const [tick, setTick] = useState(0);
   const [dataUrl, setDataUrl] = useState(url);
+  const lastTick = useRef(tick);
 
   useEffect(() => {
     if (!url) {
@@ -29,7 +30,10 @@ export const useApi = <T>(url: string | null): ApiState<T> => {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    const request = acquireJson<T>(url);
+    // A refresh follows a write: it must not reuse a read that started before it.
+    const fresh = tick !== lastTick.current;
+    lastTick.current = tick;
+    const request = acquireJson<T>(url, { fresh });
     request.promise
       .then((body) => {
         if (cancelled) return;

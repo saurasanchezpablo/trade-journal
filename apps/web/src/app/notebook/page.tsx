@@ -218,6 +218,7 @@ function Notebook() {
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Search notes"
+                aria-label="Search notes"
                 className="pl-8"
               />
             </div>

@@ -3,6 +3,7 @@
 import type { ImportReview, ImportReviewOptions } from "@/lib/import-review";
 import { Button } from "@/components/ui/button";
 import { fmtMoney } from "@/lib/utils";
+import { MonetaryValue } from "@/components/privacy";
 
 export function ImportReconciliation({
   review,
@@ -77,8 +78,9 @@ export function ImportReconciliation({
                 {review.totals.closedTrades} closed trades · {review.totals.openTrades} open trades
               </p>
               <p>
-                Closed-trade net P&amp;L: {fmtMoney(review.totals.netPnl, review.currency)} · Fees:{" "}
-                {fmtMoney(review.totals.fees, review.currency)}
+                Closed-trade net P&amp;L:{" "}
+                <MonetaryValue>{fmtMoney(review.totals.netPnl, review.currency)}</MonetaryValue> ·
+                Fees: <MonetaryValue>{fmtMoney(review.totals.fees, review.currency)}</MonetaryValue>
               </p>
             </div>
           )}
@@ -103,8 +105,8 @@ export function ImportReconciliation({
               {review.corrections.slice(0, 10).map((correction, index) => (
                 <p key={index} className="text-xs">
                   {correction.symbol} · {correction.executedAt}: commission{" "}
-                  {fmtMoney(correction.oldFee, review.currency)} →{" "}
-                  {fmtMoney(correction.newFee, review.currency)}
+                  <MonetaryValue>{fmtMoney(correction.oldFee, review.currency)}</MonetaryValue> →{" "}
+                  <MonetaryValue>{fmtMoney(correction.newFee, review.currency)}</MonetaryValue>
                 </p>
               ))}
               {review.corrections.length > 10 && (

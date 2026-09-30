@@ -122,10 +122,14 @@ function Settings() {
               </p>
             </div>
             <div>
-              <Label className="mb-1 block text-xs text-muted-foreground">
+              <Label
+                htmlFor="contract-multipliers"
+                className="mb-1 block text-xs text-muted-foreground"
+              >
                 Contract multipliers (futures/options) — one per line, SYMBOL=multiplier
               </Label>
               <textarea
+                id="contract-multipliers"
                 value={multipliers}
                 onChange={(event) => setMultipliers(event.target.value)}
                 placeholder={"ES=50\nNQ=20\nMES=5"}

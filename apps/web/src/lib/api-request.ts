@@ -6,9 +6,16 @@ interface PendingRequest {
 
 const pending = new Map<string, PendingRequest>();
 
-/** Share only in-flight GETs. Completed financial data is never retained in a global cache. */
-export function acquireJson<T>(url: string): { promise: Promise<T>; release: () => void } {
-  let request = pending.get(url);
+/**
+ * Share only in-flight GETs. Completed financial data is never retained in a global cache.
+ * `fresh` (a refresh after a write) never joins a read that started earlier: that read may
+ * predate the write.
+ */
+export function acquireJson<T>(
+  url: string,
+  { fresh = false }: { fresh?: boolean } = {},
+): { promise: Promise<T>; release: () => void } {
+  let request = fresh ? undefined : pending.get(url);
   if (!request) {
     const controller = new AbortController();
     const next: PendingRequest = { controller, users: 0, promise: Promise.resolve() };
@@ -35,10 +42,10 @@ export function acquireJson<T>(url: string): { promise: Promise<T>; release: () 
       shared.users--;
       // React Strict Mode can immediately reattach the same subscriber.
       queueMicrotask(() => {
-        if (shared.users === 0 && pending.get(url) === shared) {
-          pending.delete(url);
-          shared.controller.abort();
-        }
+        if (shared.users > 0) return;
+        // A fresh read may have taken its place; this one is still cancelled.
+        if (pending.get(url) === shared) pending.delete(url);
+        shared.controller.abort();
       });
     },
   };

@@ -51,6 +51,35 @@ describe("concurrent journal reads", () => {
     expect(await result).toBe("AbortError");
   });
 
+  it("a refresh after a write never reuses a read that started before it", async () => {
+    const resolvers: Array<(response: Response) => void> = [];
+    const signals: AbortSignal[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        (_url: string, options: RequestInit) =>
+          new Promise<Response>((resolve) => {
+            signals.push(options.signal as AbortSignal);
+            resolvers.push(resolve);
+          }),
+      ),
+    );
+    const before = acquireJson<{ checked: boolean }>("/progress");
+    before.release();
+    // The refresh subscribes before the old read's cancellation runs.
+    const after = acquireJson<{ checked: boolean }>("/progress", { fresh: true });
+    await Promise.resolve();
+    expect(resolvers).toHaveLength(2);
+    expect(signals[0]!.aborted).toBe(true);
+    resolvers[1]!(Response.json({ checked: true }));
+    expect(await after.promise).toEqual({ checked: true });
+    after.release();
+    // A later plain read shares nothing stale either.
+    const next = acquireJson("/progress");
+    expect(resolvers).toHaveLength(3);
+    next.release();
+  });
+
   it("allows a failed request to be retried", async () => {
     vi.stubGlobal(
       "fetch",

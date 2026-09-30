@@ -5,7 +5,14 @@ import { createRoot, type Root } from "react-dom/client";
 import { computeMetrics, type AnalysisFilters } from "@luxalgo/journal-core";
 import { TooltipProvider } from "../src/components/ui/tooltip";
 
+const loadedDay = () => ({
+  metrics: { ...computeMetrics([]), closedTrades: 1 },
+  trades: [],
+  intraday: [],
+  note: "Original note",
+});
 const state = vi.hoisted(() => ({
+  day: null as unknown,
   filters: { accounts: "a" } as AnalysisFilters,
   timeZone: "UTC",
   save: vi.fn(),
@@ -21,14 +28,7 @@ vi.mock("@/components/filter-bar", () => ({
 }));
 vi.mock("@/lib/use-api", () => ({
   postJson: (...args: unknown[]) => state.post(...args),
-  useApi: () => ({
-    data: {
-      metrics: { ...computeMetrics([]), closedTrades: 1 },
-      trades: [],
-      intraday: [],
-      note: "Original note",
-    },
-  }),
+  useApi: () => ({ data: state.day }),
 }));
 vi.mock("@/lib/use-autosave", () => ({
   useAutosave: () => ({ save: state.save, status: "Saved", flush: vi.fn() }),
@@ -48,7 +48,10 @@ vi.mock("@/components/journal-chat", () => ({ JournalChat: () => null }));
 vi.mock("@/lib/ai-stream", () => ({
   postAiStream: (url: string, body: unknown) => state.post(url, body),
 }));
-vi.mock("@/components/voice-note", () => ({ VoiceNote: () => null }));
+vi.mock("@/components/voice-note", () => ({
+  VoiceNote: ({ onText }: { onText: (text: string) => void }) =>
+    createElement("button", { type: "button", onClick: () => onText("Dictated words") }, "Dictate"),
+}));
 vi.mock("@/components/attachments", () => ({ Attachments: () => null }));
 vi.mock("@/components/review-export", () => ({ ReviewExport: () => null }));
 const { AskJournal } = await import("../src/components/ask-journal");
@@ -58,6 +61,7 @@ let container: HTMLDivElement;
 let root: Root;
 beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+  state.day = loadedDay();
   state.filters = { accounts: "a" };
   state.timeZone = "UTC";
   state.post.mockReset();
@@ -220,3 +224,13 @@ it.each(["account", "date", "unmount"])(
     expect(container.textContent).not.toContain("Generated recap");
   },
 );
+
+it("text added before the day has loaded waits for the saved note instead of replacing it", async () => {
+  state.day = null;
+  await renderDay();
+  await click("Dictate");
+  expect(state.save).not.toHaveBeenCalled();
+  state.day = loadedDay();
+  await renderDay();
+  expect(state.save.mock.calls.at(-1)![0].note).toBe("Original note Dictated words");
+});

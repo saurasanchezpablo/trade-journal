@@ -80,13 +80,21 @@ function Playbooks() {
                   variant="ghost"
                   size="icon"
                   className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                  aria-label={`Delete playbook ${playbook.name}`}
+                  title="Delete playbook"
                   onClick={async () => {
                     if (
                       confirm(
                         `Delete "${playbook.name}"? Trades keep their data, just lose the link.`,
                       )
                     ) {
-                      await postJson(`/api/playbooks/${playbook.id}`, undefined, "DELETE");
+                      try {
+                        await postJson(`/api/playbooks/${playbook.id}`, undefined, "DELETE");
+                      } catch (error) {
+                        alert(
+                          error instanceof Error ? error.message : "Could not delete the playbook.",
+                        );
+                      }
                       refresh();
                     }
                   }}

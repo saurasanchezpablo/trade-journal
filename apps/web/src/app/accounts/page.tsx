@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { postJson, useApi } from "@/lib/use-api";
+import { NOT_A_NUMBER, parseDecimalInput } from "@/lib/number-input";
 import { fmtMoney } from "@/lib/utils";
 import { MonetaryValue, MonetaryField } from "@/components/privacy";
 
@@ -150,30 +151,52 @@ function Accounts() {
               )}
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
-                  <label className="text-xs text-muted-foreground">
+                  <label
+                    htmlFor={`initial-balance-${account.id}`}
+                    className="text-xs text-muted-foreground"
+                  >
                     Initial balance (anchors drawdown %)
                   </label>
                   <MonetaryField>
                     <Input
+                      id={`initial-balance-${account.id}`}
                       defaultValue={account.initialBalance || ""}
                       placeholder="0"
                       inputMode="decimal"
                       onBlur={async (event) => {
-                        const value = Number(event.target.value || 0);
-                        if (value !== account.initialBalance) {
+                        const input = event.currentTarget;
+                        const value = parseDecimalInput(input.value);
+                        if (value === undefined) {
+                          input.value = account.initialBalance
+                            ? String(account.initialBalance)
+                            : "";
+                          alert(NOT_A_NUMBER);
+                          return;
+                        }
+                        if ((value ?? 0) === account.initialBalance) return;
+                        try {
                           await postJson(
                             `/api/accounts/${account.id}`,
-                            { initialBalance: value },
+                            { initialBalance: value ?? 0 },
                             "PATCH",
                           );
-                          refresh();
+                        } catch (error) {
+                          alert(
+                            error instanceof Error ? error.message : "Could not save the balance.",
+                          );
                         }
+                        refresh();
                       }}
                     />
                   </MonetaryField>
                 </div>
                 <div>
-                  <label className="text-xs text-muted-foreground">Profit calculation</label>
+                  <label
+                    htmlFor={`profit-calc-${account.id}`}
+                    className="text-xs text-muted-foreground"
+                  >
+                    Profit calculation
+                  </label>
                   <Select
                     value={account.profitCalcMethod}
                     onValueChange={async (value) => {
@@ -185,7 +208,7 @@ function Accounts() {
                       refresh();
                     }}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger id={`profit-calc-${account.id}`}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>

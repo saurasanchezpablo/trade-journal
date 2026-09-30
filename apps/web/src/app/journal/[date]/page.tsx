@@ -11,7 +11,7 @@ import { dayKeyOf } from "@luxalgo/journal-core";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { CandlestickChart } from "lucide-react";
-import { Suspense, use, useRef, useState } from "react";
+import { Suspense, use, useEffect, useRef, useState } from "react";
 import type { IntradayPoint, TradeMetrics } from "@luxalgo/journal-core";
 import { EquityArea } from "@/components/charts/equity-area";
 import { FilterBar, useFilters } from "@/components/filter-bar";
@@ -58,6 +58,10 @@ export default function JournalDayPage({ params }: { params: Promise<{ date: str
   );
 }
 
+/** The note with a block added after it, or the block alone on an empty note. */
+const appended = (separator: string, block: string) => (current: string) =>
+  current ? `${current}${separator}${block}` : block;
+
 function JournalDay({ date }: { date: string }) {
   const { query, values: filters, timeZone } = useFilters();
   // A scheduled recap's notification links here with its chat.
@@ -75,6 +79,20 @@ function JournalDay({ date }: { date: string }) {
     setNote(value);
     save({ note: value });
   };
+  // An addition made before the saved note has loaded would replace it: it waits for it.
+  const loaded = note !== null || data !== null;
+  const waiting = useRef<Array<(current: string) => string>>([]);
+  const change = (build: (current: string) => string) => {
+    if (loaded) scheduleSave(build(latestNote.current));
+    else waiting.current.push(build);
+  };
+  useEffect(() => {
+    if (!data || waiting.current.length === 0) return;
+    const builds = waiting.current;
+    waiting.current = [];
+    scheduleSave(builds.reduce((text, build) => build(text), latestNote.current));
+    // Once, when the day arrives (scheduleSave is recreated each render).
+  }, [data]);
 
   const m = data?.metrics;
   return (
@@ -193,14 +211,13 @@ function JournalDay({ date }: { date: string }) {
             date={date}
             today={date === dayKeyOf(new Date().toISOString(), timeZone)}
             note={noteValue}
-            onInsert={(markdown) => {
-              const current = latestNote.current;
-              scheduleSave(
+            onInsert={(markdown) =>
+              change((current) =>
                 current.trim()
                   ? `${current.replace(/\s+$/, "")}\n\n${markdown}\n`
                   : `${markdown}\n`,
-              );
-            }}
+              )
+            }
           />
         </div>
 
@@ -217,8 +234,8 @@ function JournalDay({ date }: { date: string }) {
               <VoiceNote
                 onPrepare={() => noteEditor.current?.focus()}
                 onText={(text) =>
-                  scheduleSave(
-                    noteValue ? `${noteValue}${noteValue.endsWith(" ") ? "" : " "}${text}` : text,
+                  change((current) =>
+                    current ? `${current}${current.endsWith(" ") ? "" : " "}${text}` : text,
                   )
                 }
               />
@@ -231,14 +248,7 @@ function JournalDay({ date }: { date: string }) {
               analyses are sent as they were that day.
             </p>
             <div className="mb-3">
-              <VoiceMemo
-                kind="day"
-                onInsert={(markdown) =>
-                  scheduleSave(
-                    latestNote.current ? `${latestNote.current}\n\n${markdown}` : markdown,
-                  )
-                }
-              />
+              <VoiceMemo kind="day" onInsert={(markdown) => change(appended("\n\n", markdown))} />
             </div>
             <div className="mb-3">
               <AiRecap
@@ -251,9 +261,7 @@ function JournalDay({ date }: { date: string }) {
                   setLastRecap({ key: `${date}:${timeZone}:${query}`, text: recap });
                   // Append to the current draft, including edits made while AI was running.
                   const section = `## AI recap\n\n${scope.label.replace(/[\\`*_{}\[\]<>#]/g, "").replace(/[\r\n]+/g, " ")}\n\n${analysesUsedMarkdown(analyses)}${recap}`;
-                  scheduleSave(
-                    latestNote.current ? `${latestNote.current}\n\n---\n\n${section}` : section,
-                  );
+                  change(appended("\n\n---\n\n", section));
                 }}
               />
             </div>
@@ -295,11 +303,7 @@ function JournalDay({ date }: { date: string }) {
         <ExternalOpinions
           date={date}
           note={noteValue}
-          onAdd={(markdown) =>
-            scheduleSave(
-              latestNote.current ? `${latestNote.current}\n\n---\n\n${markdown}` : markdown,
-            )
-          }
+          onAdd={(markdown) => change(appended("\n\n---\n\n", markdown))}
         />
         <Card>
           <CardHeader>
