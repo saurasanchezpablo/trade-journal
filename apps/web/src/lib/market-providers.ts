@@ -86,6 +86,59 @@ export const MARKET_PROVIDERS: ProviderInfo[] = [
     fields: [],
   },
   {
+    id: "okx",
+    name: "OKX",
+    mode: "public",
+    description:
+      "Public OKX candles for spot pairs and perpetual swaps, with years of 1-minute history. No API key required; availability depends on your region.",
+    symbolHint:
+      "Pick the market, then search its symbols: BTC-USDT on spot, BTC-USDT-SWAP for the perpetual.",
+    searchable: true,
+    fields: [],
+    datasets: [
+      { value: "", label: "Choose a market" },
+      { value: "spot", label: "Spot" },
+      { value: "swap", label: "Perpetual swaps" },
+    ],
+  },
+  {
+    id: "kraken",
+    name: "Kraken",
+    mode: "public",
+    description:
+      "Public Kraken candles for crypto and a dozen major currency pairs (EUR/USD, GBP/USD, USD/JPY...). No API key required, but only the latest 720 candles of each size: about 12 hours of 1m, 30 days of 1h, two years of 1d.",
+    symbolHint: "Use a Kraken pair such as EURUSD, GBPUSD, USDJPY or XBTUSD.",
+    searchable: true,
+    fields: [],
+  },
+  {
+    id: "nasdaq",
+    name: "Nasdaq",
+    mode: "public",
+    description:
+      "Daily candles for US stocks and ETFs from nasdaq.com, the last ten years, split adjusted. No API key required; not an official API, so it can change. For indices use Yahoo Finance.",
+    symbolHint: "Pick what it is, then search: AAPL (stock) or SPY (ETF).",
+    searchable: true,
+    fields: [],
+    resolutions: ["1d", "1w"],
+    datasets: [
+      { value: "", label: "Choose stock or ETF" },
+      { value: "stocks", label: "Stock" },
+      { value: "etf", label: "ETF" },
+    ],
+  },
+  {
+    id: "yahoo",
+    name: "Yahoo Finance",
+    mode: "public",
+    description:
+      "Stocks and ETFs worldwide, indices, futures, currency pairs and crypto. No API key required, but it is not an official API: Yahoo throttles it and refuses some networks. Intraday history is short (1m for 30 days, 5m to 30m for 60 days, 1h for two years); daily for the whole history.",
+    symbolHint:
+      "Use Yahoo symbols: AAPL, VOD.L (London), SAP.DE (Xetra), ^GSPC (S&P 500), ES=F (E-mini, front month), EURUSD=X, BTC-USD.",
+    searchable: true,
+    fields: [],
+  },
+  {
     id: "oanda",
     name: "OANDA",
     mode: "credentials",

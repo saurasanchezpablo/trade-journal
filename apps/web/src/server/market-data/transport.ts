@@ -16,6 +16,13 @@ export const HOST_LIMITS: Record<string, { concurrent: number; intervalMs: numbe
   "api.binance.com": { concurrent: 4, intervalMs: 60 },
   "api.bybit.com": { concurrent: 4, intervalMs: 60 },
   "api.exchange.coinbase.com": { concurrent: 3, intervalMs: 150 },
+  // OKX history candles: 20 requests in 2 seconds.
+  "www.okx.com": { concurrent: 3, intervalMs: 120 },
+  // Kraken's public API allows about one call a second.
+  "api.kraken.com": { concurrent: 1, intervalMs: 1100 },
+  // Unofficial sources: asked gently, one at a time.
+  "api.nasdaq.com": { concurrent: 1, intervalMs: 500 },
+  "query1.finance.yahoo.com": { concurrent: 1, intervalMs: 700 },
 };
 
 /** Process-local GET transport. Credentials are hashed, never stored in cache keys. */

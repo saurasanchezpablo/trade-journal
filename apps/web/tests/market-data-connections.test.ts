@@ -360,7 +360,7 @@ describe("market data credential lifecycle", () => {
     const fetcher = vi.fn();
     vi.stubGlobal("fetch", fetcher);
     const state = connections();
-    expect(state).toHaveLength(7);
+    expect(state).toHaveLength(11);
     expect(state.every((item) => !item.configured && item.source === null)).toBe(true);
     expect(state.map((item) => item.name)).toEqual(
       state.map((item) => item.name).sort((a, b) => a.localeCompare(b)),
@@ -588,7 +588,7 @@ describe("a crypto trade's chart", () => {
     });
   });
 
-  it("says what to enable when no exchange is on, and leaves stocks to you", async () => {
+  it("says what to enable when no exchange is on, for a coin and for a stock", async () => {
     const key = trade("BTCUSD");
     expect((await source(key)).reason).toMatch(/Enable Binance, Bybit or Coinbase/);
     db.delete(trades).run();
@@ -596,7 +596,7 @@ describe("a crypto trade's chart", () => {
     db.delete(accounts).run();
     saveConnection("binance", "");
     const stock = trade("AAPL", "equity");
-    expect((await source(stock)).reason).toMatch(/Choose a data provider/);
+    expect((await source(stock)).reason).toMatch(/Enable Yahoo Finance in Settings/);
   });
 
   it("loads candles around the trade, for a CFD booking and for an open trade too", async () => {

@@ -45,6 +45,23 @@ Automatic loads never save estimates; that still needs the confirmation checkbox
 booked as a CFD or forex shows the exchange's candles with a warning that its prices can
 differ from your broker's.
 
+Other instruments come from the keyless sources you enabled, each symbol checked in the
+source's own search first:
+
+- A **currency pair** (asset class forex, CFD or unset; EURUSD, EUR/USD, EUR_USD, EURUSD.x,
+  EURUSDm): Yahoo Finance (`EURUSD=X`), then Kraken (`EURUSD`). A pair is never sent to a
+  crypto exchange's coin of the same name (Binance's EURUSDT).
+- A **stock or ETF** (asset class equity): Yahoo Finance as written (`BRK.B` is `BRK-B`
+  there), then, when the trade needs daily candles anyway, Nasdaq as a stock or an ETF. A
+  trade booked without an asset class is looked up this way too when no exchange lists it
+  as a coin, and only if the source lists that exact ticker.
+- A **future** (asset class futures; ESZ5, ESZ25, `ES 12-25`, /ES): Yahoo's continuous front
+  month (`ES=F`), which can differ from your contract near a roll.
+
+Yahoo and Kraken keep short intraday histories, so an older trade gets the finest candles
+the source still has (a two-month-old trade 1h from Yahoo, not 5m). Options get no
+automatic candles.
+
 ## What MAE and MFE mean here
 
 These are **estimated gross position-equity excursions** over a closed position
@@ -156,15 +173,44 @@ exchange's public instrument list (fetched at most once an hour). Candle sizes a
 calendar on Charts is a separate public feed, off until enabled (see
 [charts.md](charts.md#economic-calendar)).
 
-| Source                | Setup                                                                                                   | Symbols and coverage                                                                                                                                                 |
-| --------------------- | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Alpaca                | Key ID and secret, or `ALPACA_API_KEY` + `ALPACA_SECRET_KEY`                                            | US stocks such as `AAPL`; choose IEX or SIP. Prices are raw/unadjusted. Choose Crypto for `BTC/USD`.                                                                 |
-| Binance               | Enable source; no key                                                                                   | Binance spot pairs such as `BTCUSDT`, through its public market-data host. No futures or automatic quote-currency conversion.                                        |
-| Bybit                 | Enable source; no key. Choose the market: perpetuals and futures (USDT/USDC), spot, or inverse          | Bybit v5 symbols such as `BTCUSDT` (perpetual and spot) or `BTCUSDT-26DEC26` (futures). Every candle size comes from Bybit itself. Contract volume is in base units. |
-| Coinbase              | Enable source; no key                                                                                   | Coinbase Exchange spot products such as `BTC-USD`. Empty intervals may have no candles.                                                                              |
-| London Strategic Edge | API key in Settings, or `LSE_API_KEY`                                                                   | Historical candles for supported instruments and datasets; coverage depends on provider access.                                                                      |
-| Market data CSV       | Upload and preview local candle files                                                                   | Exact recorded symbol and resolution, with declared quote currency and price basis.                                                                                  |
-| OANDA                 | v20 token, account ID, and Practice/Live; or `OANDA_API_TOKEN`, `OANDA_ACCOUNT_ID`, `OANDA_ENVIRONMENT` | Instruments such as `EUR_USD`. Complete midpoint candles aligned to UTC; volume is price-update count. Multiplier must match the imported quantity units.            |
+| Source                | Setup                                                                                                   | Symbols and coverage                                                                                                                                                    |
+| --------------------- | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Alpaca                | Key ID and secret, or `ALPACA_API_KEY` + `ALPACA_SECRET_KEY`                                            | US stocks such as `AAPL`; choose IEX or SIP. Prices are raw/unadjusted. Choose Crypto for `BTC/USD`.                                                                    |
+| Binance               | Enable source; no key                                                                                   | Binance spot pairs such as `BTCUSDT`, through its public market-data host. No futures or automatic quote-currency conversion.                                           |
+| Bybit                 | Enable source; no key. Choose the market: perpetuals and futures (USDT/USDC), spot, or inverse          | Bybit v5 symbols such as `BTCUSDT` (perpetual and spot) or `BTCUSDT-26DEC26` (futures). Every candle size comes from Bybit itself. Contract volume is in base units.    |
+| Coinbase              | Enable source; no key                                                                                   | Coinbase Exchange spot products such as `BTC-USD`. Empty intervals may have no candles.                                                                                 |
+| Kraken                | Enable source; no key                                                                                   | Crypto (`XBTUSD`, BTC works too) and a dozen currency pairs (`EURUSD`, `GBPUSD`, `USDJPY`...). Only the latest 720 candles of each size exist there.                    |
+| London Strategic Edge | API key in Settings, or `LSE_API_KEY`                                                                   | Historical candles for supported instruments and datasets; coverage depends on provider access.                                                                         |
+| Market data CSV       | Upload and preview local candle files                                                                   | Exact recorded symbol and resolution, with declared quote currency and price basis.                                                                                     |
+| Nasdaq                | Enable source; no key. Choose stock or ETF                                                              | US stocks and ETFs (`AAPL`, `SPY`), daily candles for the last ten years, split adjusted. Not a documented API. Indices are left out: their opens there are unreliable. |
+| OANDA                 | v20 token, account ID, and Practice/Live; or `OANDA_API_TOKEN`, `OANDA_ACCOUNT_ID`, `OANDA_ENVIRONMENT` | Instruments such as `EUR_USD`. Complete midpoint candles aligned to UTC; volume is price-update count. Multiplier must match the imported quantity units.               |
+| OKX                   | Enable source; no key. Choose spot or perpetual swaps                                                   | `BTC-USDT` (spot), `BTC-USDT-SWAP` (perpetual), years of 1m history, 300 candles a page. A perpetual's contract size is stated; set the multiplier to match.            |
+| Yahoo Finance         | Enable source; no key                                                                                   | Stocks and ETFs worldwide (`AAPL`, `VOD.L`, `SAP.DE`), indices (`^GSPC`, `^IXIC`), futures (`ES=F`), currency pairs (`EURUSD=X`), crypto (`BTC-USD`). See below.        |
+
+### Keyless sources and their limits
+
+Free forex and stock candles without any key are rare: the documented free APIs (Alpha
+Vantage, Finnhub, Twelve Data, Tiingo and others) all need at least a free key. The keyless
+sources here were checked in September 2026:
+
+- **Yahoo Finance** has the widest coverage but is not an official API. Yahoo throttles it
+  and refuses some networks outright for a while; the journal then says so and waits (a
+  429 pauses requests to it for 30 seconds). Intraday history is short: 1m candles for 30
+  days (asked a week at a time), 5m to 30m for 60 days, 1h for two years; daily candles for
+  the whole history. Prices are split adjusted and cover the regular session only. Hourly
+  candles of markets that open on the half hour (New York stocks) open on the half hour.
+  London prices are in pence, so their estimates stay in the price move only.
+- **Nasdaq** answers from the JSON behind nasdaq.com. It serves daily candles only and
+  returns nothing for a range shorter than about a week, so the journal asks a week wider.
+- **Kraken** is an exchange API, stable and documented, but it keeps only the latest 720
+  candles of a size (about 12 hours of 1m, 15 days of 30m, 30 days of 1h, two years of 1d).
+  Its weeks open on Thursday, so its 1w candles are built from days, from Monday.
+- **OKX** is a documented exchange API with deep history.
+
+Not used: Stooq (now behind a browser check), Dukascopy (its widget feed only answers its own
+site, and its data export needs an AWS account), and ECB or Frankfurter rates (one fixing a
+day, no candles). `LIVE_MARKET_DATA=1 pnpm exec vitest run apps/web/tests/market-data.live.test.ts`
+checks the four live sources.
 
 Credential sets are encrypted together. Environment credentials take precedence;
 partial environment configuration is shown as unavailable rather than mixing values
@@ -217,13 +263,17 @@ also removes its saved derived estimates, leaving all trade executions intact.
 - [Bybit v5 kline](https://bybit-exchange.github.io/docs/v5/market/kline), [instruments](https://bybit-exchange.github.io/docs/v5/market/instrument), [tickers](https://bybit-exchange.github.io/docs/v5/market/tickers) and [public WebSocket](https://bybit-exchange.github.io/docs/v5/ws/connect)
 - [Coinbase Exchange candles](https://docs.cdp.coinbase.com/api-reference/exchange-api/rest-api/products/get-product-candles)
 - [OANDA candle endpoints](https://developer.oanda.com/rest-live-v20/pricing-ep/) and [environments](https://developer.oanda.com/rest-live-v20/development-guide/)
+- [OKX v5 market data](https://www.okx.com/docs-v5/en/#public-data-rest-api-get-candlesticks-history) (history candles, instruments, tickers)
+- [Kraken OHLC](https://docs.kraken.com/api/docs/rest-api/get-ohlc-data) and [asset pairs](https://docs.kraken.com/api/docs/rest-api/get-tradable-asset-pairs)
+- Yahoo Finance's chart (`/v8/finance/chart`) and search (`/v1/finance/search`) and Nasdaq's historical quotes (`/api/quote/{symbol}/historical`) are undocumented; their shape was checked live.
 
 ## Performance and request limits
 
 All remote adapters use the same server-side transport: at most eight active GETs
 per process and 64 queued requests. Hosts are paced one by one: public exchange APIs
-(Binance, Bybit: four at a time, 60 ms apart; Coinbase: three, 150 ms apart) stay well under
-their published limits, and every other host (keyed brokers with small free tiers) keeps two
+(Binance, Bybit: four at a time, 60 ms apart; Coinbase: three, 150 ms apart; OKX: three,
+120 ms apart; Kraken: one a second) stay well under their published limits, the unofficial
+Yahoo Finance and Nasdaq are asked one request at a time (700 ms and 500 ms apart), and every other host (keyed brokers with small free tiers) keeps two
 at a time, 350 ms apart. Cache hits skip the pacing. Identical concurrent requests share one
 upstream call. Cancelling a view or report releases its share; the upstream request is
 cancelled when no consumers remain. HTTP errors are not cached, and 429 responses apply a

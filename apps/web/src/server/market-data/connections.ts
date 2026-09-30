@@ -7,9 +7,15 @@ import { alpaca } from "./alpaca";
 import { binance, coinbase } from "./public-crypto";
 import { bybit } from "./bybit";
 import { oanda } from "./oanda";
+import { okx } from "./okx";
+import { kraken } from "./kraken";
+import { nasdaq } from "./nasdaq";
+import { yahoo } from "./yahoo";
 import { csvDatasets, marketCsv } from "./csv";
 import { MarketDataError, type MarketDataProvider } from "./provider";
 import { withAggregation } from "./aggregate";
+/** Sources above already wrapped with the sizes they serve natively. */
+const PREPARED = new Set(["binance", "bybit", "okx", "kraken", "yahoo"]);
 const providers: MarketDataProvider[] = [
   londonStrategicEdge,
   alpaca,
@@ -19,11 +25,15 @@ const providers: MarketDataProvider[] = [
   withAggregation(bybit, ["3m", "30m", "2h", "4h", "1w"]),
   coinbase,
   oanda,
+  // Every journal candle size is a native OKX bar, aligned to UTC.
+  withAggregation(okx, ["3m", "30m", "2h", "4h", "1w"]),
+  // Kraken's weeks open on Thursday, so its 1w is built from days, weeks from Monday.
+  withAggregation(kraken, ["30m", "4h"]),
+  nasdaq,
+  withAggregation(yahoo, ["30m"]),
   marketCsv,
 ]
-  .map((provider) =>
-    provider.id === "binance" || provider.id === "bybit" ? provider : withAggregation(provider),
-  )
+  .map((provider) => (PREPARED.has(provider.id) ? provider : withAggregation(provider)))
   .sort((a, b) => a.name.localeCompare(b.name));
 export const providerFor = (id: string) => {
   const provider = providers.find((entry) => entry.id === id);
