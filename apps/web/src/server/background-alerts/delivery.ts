@@ -135,6 +135,17 @@ export interface AlertNotification {
 /** Network access, replaced in tests. */
 export const transport = { fetch: (url: string, init: RequestInit) => fetch(url, init) };
 
+/**
+ * A header value any HTTP client sends: plain ASCII as it is, anything else (an emoji, a
+ * channel name in Japanese) as an RFC 2047 encoded word, which ntfy decodes. A raw value
+ * outside Latin-1 makes `fetch` throw and the notification would never go out.
+ */
+export function headerText(value: string): string {
+  const flat = value.replace(/[\r\n\t]+/g, " ").trim();
+  if (/^[\x20-\x7e]*$/.test(flat)) return flat;
+  return `=?UTF-8?B?${Buffer.from(flat, "utf8").toString("base64")}?=`;
+}
+
 /** Send to every browser and the webhook; returns how many accepted it. */
 export async function deliver(notification: AlertNotification): Promise<number> {
   const keys = vapidKeys();
@@ -179,7 +190,7 @@ export async function deliver(notification: AlertNotification): Promise<number> 
         method: "POST",
         headers: {
           "Content-Type": "text/plain; charset=utf-8",
-          Title: notification.title,
+          Title: headerText(notification.title),
           Tags: "chart_with_upwards_trend",
           ...(origin ? { Click: `${origin}${notification.url}` } : {}),
         },

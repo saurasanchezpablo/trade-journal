@@ -46,7 +46,8 @@ Scheduled AI digests use the same delivery; see [ai-chat.md](ai-chat.md#schedule
   stored encrypted. Messages go through the browser's own push service (Google's for Chrome).
 - **Webhook**: optionally one URL that receives a text POST for every alert, for example an
   [ntfy](https://ntfy.sh) topic; ntfy reads the title and, with `JOURNAL_PUBLIC_URL` set, a link
-  to the chart.
+  to the chart. A title with anything beyond plain ASCII (an emoji, accents, a channel name in
+  Japanese) is sent as an RFC 2047 encoded word (`=?UTF-8?B?...?=`), which ntfy decodes.
 - **Send a test** checks every browser and the webhook. The card lists the browsers, what is
   being watched and the alerts the server sent.
 - When the chart is open and in front, the page shows the alert itself and the service worker

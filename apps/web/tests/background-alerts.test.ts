@@ -327,6 +327,29 @@ describe("delivery", () => {
     ).toBe(400);
   });
 
+  it("sends a webhook title with emoji or non-Latin letters, which ntfy reads back", async () => {
+    await webhookRoute.PUT(
+      json("/api/alerts/webhook", { url: "https://ntfy.example/alerts" }, "PUT"),
+    );
+    // Build the request as fetch would: a raw emoji in a header throws there.
+    const sent: Request[] = [];
+    const fetcher = vi
+      .spyOn(push.transport, "fetch")
+      .mockImplementation(
+        async (url, init) => (sent.push(new Request(url, init)), new Response("ok")),
+      );
+    const title = "New analysis: 📈 日本の相場";
+    expect(await push.deliver({ title, body: "The body.", tag: "t", url: "/external" })).toBe(1);
+    const header = sent[0]!.headers.get("Title")!;
+    expect(header).toMatch(/^=\?UTF-8\?B\?[A-Za-z0-9+/=]+\?=$/);
+    expect(Buffer.from(header.slice(10, -2), "base64").toString("utf8")).toBe(title);
+    expect(await sent[0]!.text()).toBe("The body.");
+    // Plain titles go as they are.
+    expect(push.headerText("Chart alert")).toBe("Chart alert");
+    fetcher.mockRestore();
+    await webhookRoute.PUT(json("/api/alerts/webhook", { url: "" }, "PUT"));
+  });
+
   it("browsers subscribe and unsubscribe through the API", async () => {
     const state = await (await pushRoute.GET()).json();
     expect(state.publicKey).toMatch(/^[A-Za-z0-9_-]{80,}$/);
