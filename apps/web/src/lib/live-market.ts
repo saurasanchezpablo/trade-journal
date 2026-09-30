@@ -168,10 +168,20 @@ export class JournalMarketProvider implements DataProvider {
     if (!this.disposed) this.hooks.onStatus(status);
   }
 
-  /** The chart was removed: stop reporting (pending requests and polls become no-ops). */
+  /** Cancels every history request still on its way once the chart is gone. */
+  private readonly requests = new AbortController();
+  /** The live subscriptions still running, each stopped with the chart. */
+  private readonly subscriptions = new Set<() => void>();
+
+  /**
+   * The chart was removed: stop reporting, cancel the history requests still running (a
+   * long view's paged load stops between pages) and stop live updates.
+   */
   dispose() {
     this.disposed = true;
     this.wakers.clear();
+    this.requests.abort();
+    for (const stop of [...this.subscriptions]) stop();
   }
 
   /** Newest candle time seen per timeframe, so a resumed poll fills the gap. */
@@ -207,7 +217,12 @@ export class JournalMarketProvider implements DataProvider {
     return this.paused;
   }
 
-  private async request(ticker: string, resolution: Resolution, window: HistoryWindow) {
+  private async request(
+    ticker: string,
+    resolution: Resolution,
+    window: HistoryWindow,
+    signal: AbortSignal = this.requests.signal,
+  ) {
     const response = await fetch("/api/market-data/history", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -218,6 +233,7 @@ export class JournalMarketProvider implements DataProvider {
         resolution,
         ...window,
       }),
+      signal,
     });
     const body = (await response.json().catch(() => ({}))) as {
       bars?: MarketBar[];
@@ -238,13 +254,15 @@ export class JournalMarketProvider implements DataProvider {
    * view, and any volume profile over it, stays empty.
    */
   private async load(ticker: string, resolution: Resolution, window: HistoryWindow) {
+    const signal = this.requests.signal;
     if ("from" in window || window.limit <= MAX_REQUEST_BARS)
-      return retry(() => this.request(ticker, resolution, window));
+      return retry(() => this.request(ticker, resolution, window), signal);
     const byTime = new Map<number, OHLCV>();
     let to = window.to;
-    while (byTime.size < window.limit) {
+    // A removed chart asks for no further pages.
+    while (byTime.size < window.limit && !this.disposed) {
       const want = Math.min(MAX_REQUEST_BARS, window.limit - byTime.size);
-      const page = await retry(() => this.request(ticker, resolution, { to, limit: want }));
+      const page = await retry(() => this.request(ticker, resolution, { to, limit: want }), signal);
       let added = 0;
       let oldest = Infinity;
       for (const bar of page) {
@@ -285,9 +303,11 @@ export class JournalMarketProvider implements DataProvider {
 
   subscribe(ticker: string, timeframe: string, onBar: (bar: OHLCV) => void) {
     const resolution = resolutionForTimeframe(timeframe);
-    if (!resolution || !isResolution(resolution)) return () => {};
+    if (this.disposed || !resolution || !isResolution(resolution)) return () => {};
     const step = RESOLUTIONS[resolution];
     let stopped = false;
+    // Unsubscribing (or removing the chart) cancels the poll still on its way.
+    const polling = new AbortController();
     let timer: ReturnType<typeof setTimeout> | null = null;
     let running = false;
     const hidden = () => typeof document !== "undefined" && document.hidden;
@@ -394,7 +414,7 @@ export class JournalMarketProvider implements DataProvider {
           now - MAX_REQUEST_BARS * step,
           Math.min(this.lastTime.get(timeframe) ?? now, now - 2 * step),
         );
-        const bars = await this.request(ticker, resolution, { from, to: now });
+        const bars = await this.request(ticker, resolution, { from, to: now }, polling.signal);
         if (!stopped) {
           // Polled candles can lag the stream (the server caches recent data briefly), so
           // while streaming they only settle candles that are already finished.
@@ -429,28 +449,39 @@ export class JournalMarketProvider implements DataProvider {
     document.addEventListener("visibilitychange", onVisible);
     openStream();
     schedule();
-    return () => {
+    const unsubscribe = () => {
       stopped = true;
+      polling.abort();
       if (timer) clearTimeout(timer);
       if (publishTimer) clearTimeout(publishTimer);
       closeStream();
       this.wakers.delete(wake);
+      this.subscriptions.delete(unsubscribe);
       document.removeEventListener("visibilitychange", onVisible);
     };
+    this.subscriptions.add(unsubscribe);
+    return unsubscribe;
   }
 }
 
 const RETRY_DELAYS_MS = [800, 2500];
 
-async function retry<T>(work: () => Promise<T>): Promise<T> {
+async function retry<T>(work: () => Promise<T>, signal?: AbortSignal): Promise<T> {
   for (let attempt = 0; ; attempt += 1) {
     try {
       return await work();
     } catch (error) {
       const delay = RETRY_DELAYS_MS[attempt];
-      // Request errors (4xx: a bad symbol, a missing connection) will not heal by waiting.
-      if (delay === undefined || (error instanceof HistoryError && error.status < 500)) throw error;
+      // Request errors (4xx: a bad symbol, a missing connection) will not heal by waiting,
+      // and a cancelled request is not retried.
+      if (
+        delay === undefined ||
+        signal?.aborted ||
+        (error instanceof HistoryError && error.status < 500)
+      )
+        throw error;
       await new Promise((resolve) => setTimeout(resolve, delay));
+      if (signal?.aborted) throw error;
     }
   }
 }
