@@ -21,6 +21,7 @@ export const GET = handler(async (request: Request) => {
         tags: trades[index]!.annotations?.tags ?? [],
         mistakes: trades[index]!.annotations?.mistakes ?? [],
         reviewed: row.reviewedAt !== null,
+        contractMultiplier: trades[index]!.contractMultiplier ?? null,
       };
     }),
     metrics,

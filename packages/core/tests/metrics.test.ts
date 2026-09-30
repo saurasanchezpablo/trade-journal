@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildRoundTrips } from "../src/round-trips";
-import { computeMetrics, realizedR } from "../src/metrics";
+import { computeMetrics, realizedR, returnOnNotional } from "../src/metrics";
 import { EDGE_SCORE_VERSION, computeEdgeScore } from "../src/edge-score";
 import { calendarMonth, byWeekday, byDuration } from "../src/aggregate";
 import {
@@ -211,5 +211,24 @@ describe("calendar and buckets group trading days the way a trader reads them", 
     const times = new Map(executions.map((e) => [e.id, e.executedAt]));
     const curve = intradayCurve(trades, times, "2026-01-05");
     expect(curve.at(-1)!.cumNetPnl).toBeCloseTo(98 - 50, 6);
+  });
+});
+
+describe("net return on notional", () => {
+  it("counts the contract multiplier, so one ES contract up $500 at 5000 is 0.2%", () => {
+    const [trade] = buildRoundTrips(
+      [
+        fill("ES", "buy", 1, 5000, "2026-01-05T14:30:00Z"),
+        fill("ES", "sell", 1, 5010, "2026-01-05T15:30:00Z"),
+      ],
+      { multipliers: { ES: 50 } },
+    );
+    expect(trade!.netPnl).toBe(500);
+    expect(returnOnNotional(trade!)).toBeCloseTo(0.002, 10);
+  });
+
+  it("uses the plain notional without a multiplier and is empty with nothing to divide by", () => {
+    expect(returnOnNotional({ netPnl: 10, avgEntry: 100, quantity: 10 })).toBeCloseTo(0.01, 10);
+    expect(returnOnNotional({ netPnl: 10, avgEntry: 0, quantity: 10 })).toBeNull();
   });
 });

@@ -60,6 +60,18 @@ export const realizedR = (trade: AnnotatedTrade): number | null => {
   return tradeR(trade);
 };
 
+/**
+ * Net return on the position's entry notional: net P&L over entry price × quantity × contract
+ * multiplier (1 when none is set, matching how P&L was computed). Null when there is no
+ * notional to divide by.
+ */
+export const returnOnNotional = (
+  trade: Pick<AnnotatedTrade, "netPnl" | "avgEntry" | "quantity" | "contractMultiplier">,
+): number | null => {
+  const notional = Math.abs(trade.avgEntry * trade.quantity * (trade.contractMultiplier ?? 1));
+  return notional > 0 && Number.isFinite(notional) ? trade.netPnl / notional : null;
+};
+
 export const computeMetrics = (
   trades: AnnotatedTrade[],
   options: MetricsOptions = {},
