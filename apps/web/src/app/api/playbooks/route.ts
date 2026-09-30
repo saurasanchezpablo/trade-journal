@@ -1,7 +1,17 @@
-import { asc, eq } from "drizzle-orm";
+import { asc } from "drizzle-orm";
 import { db, playbooks, trades } from "@/db";
-import { bad, handler, ok } from "@/server/api";
+import { handler, ok, requireValue } from "@/server/api";
 import { newId, nowIso } from "@/server/ids";
+import { readPlaybook } from "@/server/playbook-fields";
+
+const parseRules = (json: string): string[] => {
+  try {
+    const rules = JSON.parse(json) as unknown;
+    return Array.isArray(rules) ? rules.filter((rule) => typeof rule === "string") : [];
+  } catch {
+    return [];
+  }
+};
 
 export const GET = handler(() => {
   const rows = db.select().from(playbooks).orderBy(asc(playbooks.createdAt)).all();
@@ -12,15 +22,15 @@ export const GET = handler(() => {
   return ok({
     playbooks: rows.map((row) => ({
       ...row,
-      rules: JSON.parse(row.rulesJson) as string[],
+      rules: parseRules(row.rulesJson),
       tradeCount: counts.get(row.id) ?? 0,
     })),
   });
 });
 
 export const POST = handler(async (request: Request) => {
-  const body = (await request.json()) as { name?: string; description?: string; rules?: string[] };
-  if (!body.name) return bad("name is required");
+  const body = readPlaybook(await request.json());
+  requireValue(body.name, "name is required");
   const id = newId();
   db.insert(playbooks)
     .values({

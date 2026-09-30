@@ -1,6 +1,7 @@
 import { asc, desc, eq } from "drizzle-orm";
 import { db, folders, notes } from "@/db";
-import { bad, handler, ok } from "@/server/api";
+import { handler, ok, requireValue } from "@/server/api";
+import { readNote } from "@/server/note-fields";
 import { newId, nowIso } from "@/server/ids";
 
 export const GET = handler(async (request: Request) => {
@@ -42,17 +43,13 @@ export const GET = handler(async (request: Request) => {
   return ok({ notes: rows, folders: folderRows });
 });
 
-interface CreateNoteBody {
-  folderId?: string;
-  title?: string;
-  content?: string;
-  tags?: string[];
-  tradeKey?: string;
-  dayDate?: string;
-}
-
 export const POST = handler(async (request: Request) => {
-  const body = (await request.json()) as CreateNoteBody;
+  const body = readNote(await request.json());
+  requireValue(body.tradeKey === undefined || body.tradeKey.length > 0, "Invalid trade link.");
+  requireValue(
+    body.dayDate === undefined || /^\d{4}-\d{2}-\d{2}$/.test(body.dayDate),
+    "Day links must be YYYY-MM-DD.",
+  );
   const id = newId();
   const now = nowIso();
   db.insert(notes)

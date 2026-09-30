@@ -4,10 +4,14 @@ import { computeMetrics, dayKeyOf, intradayCurve } from "@luxalgo/journal-core";
 import { db, executions, journalDays } from "@/db";
 import { bad, handler, ok } from "@/server/api";
 import { nowIso } from "@/server/ids";
+import { optionalString, requireObject } from "@/server/request-fields";
 import { getTimeZone } from "@/server/settings";
 import { queryTrades } from "@/server/trades-query";
 
 type Params = { params: Promise<{ date: string }> };
+
+/** Generous: recaps and external summaries are appended to the day's note. */
+const MAX_DAY_NOTE = 1_000_000;
 
 export const GET = handler(async (request: Request, { params }: Params) => {
   const { date } = await params;
@@ -41,12 +45,18 @@ export const GET = handler(async (request: Request, { params }: Params) => {
 export const PUT = handler(async (request: Request, { params }: Params) => {
   const { date } = await params;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return bad("date must be YYYY-MM-DD");
-  const { note } = (await request.json()) as { note?: string };
+  const body = requireObject(await request.json(), "Enter a valid day note.");
+  const note =
+    optionalString(
+      body.note,
+      MAX_DAY_NOTE,
+      `Day notes must be at most ${MAX_DAY_NOTE.toLocaleString("en-US")} characters.`,
+    ) ?? "";
   db.insert(journalDays)
-    .values({ date, note: note ?? "", updatedAt: nowIso() })
+    .values({ date, note, updatedAt: nowIso() })
     .onConflictDoUpdate({
       target: journalDays.date,
-      set: { note: note ?? "", updatedAt: nowIso() },
+      set: { note, updatedAt: nowIso() },
     })
     .run();
   return ok({ saved: true });

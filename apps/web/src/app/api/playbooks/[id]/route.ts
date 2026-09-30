@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { db, playbooks, trades } from "@/db";
 import { bad, handler, ok } from "@/server/api";
+import { readPlaybook } from "@/server/playbook-fields";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -8,12 +9,12 @@ export const PATCH = handler(async (request: Request, { params }: Params) => {
   const { id } = await params;
   const existing = db.select().from(playbooks).where(eq(playbooks.id, id)).get();
   if (!existing) return bad("Playbook not found", 404);
-  const body = (await request.json()) as { name?: string; description?: string; rules?: string[] };
+  const body = readPlaybook(await request.json());
   db.update(playbooks)
     .set({
       name: body.name ?? existing.name,
       description: body.description ?? existing.description,
-      rulesJson: body.rules ? JSON.stringify(body.rules) : existing.rulesJson,
+      rulesJson: body.rules !== undefined ? JSON.stringify(body.rules) : existing.rulesJson,
     })
     .where(eq(playbooks.id, id))
     .run();
