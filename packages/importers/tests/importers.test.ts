@@ -207,6 +207,33 @@ AAPL,XFER,100,185.00,2026-01-05,09:45:00`)!;
     expect(result.warnings.join(" ")).toContain('"XFER"');
   });
 
+  it("fills at the same second keep the file's order, whether it lists oldest or newest first", () => {
+    const header = "Symbol,Side,Type,Qty,Fill Price,Status,Commission,Closing Time";
+    const rows = [
+      "NASDAQ:AAPL,Buy,Market,10,100,Filled,0,2026-01-05 09:30:00",
+      "NASDAQ:AAPL,Sell,Market,10,101,Filled,0,2026-01-05 09:30:00",
+      "NASDAQ:AAPL,Sell,Market,5,102,Filled,0,2026-01-05 10:00:00",
+      "NASDAQ:AAPL,Buy,Market,5,101,Filled,0,2026-01-05 10:30:00",
+    ];
+    for (const lines of [rows, [...rows].reverse()]) {
+      const result = parseAuto([header, ...lines].join("\n"))!;
+      // Ids that sort sells first, so only the import order can put the buy first.
+      const trades = buildRoundTrips(
+        result.executions.map((e, i) => ({
+          ...e,
+          id: `${e.side === "sell" ? "a" : "b"}${i}`,
+          accountId: "a",
+          source: "import" as const,
+          importMetadata: storedImportMetadata(e),
+        })),
+      );
+      expect(trades.map((t) => [t.direction, t.quantity, t.netPnl])).toEqual([
+        ["long", 10, 10],
+        ["short", 5, 5],
+      ]);
+    }
+  });
+
   it("an unknown file is not guessed at — it goes to the column mapper instead", () => {
     const weird = `When,Ticker,Way,Amount,Cost
 2026-01-05 09:31:00,AAPL,bought,100,185.50`;

@@ -55,6 +55,34 @@ export const parseSide = (value: string | undefined): "buy" | "sell" | null => {
   return null;
 };
 
+/**
+ * Order fills that share an instant by the file's row order, when the file
+ * lists fills chronologically: oldest first, or newest first (then the order
+ * is reversed). A file whose rows go both ways proves no order, and its tied
+ * fills stay unordered. The order is a reconstruction fact outside the dedup
+ * hash, so fills imported before it existed still deduplicate.
+ */
+export const withFileOrder = (executions: ImportedExecution[]): ImportedExecution[] => {
+  const previous = new Map<string, number>();
+  let forward = 0;
+  let backward = 0;
+  for (const execution of executions) {
+    const at = Date.parse(execution.executedAt);
+    const before = previous.get(execution.symbol);
+    if (before !== undefined) {
+      if (at > before) forward++;
+      else if (at < before) backward++;
+    }
+    previous.set(execution.symbol, at);
+  }
+  if (forward && backward) return executions;
+  const last = executions.length - 1;
+  return executions.map((execution, index) => ({
+    ...execution,
+    reconstruction: { ...execution.reconstruction, order: backward ? last - index : index },
+  }));
+};
+
 export const rowsToFills = (
   records: Row[],
   columns: FillsColumnMap,
@@ -164,7 +192,7 @@ export const rowsToFills = (
         .map((side) => `"${side}"`)
         .join(", ")}) were skipped; a fill's side is never guessed.`,
     );
-  return { executions, skippedRows, warnings };
+  return { executions: withFileOrder(executions), skippedRows, warnings };
 };
 
 /** Build an ImportFormat from a declarative column spec — the path for most broker CSVs. */

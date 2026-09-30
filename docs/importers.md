@@ -73,6 +73,9 @@ selections beyond the defaults.
 - Sides: `Buy`/`B`/`BOT`/`Bid`/`BC`/`Cover`/`Buy to cover` are buys, `Sell`/`S`/`SLD`/`Ask`/
   `SS`/`Short Sell`/`Sell short` are sells. A fill row with any other side is skipped and the
   preview names the values
+- Fills that share a timestamp keep the file's row order when the file lists fills
+  chronologically (oldest or newest first), so a buy and sell in the same second always
+  make the same trade. A file whose rows are not in time order proves no order for them
 - Slash dates (`04/03/2026`) follow the order the file proves (a first number above 12 means
   day-first); a file that settles nothing is read month-first with a warning
 - TradeZella P&L: the row's stated net P&L is kept exactly (commissions are the fee and the
@@ -246,6 +249,8 @@ corrected history in a new account, or delete the affected trades first.
   columns, the earlier parser saved midnight: the corrected timestamps are a new identity,
   and a re-import over those midnight rows is refused.
 
+- **Fills at the same second** in fill exports carry their file order as a reconstruction
+  fact. Earlier imports deduplicate, and their tied fills keep the order they had.
 - **Decimal commas** such as `0,005` were read as thousands (`5`). Corrected quantities and
   prices are a new identity: re-importing a fill export over rows saved with the earlier
   reading is refused. History exports (TradingView strategy, MetaTrader, generic mapper)

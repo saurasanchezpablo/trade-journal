@@ -3,6 +3,7 @@ import { parseTimestamp } from "../dates";
 import { parseMoney, parseQuantity } from "../numbers";
 import type { AssetClass } from "@luxalgo/journal-core";
 import type { ImportFormat, ImportedExecution, ParsedImport } from "../types";
+import { withFileOrder } from "./fills";
 
 const ASSET_MAP: Record<string, AssetClass> = {
   stocks: "equity",
@@ -81,6 +82,6 @@ export const ibkr: ImportFormat = {
       });
     }
 
-    return { format: "ibkr", executions, skippedRows, warnings: [] };
+    return { format: "ibkr", executions: withFileOrder(executions), skippedRows, warnings: [] };
   },
 };
