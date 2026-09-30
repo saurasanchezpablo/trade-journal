@@ -175,6 +175,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - Chart appearance: typing a number such as 14 into Text size no longer snaps back on the first digit (a value out of range is brought into range when you leave the field), and every colour picker, including the Drawings tab and the grid colour, has a name for screen readers
 - Chart zones: a low above the high (or a high under the low) says why it was not saved and the field shows the saved price again, and emptying a zone's price no longer saves it as 0
 - Chart layers: the layer colour swatches in a layer's options menu can be reached with the arrow keys
+- Weekly review: the week ends today in the journal's time zone (it could start from the UTC day before settings loaded), and leaving the page stops a review being written
 
 ## [0.1.0] - 2026-09-03
 

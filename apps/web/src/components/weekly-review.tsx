@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { dayKeyOf } from "@luxalgo/journal-core";
 import { postAiStream } from "@/lib/ai-stream";
 import { Markdown } from "./rich-editor";
@@ -9,22 +9,37 @@ import { SectionCard } from "./section-card";
 
 /** An AI review of a week of journal days: trades, plan grades and your Keep/Fix lessons. */
 export function WeeklyReview({ timeZone }: { timeZone: string }) {
-  const [end, setEnd] = useState(() => dayKeyOf(new Date().toISOString(), timeZone));
+  // Today in the journal's time zone (which loads after the page) until you pick a week.
+  const [picked, setEnd] = useState<string | null>(null);
+  const end = picked ?? dayKeyOf(new Date().toISOString(), timeZone);
   const [busy, setBusy] = useState(false);
   const [review, setReview] = useState<{ review: string; from: string; to: string } | null>(null);
   const [error, setError] = useState("");
   // The review as it is written.
   const [writing, setWriting] = useState("");
+  // Leaving the page stops the review being written.
+  const controller = useRef<AbortController | null>(null);
+  useEffect(() => () => controller.current?.abort(), []);
   const write = async () => {
+    controller.current?.abort();
+    const request = new AbortController();
+    controller.current = request;
     setBusy(true);
     setError("");
     setWriting("");
     try {
-      setReview(await postAiStream("/api/ai/weekly", { end }, setWriting));
+      const result = await postAiStream<{ review: string; from: string; to: string }>(
+        "/api/ai/weekly",
+        { end },
+        (text) => !request.signal.aborted && setWriting(text),
+        request.signal,
+      );
+      if (!request.signal.aborted) setReview(result);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not write the review.");
+      if (!request.signal.aborted)
+        setError(cause instanceof Error ? cause.message : "Could not write the review.");
     } finally {
-      setBusy(false);
+      if (!request.signal.aborted) setBusy(false);
     }
   };
   return (
