@@ -16,4 +16,5 @@ export const isPublicAppAsset = (pathname: string) =>
   pathname === "/manifest.webmanifest" ||
   pathname === "/sw.js" ||
   pathname.startsWith("/icons/") ||
-  pathname.startsWith("/apple-icon");
+  pathname.startsWith("/apple-icon") ||
+  pathname.startsWith("/icon");

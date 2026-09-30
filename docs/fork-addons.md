@@ -47,6 +47,7 @@ dependencies added are single sign-on's (push uses Node's crypto).
 ## Files the add-ons own
 
 - Installable app: `app/manifest.ts`, `app/icons/[name]/route.tsx`, `app/apple-icon.tsx`,
+  `app/icon.tsx` (the tab icon),
   `components/app-icon.tsx`, `lib/pwa.ts`, `instrumentation-client.ts`, `public/sw.js`.
 - Background alerts: `server/background-alerts/*`, `instrumentation.ts`,
   `instrumentation-node.ts`, `app/api/alerts/**`, `components/background-alerts.tsx`,
