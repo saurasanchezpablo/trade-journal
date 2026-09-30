@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Plus, Sparkles } from "lucide-react";
 import { MAX_SCENARIOS, type AnalysisPlan, type Bias } from "@/lib/analysis-plan";
 import { fmtPrice } from "@/lib/analysis-text";
@@ -37,16 +37,27 @@ export function PlanDraft({
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // A draft belongs to the analysis it was asked for: switching analyses drops it, and an
+  // answer that arrives after the switch is not offered for the new one.
+  const current = useRef(analysisId);
+  current.current = analysisId;
+  useEffect(() => {
+    setDraft(null);
+    setError(null);
+    setBusy(false);
+  }, [analysisId]);
   const ask = async () => {
     if (!analysisId) return;
+    const asked = analysisId;
     setBusy(true);
     setError(null);
     try {
-      setDraft(await postJson<Draft>("/api/ai/plan-draft", { analysisId }));
+      const next = await postJson<Draft>("/api/ai/plan-draft", { analysisId: asked });
+      if (current.current === asked) setDraft(next);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "No draft");
+      if (current.current === asked) setError(cause instanceof Error ? cause.message : "No draft");
     } finally {
-      setBusy(false);
+      if (current.current === asked) setBusy(false);
     }
   };
   const full = plan.scenarios.length >= MAX_SCENARIOS;

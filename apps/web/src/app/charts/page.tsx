@@ -2303,6 +2303,7 @@ const ChartBoard = memo(function ChartBoard({
                 }
               />
               <PlanDraft
+                key={analysisId ?? "unsaved"}
                 analysisId={analysisId}
                 plan={plan}
                 disabled={!board || Boolean(viewing)}

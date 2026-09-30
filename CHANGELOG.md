@@ -164,6 +164,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - AI chat: external opinions are handed to the AI as untrusted third-party text, and the chat is told never to follow instructions in them or put images and outside links in its answers; asking about one instrument finds its opinions even when more than 30 newer videos discuss others
 - Inserting a chart analysis into a day note no longer drops what was typed or added (a recap, a voice memo) while the day's snapshot was being pinned
 - Applying suggested labels (one trade or **Apply all suggestions** on Trades) no longer removes tags and mistakes added to the trade after the AI answered, and a failed save says so
+- A drafted day plan on Charts stays with its analysis: opening another analysis drops it, and a draft that arrives after the switch is not offered for the new one
 
 ## [0.1.0] - 2026-09-03
 
