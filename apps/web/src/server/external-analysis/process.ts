@@ -42,7 +42,8 @@ export interface ProcessDeps {
   transcript: (videoId: string) => Promise<VideoTranscript>;
 }
 const defaults: ProcessDeps = {
-  now: Date.now,
+  // Read at call time, so a replaced clock (tests' fake timers) is the one used.
+  now: () => Date.now(),
   deliver: deliverAlert,
   transcript: (videoId) => fetchTranscript(videoId, { languages: ["en", "es"] }),
 };
