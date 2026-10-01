@@ -102,41 +102,52 @@ and picture, as they stood when you last saved that day.
   analysis.
 - Deleting an analysis deletes its day versions.
 
-## Multiview
+## Workspace
 
-Off by default: the page shows one chart. The layout button next to **Pause** (**Single
-chart**) shows two, three or four charts, remembered per browser.
+**Workspace** (next to **Pause**) opens several charts at once over the whole window, on
+Vela's workspace. The Charts page itself stays one chart with its analysis.
 
-- **Every chart is a full chart.** Each has its own source, symbol, candle size and analysis:
-  drawings (toolbar, stylus, layers), indicators and Pine scripts, support and resistance zones,
-  missed trades, trades and sessions on the chart, appearance, autosave, day versions, **Add to
-  journal**, in-page alerts and **Keep watching when this page is closed**.
-- **The chart you work on** has a highlighted header ("Editing"). The top card (symbol, candle
-  sizes, watchlist), the page title and live badge, and the sidebar (analysis, on the chart,
-  zones, indicators, alerts, all analyses) belong to it. Clicking or tabbing into another chart
-  makes that one the chart you work on.
-- **One analysis, one chart.** An analysis open in one chart is never open in another, so two
-  autosaves never overwrite each other. Choosing an analysis that another chart has open
-  switches to that chart. A symbol opens its newest analysis that no other chart has, otherwise
-  a new one (created on the first drawing, as usual).
-- **What each chart shows is remembered.** A new extra chart starts on the first chart's symbol
-  at its own candle size (4h, 15m and 1d by default); after that it keeps its own symbol, candle
-  size and analysis, and reopens them next time. The first chart follows the URL as before.
-- **Alerts run on every chart**, not only the one you work on. The Alerts switch is shared; a
-  chart you are not working on shows a bell with the count of alerts it raised meanwhile.
-- **Layout**: a grid with two per row, the first chart large with the others in a row below
-  it, or one below the other. **Keep in step**: **Crosshair** (on by default) shows the moment
-  under your cursor on every chart; **Time window** makes scrolling or zooming any chart show
-  the same span on the others, loading older candles as needed.
-- The **×** on an extra chart closes it (after saving); its settings wait for the next time you
-  add a chart. In multiview the charts are shorter and the Layers panel starts hidden
-  (remembered separately from the single chart's).
+- **A new workspace** shows the chart you came from (else the last symbol you watched) on
+  four charts: 1 day, 4 hours, 1 hour and 15 minutes (a source with fewer candle sizes uses the
+  nearest it has). After that it opens as you left it: layout, charts, drawings, indicators,
+  links and split sizes, saved on the server, so every browser opens the same workspace.
+- **Layout** (the grid button): 1 to 16 charts, in presets or any rows × columns grid. Drag the
+  lines between charts to resize them (double-click resets), drag a chart's grip to swap it
+  with another, and maximize one chart over the grid and back from its hover controls.
+- **Links between the charts**: in the layout menu, **Crosshair** (on at first: the moment
+  under your cursor shows on every chart, with the price on charts of the same symbol),
+  **Symbol**, **Interval** (candle size) and **Style**; the chain button next to it links the
+  **time window** (scrolling or zooming one chart shows the same span on the others; linking
+  aligns them to the active chart); the drawing toolbar links **drawings** (a drawing made on
+  one chart appears on the others, and edits and deletions follow).
+- **One topbar for the chart you work on** (click a chart to make it active): symbol search,
+  candle sizes, chart style, indicators, undo and redo, alerts, object tree and data window,
+  screenshot of the whole layout. The drawing toolbar on the left draws on the active chart.
+  Typing a letter on a chart opens the symbol search; typing a number sets the candle size;
+  `?` lists the shortcuts.
+- **Symbols** come from your market data sources (Settings → Market data), one per market:
+  `binance:BTCUSDT`, `bybit_spot:ETHUSDT`, `yahoo:AAPL`. The search lists what the charts show
+  and your recent symbols, then each source's own search as you type (`yahoo:apple` asks Yahoo
+  only); a source without a search (a CSV file, a broker) offers the symbol as typed.
+- **Indicators**: Vela's built-in indicators, the journal's indicator library and your saved
+  Pine scripts, each chart running its scripts in its own worker.
+- **Top right**: **Open in Charts** opens the active chart's symbol and candle size on the
+  Charts page, where your trades, zones, plan and analyses are; **Full screen** uses the
+  browser's full screen. The arrow at the top left goes back to Charts. Right-click a chart
+  for **Start the workspace over** (back to the four starting charts).
+- The workspace follows the journal's light or dark theme and starts in its display timezone
+  (the clock at the bottom right changes it for the workspace).
 
-Code: `app/charts/page.tsx` (`ChartLab` holds what the charts share and the slots the chart you
-work on renders into through portals; each chart is a `ChartBoard`), `lib/multiview.ts`
-(settings and what each chart opens), `lib/chart-sync.ts` (crosshair and time sync),
-`components/multiview.tsx` (menu, layout, chart header); the chart takes optional `sync` and
-`size` props.
+Journal trades, zones, plans and alerts stay on the Charts page: the workspace is for reading
+the market across symbols and candle sizes.
+
+Code: `app/charts/workspace/page.tsx` (loads what the workspace starts from),
+`components/chart-workspace.tsx` (mounts `VelaWorkspace` with the journal's sources, Pine
+engines, chart fixes and topbar buttons, and saves its state), `components/workspace-symbol-search.ts`
+(the symbol search over the sources' searches), `lib/chart-workspace.ts` (sources, symbols,
+starting charts, checks), `server/chart-workspace/store.ts` (its `chart_workspaces` table) and
+`app/api/chart-workspace/route.ts` (`GET`, `PUT { state }` up to 4 MB, `DELETE`). Charts in a
+workspace share one provider per source, which keeps each symbol's latest candle apart.
 
 ## Drawings over the candles
 

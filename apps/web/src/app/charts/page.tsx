@@ -15,6 +15,7 @@ import {
   BookOpenText,
   ChevronDown,
   Crosshair,
+  LayoutGrid,
   Pause,
   Play,
   Plus,
@@ -115,16 +116,6 @@ import { recentSymbols, type RecentSymbol } from "@/lib/recent-symbols";
 import { postJson, useApi } from "@/lib/use-api";
 import { cn, fmtNumber } from "@/lib/utils";
 import { BackgroundAlerts } from "@/components/background-alerts";
-import { MultiviewMenu, PaneHeader, multiviewLayout } from "@/components/multiview";
-import { createChartSync, type ChartSync } from "@/lib/chart-sync";
-import {
-  DEFAULT_MULTIVIEW,
-  MAIN_CHART,
-  multiviewPreference,
-  paneStart,
-  type MainMarket,
-  type MultiviewState,
-} from "@/lib/multiview";
 import { TimeframeBar } from "@/components/timeframe-bar";
 import { OverlaysPanel } from "@/components/overlays-panel";
 import { ZonesPanel } from "@/components/zones-panel";
@@ -267,7 +258,7 @@ interface OpenTarget {
   fresh?: boolean;
   /** The candle size for a symbol that opens without a saved analysis. */
   resolution?: Resolution;
-  /** An analysis that is gone or open in another chart opens the symbol instead. */
+  /** An analysis that is gone opens the symbol instead. */
   fallback?: boolean;
   /** Open even though the current chart's edits could not be saved (they are lost). */
   discard?: boolean;
@@ -281,28 +272,17 @@ interface Slots {
   side: HTMLElement;
 }
 
-/** What a chart tells the page about itself, and what the page can ask of it. */
-interface BoardReport extends MainMarket {
-  resolution: Resolution;
-  analysisId: string | null;
-}
+/** What the page can ask of the chart. */
 interface BoardApi {
   open: (target: OpenTarget) => Promise<void>;
   current: () => { analysisId: string | null; viewing: string | null; opening: boolean };
   started: () => boolean;
 }
 
-/** Stable page services every chart uses. */
+/** Stable page services the chart uses. */
 interface Shell {
   prefs: () => ChartPreferences;
-  sync: ChartSync;
-  activate: (paneId: string) => void;
-  /** The other chart that has this analysis open, if any. */
-  heldBy: (analysisId: string, except: string) => string | null;
-  hold: (paneId: string, analysisId: string | null) => void;
-  report: (paneId: string, info: BoardReport | null) => void;
-  register: (paneId: string, api: BoardApi) => () => void;
-  closePane: (paneId: string) => void;
+  register: (api: BoardApi) => () => void;
   addRecent: (item: RecentSymbol) => void;
 }
 
@@ -328,14 +308,12 @@ interface Shared {
   changeOverlays: (next: OverlayOptions) => void;
   alertsOn: boolean;
   toggleAlerts: () => Promise<void>;
-  multiview: MultiviewState;
-  changeMultiview: (next: MultiviewState) => void;
 }
 
 /**
- * The charts page: one chart, or several in multiview. Every chart is a full ChartBoard
- * with its own analysis; the one you work on (the active chart) shows its controls in the
- * page's header, top card, sidebar and below the charts.
+ * The charts page: one chart with its analysis, whose controls show in the page's header,
+ * top card, sidebar and below the chart. Several charts at once open in the workspace
+ * (`/charts/workspace`).
  */
 function ChartLab() {
   const params = useSearchParams();
@@ -452,117 +430,35 @@ function ChartLab() {
     [changeOverlays, refreshCalendar],
   );
 
-  // ── Multiview: optional extra charts, each a full chart ──
-  const [multiview, setMultiview] = useState<MultiviewState>(DEFAULT_MULTIVIEW);
-  const multiviewRef = useRef(multiview);
-  multiviewRef.current = multiview;
-  useEffect(() => setMultiview(multiviewPreference.read()), []);
-  const changeMultiview = useCallback((next: MultiviewState) => {
-    multiviewRef.current = next;
-    setMultiview(next);
-    multiviewPreference.write(next);
-  }, []);
-  const [chartSync] = useState(() => createChartSync(DEFAULT_MULTIVIEW.sync));
-  useEffect(() => chartSync.setOptions(multiview.sync), [chartSync, multiview.sync]);
-  const shown = multiview.enabled ? multiview.panes.slice(0, multiview.count) : [];
-  const [active, setActive] = useState(MAIN_CHART);
-  // Back to the first chart when the one you worked on closes.
-  const activeId = shown.some((p) => p.id === active) ? active : MAIN_CHART;
-
-  /** Which analysis each chart has open: one analysis is only ever open in one chart. */
-  const held = useRef(new Map<string, string | null>());
-  const boards = useRef(new Map<string, BoardApi>());
-  const [mainMarket, setMainMarket] = useState<MainMarket | null>(null);
+  /** The chart's controls, for links that arrive while the page is open. */
+  const boardApi = useRef<BoardApi | null>(null);
   const shell = useMemo<Shell>(
     () => ({
       prefs: () => prefsRef.current,
-      sync: chartSync,
-      activate: setActive,
-      heldBy: (analysisId, except) => {
-        for (const [id, value] of held.current)
-          if (id !== except && value === analysisId && boards.current.has(id)) return id;
-        return null;
-      },
-      // A chart that closed (saving on its way out) holds nothing.
-      hold: (paneId, analysisId) => {
-        if (boards.current.has(paneId)) held.current.set(paneId, analysisId);
-      },
-      report: (paneId, info) => {
-        if (!info) return;
-        if (paneId === MAIN_CHART) {
-          setMainMarket((prev) =>
-            prev &&
-            prev.provider === info.provider &&
-            prev.dataset === info.dataset &&
-            prev.symbol === info.symbol
-              ? prev
-              : { provider: info.provider, dataset: info.dataset, symbol: info.symbol },
-          );
-          return;
-        }
-        // An extra chart remembers what it shows, to reopen it next time.
-        const current = multiviewRef.current;
-        const pane = current.panes.find((p) => p.id === paneId);
-        if (!pane) return;
-        const next = {
-          id: pane.id,
-          provider: info.provider,
-          dataset: info.dataset,
-          symbol: info.symbol,
-          resolution: info.resolution,
-          analysisId: info.analysisId,
+      register: (api) => {
+        boardApi.current = api;
+        return () => {
+          if (boardApi.current === api) boardApi.current = null;
         };
-        if (JSON.stringify(next) === JSON.stringify(pane)) return;
-        changeMultiview({
-          ...current,
-          panes: current.panes.map((p) => (p.id === paneId ? next : p)),
-        });
-      },
-      register: (paneId, api) => {
-        boards.current.set(paneId, api);
-        return () => void boards.current.delete(paneId);
-      },
-      closePane: (paneId) => {
-        const current = multiviewRef.current;
-        const pane = current.panes.find((p) => p.id === paneId);
-        if (!pane) return;
-        changeMultiview(
-          current.count > 1
-            ? {
-                ...current,
-                count: current.count - 1,
-                // Its settings wait at the end for the next time you add a chart.
-                panes: [...current.panes.filter((p) => p.id !== paneId), pane],
-              }
-            : { ...current, enabled: false },
-        );
       },
       addRecent: (item) => setRecent(recentSymbols.add(item)),
     }),
-    [chartSync, changeMultiview],
+    [],
   );
 
-  // Links to an analysis (journal embeds, day versions, shared URLs) open it in the chart
-  // that has it, or in the first chart. The first chart opens the page's own link itself.
+  // Links to an analysis (journal embeds, day versions, shared URLs) open it in the chart,
+  // which opens the page's own link itself when it starts.
   const linkedId = params.get("id");
   const linkedSnapshot = params.get("snapshot");
   const linkedDay = isDayKey(linkedSnapshot) ? linkedSnapshot : null;
   useEffect(() => {
-    if (!linkedId || !boards.current.get(MAIN_CHART)?.started()) return;
-    const holder = shell.heldBy(linkedId, "") ?? MAIN_CHART;
-    const board = boards.current.get(holder);
-    const now = board?.current();
-    if (!board || !now || now.opening) return;
+    const board = boardApi.current;
+    if (!linkedId || !board?.started()) return;
+    const now = board.current();
+    if (now.opening) return;
     if (now.analysisId === linkedId && now.viewing === linkedDay) return;
     void board.open({ analysisId: linkedId, snapshotDay: linkedDay ?? undefined });
-    setActive(holder);
-  }, [linkedId, linkedDay, shell]);
-
-  const defaultResolution = prefs.defaults.resolution;
-  const starts = useMemo(
-    () => new Map(multiview.panes.map((p) => [p.id, paneStart(p, mainMarket, defaultResolution)])),
-    [multiview.panes, mainMarket, defaultResolution],
-  );
+  }, [linkedId, linkedDay]);
 
   const [header, setHeader] = useState<HTMLElement | null>(null);
   const [top, setTop] = useState<HTMLElement | null>(null);
@@ -595,8 +491,6 @@ function ChartLab() {
       changeOverlays,
       alertsOn,
       toggleAlerts,
-      multiview,
-      changeMultiview,
     }),
     [
       settings,
@@ -619,38 +513,16 @@ function ChartLab() {
       changeOverlays,
       alertsOn,
       toggleAlerts,
-      multiview,
-      changeMultiview,
     ],
   );
 
-  const layout = multiviewLayout(multiview);
-  const ids = [MAIN_CHART, ...shown.map((p) => p.id)];
   return (
     <div>
       <div ref={setHeader} className="contents" />
       <div className="grid gap-3 p-4 2xl:grid-cols-[minmax(0,1fr)_340px]">
         <div className="flex min-w-0 flex-col gap-3">
           <div ref={setTop} className="contents" />
-          <div className={layout.container}>
-            {ids.map((id, index) => {
-              const cell = layout.cell(index);
-              return (
-                <ChartBoard
-                  key={id}
-                  paneId={id}
-                  active={id === activeId}
-                  multi={layout.total > 1}
-                  cellClass={cell.cell}
-                  size={cell.size}
-                  start={id === MAIN_CHART ? null : (starts.get(id) ?? null)}
-                  slots={slots}
-                  shared={shared}
-                  shell={shell}
-                />
-              );
-            })}
-          </div>
+          <ChartBoard slots={slots} shared={shared} shell={shell} />
           <div ref={setBelow} className="contents" />
           {(prefsError || (prefsLoadError && !prefsReady)) && (
             <p role="alert" className="text-sm text-destructive">
@@ -665,33 +537,15 @@ function ChartLab() {
   );
 }
 
-type PaneStart = NonNullable<ReturnType<typeof paneStart>>;
-
 const ChartBoard = memo(function ChartBoard({
-  paneId,
-  active,
-  multi,
-  cellClass,
-  size,
-  start,
   slots,
   shared,
   shell,
 }: {
-  paneId: string;
-  /** The chart you work on: its controls show in the page's slots. */
-  active: boolean;
-  /** Multiview is on. */
-  multi: boolean;
-  cellClass: string;
-  size: "full" | "pane";
-  /** What an extra chart opens first; the first chart follows the URL instead. */
-  start: PaneStart | null;
   slots: Slots | null;
   shared: Shared;
   shell: Shell;
 }) {
-  const main = paneId === MAIN_CHART;
   const params = useSearchParams();
   const router = useRouter();
   const {
@@ -717,16 +571,10 @@ const ChartBoard = memo(function ChartBoard({
   const today = dayKeyOf(new Date().toISOString(), settings?.timeZone ?? "UTC");
 
   // ── Selection ──
-  const [provider, setProvider] = useState(
-    () => (main ? params.get("provider") : start?.provider) ?? "",
-  );
-  const [dataset, setDataset] = useState<string>(
-    () => (main ? params.get("dataset") : start?.dataset) ?? "",
-  );
-  const [symbolDraft, setSymbolDraft] = useState(
-    () => (main ? params.get("symbol") : start?.symbol) ?? "",
-  );
-  const tfParam = main ? params.get("tf") : (start?.resolution ?? null);
+  const [provider, setProvider] = useState(() => params.get("provider") ?? "");
+  const [dataset, setDataset] = useState<string>(() => params.get("dataset") ?? "");
+  const [symbolDraft, setSymbolDraft] = useState(() => params.get("symbol") ?? "");
+  const tfParam = params.get("tf");
   const [resolution, setResolution] = useState<Resolution>(isResolution(tfParam) ? tfParam : "5m");
   const [live, setLive] = useState(true);
 
@@ -737,7 +585,7 @@ const ChartBoard = memo(function ChartBoard({
     if (!prefsReady || prefsApplied.current) return;
     prefsApplied.current = true;
     // Defaults for this visit, unless a link chose them.
-    if (main && !isResolution(params.get("tf")) && !state.current.board)
+    if (!isResolution(params.get("tf")) && !state.current.board)
       setResolution(prefs.defaults.resolution);
     setLive(prefs.defaults.live);
   }, [prefsReady]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -784,15 +632,6 @@ const ChartBoard = memo(function ChartBoard({
   }>(analysisId ? `/api/analyses/${encodeURIComponent(analysisId)}/snapshots` : null);
   const chart = useRef<AnalysisChartHandle>(null);
 
-  // ── Multiview: crosshair and time window in step with the other charts ──
-  const sync = useMemo(() => ({ bus: shell.sync, id: paneId }), [shell.sync, paneId]);
-  const activeRef = useRef(active);
-  activeRef.current = active;
-  /** Alerts raised while you worked on another chart, shown on this chart's header. */
-  const [unseenAlerts, setUnseenAlerts] = useState(0);
-  useEffect(() => {
-    if (active) setUnseenAlerts(0);
-  }, [active]);
   const { data: symbolAnalyses, refresh: refreshSymbolAnalyses } = useApi<{
     analyses: ChartAnalysisSummary[];
   }>(
@@ -810,7 +649,6 @@ const ChartBoard = memo(function ChartBoard({
   const [editor, setEditor] = useState<{ key: number; draft: EditorDraft } | null>(null);
   const pushAlert = useCallback((entry: AlertEntry) => {
     setAlerts((current) => [entry, ...current].slice(0, 20));
-    if (!activeRef.current) setUnseenAlerts((n) => n + 1);
   }, []);
   const lastClose = useRef<{ time: number; close: number } | null>(null);
   const alertedAt = useRef(new Map<string, number>());
@@ -876,7 +714,7 @@ const ChartBoard = memo(function ChartBoard({
       s.timer = null;
       return queueFlush(s, options, (next) => saveOnce(s, next), mergeFlushOptions);
     },
-    [refreshAll, refreshSymbolAnalyses, refreshSnapshotDays, shell, paneId],
+    [refreshAll, refreshSymbolAnalyses, refreshSnapshotDays],
   );
 
   /** One save of the chart as it is now; not ok when it failed (the edits stay unsaved). */
@@ -962,7 +800,6 @@ const ChartBoard = memo(function ChartBoard({
           // A board switched mid-save must not adopt this id.
           if (!current.analysisId && state.current.board === board) {
             state.current.analysisId = result.analysis.id;
-            shell.hold(paneId, result.analysis.id);
             setAnalysisId(result.analysis.id);
             refreshSymbolAnalyses();
           }
@@ -1023,8 +860,7 @@ const ChartBoard = memo(function ChartBoard({
 
   // Keep the URL shareable, with the analysis id once it exists.
   useEffect(() => {
-    // The first chart's; extra charts remember theirs in the multiview settings.
-    if (!main || !board) return;
+    if (!board) return;
     const next = new URLSearchParams();
     next.set("provider", board.provider);
     if (board.dataset) next.set("dataset", board.dataset);
@@ -1037,7 +873,7 @@ const ChartBoard = memo(function ChartBoard({
     // (Next keeps useSearchParams in step with it).
     if (`${window.location.pathname}${window.location.search}` !== url)
       window.history.replaceState(window.history.state, "", url);
-  }, [main, board, analysisId, resolution, router, viewing]);
+  }, [board, analysisId, resolution, router, viewing]);
 
   // ── Appearance of the open chart ──
   const journalZone = settings?.timeZone ?? "UTC";
@@ -1137,13 +973,7 @@ const ChartBoard = memo(function ChartBoard({
   const openSeq = useRef(0);
   const openBoard = useCallback(
     async (target: OpenTarget) => {
-      // An analysis open in another chart is worked on there.
-      const elsewhere = target.analysisId ? shell.heldBy(target.analysisId, paneId) : null;
-      if (elsewhere && !target.fallback) {
-        shell.activate(elsewhere);
-        return;
-      }
-      const wanted = target.analysisId && !elsewhere ? target.analysisId : null;
+      const wanted = target.analysisId ?? null;
       const snapshotDay = wanted && target.snapshotDay ? target.snapshotDay : null;
       const seq = ++openSeq.current;
       /** A newer open started while this one waited: it owns the chart now. */
@@ -1151,8 +981,6 @@ const ChartBoard = memo(function ChartBoard({
       const check = () => {
         if (seq !== openSeq.current) throw new Superseded();
       };
-      // Claimed before loading, so two charts opening at once never pick the same one.
-      if (wanted) shell.hold(paneId, wanted);
       openingRef.current = true;
       setOpening(true);
       setOpenError("");
@@ -1179,8 +1007,6 @@ const ChartBoard = memo(function ChartBoard({
         };
         let analysis: ChartAnalysis | null = null;
         const saved = await read<{ scripts: ChartScript[] }>("/api/chart-scripts");
-        // Saving the chart it had may have claimed that one's new id.
-        if (wanted) shell.hold(paneId, wanted);
         try {
           if (wanted && snapshotDay) {
             analysis = (
@@ -1197,14 +1023,12 @@ const ChartBoard = memo(function ChartBoard({
           if (cause instanceof Superseded || !target.fallback) throw cause;
         }
         if (!analysis && !target.fresh && target.provider && target.symbol) {
-          // Each symbol reopens its latest analysis, drawings included, unless another
-          // chart has it open.
+          // Each symbol reopens its latest analysis, drawings included.
           const list = await read<{ analyses: ChartAnalysisSummary[] }>(
             `/api/analyses?provider=${encodeURIComponent(target.provider)}&symbol=${encodeURIComponent(target.symbol.trim())}`,
           );
-          const newest = list.analyses.find((a) => !shell.heldBy(a.id, paneId));
+          const newest = list.analyses[0];
           if (newest) {
-            shell.hold(paneId, newest.id);
             analysis = (
               await read<{ analysis: ChartAnalysis }>(
                 `/api/analyses/${encodeURIComponent(newest.id)}`,
@@ -1214,7 +1038,6 @@ const ChartBoard = memo(function ChartBoard({
         }
         // Edits made while this loaded are saved too, before the chart changes.
         if (saver.current.dirty || saver.current.running) await saveFirst();
-        shell.hold(paneId, analysis?.id ?? null);
         const nextProvider = analysis?.provider ?? target.provider!;
         const nextSymbol = analysis?.symbol ?? target.symbol!.trim();
         const nextDataset = analysis ? analysis.dataset : (target.dataset ?? null);
@@ -1289,7 +1112,6 @@ const ChartBoard = memo(function ChartBoard({
         shell.addRecent({ provider: nextProvider, dataset: nextDataset, symbol: nextSymbol });
       } catch (cause) {
         if (cause instanceof Superseded) return;
-        shell.hold(paneId, state.current.analysisId);
         setOpenError(cause instanceof Error ? cause.message : "Could not open the chart.");
       } finally {
         if (seq === openSeq.current) {
@@ -1298,17 +1120,16 @@ const ChartBoard = memo(function ChartBoard({
         }
       }
     },
-    [flush, shell, paneId],
+    [flush, shell],
   );
 
-  // The page routes links to the chart that has the analysis, and follows what each shows.
-  // Registered before the first open, so that open's claim counts.
+  // The page routes links that arrive later to the chart.
   const started = useRef(false);
   const openRef = useRef(openBoard);
   openRef.current = openBoard;
   useEffect(
     () =>
-      shell.register(paneId, {
+      shell.register({
         open: (target) => openRef.current(target),
         current: () => ({
           analysisId: state.current.analysisId,
@@ -1317,27 +1138,12 @@ const ChartBoard = memo(function ChartBoard({
         }),
         started: () => started.current,
       }),
-    [shell, paneId],
+    [shell],
   );
-  // First open. The first chart: the linked analysis, the linked symbol, or the last symbol
-  // you watched. An extra chart: what it showed last time, or the first chart's symbol.
+  // First open: the linked analysis, the linked symbol, or the last symbol you watched.
   useEffect(() => {
     if (started.current || !connections) return;
     const connected = (id: string) => available.some((a) => a.id === id);
-    if (!main) {
-      if (start && connected(start.provider)) {
-        started.current = true;
-        void openBoard({
-          provider: start.provider,
-          dataset: start.dataset,
-          symbol: start.symbol,
-          resolution: start.resolution,
-          analysisId: start.analysisId ?? undefined,
-          fallback: true,
-        });
-      } else if (available.length && !connected(provider)) setProvider(available[0]!.id);
-      return;
-    }
     started.current = true;
     const id = params.get("id");
     const symbol = params.get("symbol");
@@ -1349,22 +1155,7 @@ const ChartBoard = memo(function ChartBoard({
       void openBoard({ provider: fromUrl, dataset: params.get("dataset"), symbol });
     else if (last) void openBoard(last);
     else if (available.length && !connected(provider)) setProvider(available[0]!.id);
-  }, [main, start, connections, available, params, openBoard, provider]);
-
-  useEffect(() => {
-    shell.report(
-      paneId,
-      board
-        ? {
-            provider: board.provider,
-            dataset: board.dataset,
-            symbol: board.symbol,
-            resolution,
-            analysisId,
-          }
-        : null,
-    );
-  }, [shell, paneId, board, resolution, analysisId]);
+  }, [connections, available, params, openBoard, provider]);
 
   const info = providerInfo(provider);
   const { data: csv } = useApi<{ datasets: MarketCsvDataset[] }>(
@@ -1876,7 +1667,17 @@ const ChartBoard = memo(function ChartBoard({
               {live ? <Pause /> : <Play />}
               {live ? "Pause" : "Go live"}
             </Button>
-            {board && <MultiviewMenu state={shared.multiview} onChange={shared.changeMultiview} />}
+            <Button asChild variant="outline" title="Several charts at once, full screen">
+              <Link
+                href={
+                  board
+                    ? `/charts/workspace?${workspaceQuery(board, resolution)}`
+                    : "/charts/workspace"
+                }
+              >
+                <LayoutGrid /> Workspace
+              </Link>
+            </Button>
           </form>
         )}
         {watchlist.length > 0 && (
@@ -2008,35 +1809,14 @@ const ChartBoard = memo(function ChartBoard({
   const empty = available.length > 0 && (
     <Card>
       <CardContent className="py-10 text-center text-sm text-muted-foreground">
-        {multi && !active
-          ? "Click this chart, then type a symbol and press Open."
-          : "Type a symbol and press Open. The chart loads the latest candles and keeps updating; your drawings save automatically."}
+        Type a symbol and press Open. The chart loads the latest candles and keeps updating; your
+        drawings save automatically.
       </CardContent>
     </Card>
   );
-  const activate = active ? undefined : () => shell.activate(paneId);
   return (
     <>
-      <div
-        className={cn(
-          cellClass,
-          multi && "rounded-lg",
-          multi && active && "ring-2 ring-primary/50 ring-offset-2 ring-offset-background",
-        )}
-        onPointerDownCapture={activate}
-        onFocusCapture={activate}
-      >
-        {multi && (
-          <PaneHeader
-            label={board ? symbolLabel(board.provider, board.symbol) : "Empty chart"}
-            detail={board ? resolution : ""}
-            color={symbolPrefs?.color}
-            price={<LiveClose store={live$} />}
-            active={active}
-            alerts={unseenAlerts}
-            onClose={main ? undefined : () => shell.closePane(paneId)}
-          />
-        )}
+      <div className="min-w-0">
         {board ? (
           <AnalysisChart
             key={board.key}
@@ -2128,15 +1908,12 @@ const ChartBoard = memo(function ChartBoard({
               ),
             }}
             chartRef={chart}
-            sync={sync}
-            size={size}
           />
         ) : (
           empty
         )}
       </div>
-      {active &&
-        slots &&
+      {slots &&
         createPortal(
           <FilterBar
             title={board ? `Charts · ${board.symbol}` : "Charts"}
@@ -2144,9 +1921,8 @@ const ChartBoard = memo(function ChartBoard({
           />,
           slots.header,
         )}
-      {active && slots && createPortal(topCard, slots.top)}
-      {active &&
-        slots &&
+      {slots && createPortal(topCard, slots.top)}
+      {slots &&
         createPortal(
           <>
             {viewing && board && (
@@ -2202,8 +1978,7 @@ const ChartBoard = memo(function ChartBoard({
           </>,
           slots.below,
         )}
-      {active &&
-        slots &&
+      {slots &&
         createPortal(
           <>
             <SectionCard
@@ -2724,11 +2499,16 @@ function LiveError({ store }: { store: LiveStore }) {
   );
 }
 
-/** Just the latest close, for a multiview chart's header. */
-function LiveClose({ store }: { store: LiveStore }) {
-  const { latest } = useLiveView(store);
-  return latest ? <>{fmtNumber(latest.bar.close)}</> : null;
-}
+/** The workspace starts a new layout on the chart you came from, and goes back to it. */
+const workspaceQuery = (
+  board: { provider: string; dataset: string | null; symbol: string },
+  resolution: Resolution,
+) => {
+  const query = new URLSearchParams({ provider: board.provider, symbol: board.symbol });
+  if (board.dataset) query.set("dataset", board.dataset);
+  query.set("tf", resolution);
+  return query.toString();
+};
 
 function LiveBadge({ store, live }: { store: LiveStore; live: boolean }) {
   const { status } = useLiveView(store);

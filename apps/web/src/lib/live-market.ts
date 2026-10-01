@@ -161,7 +161,8 @@ export class JournalMarketProvider implements DataProvider {
 
   /** Set once the chart is gone: late responses and timers report nothing. */
   private disposed = false;
-  /** The timeframe of the newest "up to now" request; older ones' answers are stale. */
+  /** The market (ticker and timeframe) of the newest "up to now" request; older ones'
+   *  answers are stale. */
   private current: string | null = null;
 
   private onStatus(status: LiveStatus) {
@@ -184,18 +185,19 @@ export class JournalMarketProvider implements DataProvider {
     for (const stop of [...this.subscriptions]) stop();
   }
 
-  /** Newest candle time seen per timeframe, so a resumed poll fills the gap. */
+  /** Newest candle time seen per market, so a resumed poll fills the gap. Keyed by ticker
+   *  and timeframe: one provider can serve several charts (a workspace shares it). */
   private readonly lastTime = new Map<string, number>();
-  /** Newest candle and the close before it per timeframe, to seed the live stream. */
+  /** Newest candle and the close before it per market, to seed the live stream. */
   private readonly recent = new Map<string, LatestBar>();
 
-  private latest(bars: OHLCV[], timeframe: string) {
+  private latest(bars: OHLCV[], market: string) {
     const bar = bars.at(-1);
-    if (this.disposed || (this.current !== null && timeframe !== this.current)) return;
-    if (!bar || bar.time < (this.recent.get(timeframe)?.bar.time ?? 0)) return;
-    this.lastTime.set(timeframe, Math.max(this.lastTime.get(timeframe) ?? 0, bar.time));
+    if (this.disposed || (this.current !== null && market !== this.current)) return;
+    if (!bar || bar.time < (this.recent.get(market)?.bar.time ?? 0)) return;
+    this.lastTime.set(market, Math.max(this.lastTime.get(market) ?? 0, bar.time));
     const latest = { bar, previousClose: bars.at(-2)?.close ?? null };
-    this.recent.set(timeframe, latest);
+    this.recent.set(market, latest);
     this.hooks.onLatest?.(latest);
   }
 
@@ -284,12 +286,13 @@ export class JournalMarketProvider implements DataProvider {
     if (!resolution) throw new Error(`Unsupported timeframe ${timeframe}.`);
     // A request with no end is "up to now": its last candle is the current price. Only the
     // newest such request may report it (a slow answer for the timeframe you left must not).
-    if (range.to == null) this.current = timeframe;
+    const market = marketKey(ticker, timeframe);
+    if (range.to == null) this.current = market;
     try {
       // Vela treats a failed load as "no candles" and would leave the chart blank, so a
       // brief upstream hiccup is retried before it is reported.
       const bars = await this.load(ticker, resolution, historyWindow(range));
-      if (range.to == null) this.latest(bars, timeframe);
+      if (range.to == null) this.latest(bars, market);
       this.onStatus({ state: this.paused ? "paused" : "live", updatedAt: Date.now() });
       return bars;
     } catch (error) {
@@ -305,6 +308,7 @@ export class JournalMarketProvider implements DataProvider {
     const resolution = resolutionForTimeframe(timeframe);
     if (this.disposed || !resolution || !isResolution(resolution)) return () => {};
     const step = RESOLUTIONS[resolution];
+    const market = marketKey(ticker, timeframe);
     let stopped = false;
     // Unsubscribing (or removing the chart) cancels the poll still on its way.
     const polling = new AbortController();
@@ -319,7 +323,7 @@ export class JournalMarketProvider implements DataProvider {
     let publishTimer: ReturnType<typeof setTimeout> | null = null;
     let publishedAt = 0;
     const seed = () => {
-      const recent = this.recent.get(timeframe);
+      const recent = this.recent.get(market);
       if (recent && (!forming.bar || recent.bar.time > forming.bar.time)) {
         forming.bar = { ...recent.bar };
         forming.previousClose = recent.previousClose;
@@ -334,7 +338,7 @@ export class JournalMarketProvider implements DataProvider {
           publishedAt = Date.now();
           if (stopped || this.disposed || !forming.bar) return;
           const latest = { bar: { ...forming.bar }, previousClose: forming.previousClose };
-          this.recent.set(timeframe, latest);
+          this.recent.set(market, latest);
           this.hooks.onLatest?.(latest);
           this.onStatus({ state: "live", realtime: true, updatedAt: Date.now() });
         },
@@ -373,10 +377,7 @@ export class JournalMarketProvider implements DataProvider {
         const bars = applyLive(forming, message, resolution);
         if (!bars.length) return;
         for (const bar of bars) onBar(bar);
-        this.lastTime.set(
-          timeframe,
-          Math.max(this.lastTime.get(timeframe) ?? 0, bars.at(-1)!.time),
-        );
+        this.lastTime.set(market, Math.max(this.lastTime.get(market) ?? 0, bars.at(-1)!.time));
         publish();
       };
       opened.onerror = () => {
@@ -412,7 +413,7 @@ export class JournalMarketProvider implements DataProvider {
         // candle and the one before it, and never more than one request can hold.
         const from = Math.max(
           now - MAX_REQUEST_BARS * step,
-          Math.min(this.lastTime.get(timeframe) ?? now, now - 2 * step),
+          Math.min(this.lastTime.get(market) ?? now, now - 2 * step),
         );
         const bars = await this.request(ticker, resolution, { from, to: now }, polling.signal);
         if (!stopped) {
@@ -421,7 +422,7 @@ export class JournalMarketProvider implements DataProvider {
           const cutoff = streaming && forming.bar ? forming.bar.time : Infinity;
           for (const bar of bars) if (bar.time < cutoff) onBar(bar);
           if (!streaming) {
-            this.latest(bars, timeframe);
+            this.latest(bars, market);
             seed();
             this.onStatus({ state: "live", updatedAt: Date.now() });
           }
@@ -463,6 +464,8 @@ export class JournalMarketProvider implements DataProvider {
     return unsubscribe;
   }
 }
+
+const marketKey = (ticker: string, timeframe: string) => `${ticker}|${timeframe}`;
 
 const RETRY_DELAYS_MS = [800, 2500];
 

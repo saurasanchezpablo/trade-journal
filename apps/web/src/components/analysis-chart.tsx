@@ -86,7 +86,6 @@ import {
   type OverlayHooks,
   type OverlayState,
 } from "./chart-overlays";
-import type { ChartSync } from "@/lib/chart-sync";
 import { Button } from "./ui/button";
 import { HoverHint } from "./ui/tooltip";
 import { PortalContainer } from "./ui/portal-container";
@@ -254,8 +253,6 @@ export function AnalysisChart({
   capturing,
   toolbarExtras,
   sidePanel,
-  sync,
-  size = "full",
   layers,
   onDrawingCreated,
   onDrawingsChange,
@@ -290,10 +287,6 @@ export function AnalysisChart({
   toolbarExtras?: React.ReactNode;
   /** Docked beside the chart (below it on narrow screens), toggled from the toolbar. */
   sidePanel?: { title: string; count?: number; content: React.ReactNode };
-  /** Multiview: keeps this chart's crosshair and time window in step with the others. */
-  sync?: { bus: ChartSync; id: string };
-  /** Multiview: a shorter chart, so several fit on screen. */
-  size?: "full" | "pane";
   layers: LayersDocument;
   onDrawingCreated: (id: string) => void;
   /** Every drawing on the chart, after any change (for the layers panel and alerts). */
@@ -387,21 +380,18 @@ export function AnalysisChart({
   const [fullscreen, setFullscreen] = useState(false);
   /** Full screen via the browser API shows only the frame, so popups portal into it. */
   const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
-  // Remembered apart for multiview charts, where the panel starts closed to leave room.
-  const sideKey = size === "pane" ? `${SIDE_PANEL_KEY}-pane` : SIDE_PANEL_KEY;
-  const [sideOpen, setSideOpen] = useState(size === "full");
+  const [sideOpen, setSideOpen] = useState(true);
   useEffect(() => {
     try {
-      const stored = localStorage.getItem(sideKey);
-      setSideOpen(size === "pane" ? stored === "open" : stored !== "closed");
+      setSideOpen(localStorage.getItem(SIDE_PANEL_KEY) !== "closed");
     } catch {
-      // The default for this size.
+      // Open by default.
     }
-  }, [sideKey, size]);
+  }, []);
   const toggleSide = () =>
     setSideOpen((open) => {
       try {
-        localStorage.setItem(sideKey, open ? "closed" : "open");
+        localStorage.setItem(SIDE_PANEL_KEY, open ? "closed" : "open");
       } catch {
         // This page only.
       }
@@ -750,25 +740,6 @@ export function AnalysisChart({
           growHistory(instance, state.requested * 2);
         }),
       ];
-      if (sync) {
-        const following = { current: false, timer: 0 as ReturnType<typeof setTimeout> | 0 };
-        offs.push(
-          instance.renderer.onCrosshairMove((e) => sync.bus.crosshair(sync.id, e.time)),
-          instance.on("viewport:changed", ({ from, to }) => {
-            if (!following.current) sync.bus.range(sync.id, { from, to });
-          }),
-          sync.bus.subscribe(sync.id, {
-            crosshair: (time) => instance.renderer.setExternalCrosshair(time, null),
-            range: (range) => {
-              // Ignore the viewport event this move causes, so it is not echoed back.
-              following.current = true;
-              instance.setVisibleRange(range);
-              if (following.timer) clearTimeout(following.timer);
-              following.timer = setTimeout(() => (following.current = false), 50);
-            },
-          }),
-        );
-      }
       setTool(instance.drawings.getTool());
       refresh();
 
@@ -1325,21 +1296,13 @@ export function AnalysisChart({
         <div
           className={cn(
             "flex flex-col gap-2 md:flex-row",
-            fullscreen
-              ? "min-h-0 flex-1"
-              : size === "pane"
-                ? "md:h-[min(56vh,540px)] md:min-h-[340px]"
-                : "md:h-[min(72vh,680px)] md:min-h-[420px]",
+            fullscreen ? "min-h-0 flex-1" : "md:h-[min(72vh,680px)] md:min-h-[420px]",
           )}
         >
           <div
             className={cn(
               "relative min-w-0 md:min-h-0 md:flex-1",
-              fullscreen
-                ? "min-h-0 flex-1"
-                : size === "pane"
-                  ? "h-[min(56vh,540px)] min-h-[340px] md:h-auto"
-                  : "h-[min(72vh,680px)] min-h-[420px] md:h-auto",
+              fullscreen ? "min-h-0 flex-1" : "h-[min(72vh,680px)] min-h-[420px] md:h-auto",
             )}
           >
             <div
@@ -1393,7 +1356,7 @@ export function AnalysisChart({
             </aside>
           )}
         </div>
-        {!fullscreen && size === "full" && (
+        {!fullscreen && (
           <p className="text-xs text-muted-foreground">
             {penSeen
               ? "Stylus detected. The pen tip draws, a pen tap selects a drawing, the eraser end erases, and fingers pan and zoom. Turn off “Stylus draws” to drag drawings with the pen."

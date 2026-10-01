@@ -101,6 +101,11 @@ structure and re-apply the fix; each one has a test that fails without it.
 - Explained alerts: `lib/alert-explain.ts`, test `alert-explain.test.ts`.
 - Update notice (docs/updates.md): `server/update-check.ts`, `app/api/update/route.ts`,
   `components/update-notice.tsx`, test `update-check.test.ts`.
+- Chart workspace (docs/charts.md#workspace): `app/charts/workspace/page.tsx`,
+  `components/chart-workspace.tsx`, `components/workspace-symbol-search.ts`,
+  `lib/chart-workspace.ts`, `server/chart-workspace/store.ts` (its `chart_workspaces` table),
+  `app/api/chart-workspace/route.ts`, test `chart-workspace.test.ts`. It replaced the fork's
+  multiview on the Charts page.
 - Backtesting (docs/backtesting.md): `packages/core/src/backtest.ts` (the fill engine and
   report), `lib/backtest-session.ts`, `lib/backtest-replay.ts`, `lib/backtest-strategies.ts`,
   `server/backtest/*` (its `backtest_sessions` table), `app/api/backtests/**`,

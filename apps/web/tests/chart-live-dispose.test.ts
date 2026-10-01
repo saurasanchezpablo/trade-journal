@@ -78,3 +78,24 @@ describe("a chart that is removed", () => {
     expect(pending[0]!.signal?.aborted).toBe(true);
   });
 });
+
+describe("charts sharing one provider (the workspace)", () => {
+  it("each catches up from its own last candle, not another symbol's", async () => {
+    vi.useFakeTimers();
+    const now = Date.UTC(2026, 8, 29, 8);
+    vi.setSystemTime(now);
+    const pending = heldFetch();
+    const shared = provider();
+    const eth = shared.getBars("ETH", "1", { limit: 10 });
+    pending[0]!.answer([bar(now - 50 * 60_000)]);
+    await eth;
+    const btc = shared.getBars("BTC", "1", { limit: 10 });
+    pending[1]!.answer([bar(now - 60_000)]);
+    await btc;
+    shared.subscribe("ETH", "1", () => {});
+    await vi.advanceTimersByTimeAsync(LIVE_POLL_MS["1m"]);
+    const poll = pending[2]!.body as unknown as { from: number };
+    expect(poll.from).toBe(now - 50 * 60_000);
+    shared.dispose();
+  });
+});
