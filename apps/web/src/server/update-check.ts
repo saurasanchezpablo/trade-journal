@@ -1,15 +1,19 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
+import appPackage from "../../package.json";
 
 /**
- * Whether a newer version of the journal is published: the commit this server runs, compared
- * with the newest commit of the repository's branch on GitHub. Asked at most every six hours
- * (an hour after a failure); nothing about the journal is sent, only the running commit's id
- * when it differs from the branch's newest. `JOURNAL_UPDATE_CHECK=off` turns it off.
+ * Whether a newer release of the journal is published: the repository's latest GitHub
+ * release (drafts and pre-releases never count), against the version this server runs.
+ * Asked at most every six hours (an hour after a failure); nothing about the journal is
+ * sent, only the running commit's id to ask GitHub whether it already has the release.
+ * `JOURNAL_UPDATE_CHECK=off` turns it off.
  *
- * The running commit is `JOURNAL_BUILD_COMMIT` (a Docker build sets it), or the checkout's
- * own `.git`. The repository is `JOURNAL_UPDATE_REPO` (owner/name), or the checkout's GitHub
- * `origin`, or this fork's; the branch is `JOURNAL_UPDATE_BRANCH`, `main` by default.
+ * The running version is its commit when known (`JOURNAL_BUILD_COMMIT`, which a Docker build
+ * sets, or the checkout's own `.git`): it has the release when it contains the release's tag.
+ * Otherwise the app's version number (`apps/web/package.json`) against the release's tag
+ * (`v0.2.0`). The repository is `JOURNAL_UPDATE_REPO` (owner/name), or the checkout's GitHub
+ * `origin`, or this fork's.
  */
 
 export const DEFAULT_UPDATE_REPO = "saurasanchezpablo/trade-journal";
@@ -20,17 +24,26 @@ const MAX_BODY_BYTES = 8 * 1024 * 1024;
 
 export interface UpdateStatus {
   available: boolean;
-  /** Commits on the branch that this server does not have. */
-  behind: number;
-  /** Where to see what changed. */
+  /** The newer release's tag (`v0.2.0`) and its title. */
+  version: string | null;
+  name: string | null;
+  /** The release's page on GitHub, with its notes. */
   url: string | null;
+  publishedAt: string | null;
   checkedAt: string | null;
 }
 
-const NONE: UpdateStatus = { available: false, behind: 0, url: null, checkedAt: null };
+const NONE: UpdateStatus = {
+  available: false,
+  version: null,
+  name: null,
+  url: null,
+  publishedAt: null,
+  checkedAt: null,
+};
 const SHA = /^[0-9a-f]{40}$/;
 const REPO = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
-const BRANCH = /^[A-Za-z0-9._/-]{1,100}$/;
+const TAG = /^[A-Za-z0-9._/+-]{1,100}$/;
 
 /**
  * The `.git` directory of the journal's checkout holding `from` (a worktree's `.git` file
@@ -108,24 +121,42 @@ export function originRepo(gitDir: string): string | null {
 
 export interface UpdateSource {
   commit: string | null;
+  /** The app's version number. */
+  version: string;
   repo: string;
-  branch: string;
 }
 
-/** What to compare: the running commit, the repository and its branch. */
+/** What to compare: the running commit and version, and the repository. */
 export function updateSource(
   env: Record<string, string | undefined> = process.env,
   from = process.cwd(),
+  version: string = appPackage.version,
 ): UpdateSource {
   const gitDir = findGitDir(from);
   const built = env.JOURNAL_BUILD_COMMIT?.trim().toLowerCase();
   const repo = env.JOURNAL_UPDATE_REPO?.trim();
-  const branch = env.JOURNAL_UPDATE_BRANCH?.trim();
   return {
     commit: built && SHA.test(built) ? built : gitDir ? headCommit(gitDir) : null,
+    version,
     repo: repo && REPO.test(repo) ? repo : (gitDir && originRepo(gitDir)) || DEFAULT_UPDATE_REPO,
-    branch: branch && BRANCH.test(branch) ? branch : "main",
   };
+}
+
+const semver = (value: string) => {
+  const match = /^v?(\d+)\.(\d+)\.(\d+)$/.exec(value.trim());
+  return match ? [Number(match[1]), Number(match[2]), Number(match[3])] : null;
+};
+
+/**
+ * Whether a release tag (`v0.2.0`, `0.2.0`) is a later version than `current`. A tag that is
+ * not a plain version number never counts: there is nothing to compare it with.
+ */
+export function isNewerVersion(tag: string, current: string): boolean {
+  const a = semver(tag);
+  const b = semver(current);
+  if (!a || !b) return false;
+  for (let i = 0; i < 3; i++) if (a[i] !== b[i]) return a[i]! > b[i]!;
+  return false;
 }
 
 type Fetcher = (url: string, init: RequestInit) => Promise<Response>;
@@ -148,30 +179,45 @@ async function readGitHub(fetcher: Fetcher, url: string): Promise<Record<string,
   return (await response.json()) as Record<string, unknown>;
 }
 
-/** Compare the running commit with the branch's newest one. */
+const text = (value: unknown) => (typeof value === "string" && value.trim() ? value.trim() : null);
+
+/** Whether the repository's latest release is newer than what this server runs. */
 export async function compareWithGitHub(
   source: UpdateSource,
   fetcher: Fetcher = fetch,
   now = Date.now(),
 ): Promise<UpdateStatus> {
   const checkedAt = new Date(now).toISOString();
-  if (!source.commit) return { ...NONE, checkedAt };
   const api = `https://api.github.com/repos/${source.repo}`;
-  const branch = await readGitHub(fetcher, `${api}/branches/${encodeURIComponent(source.branch)}`);
-  const newest = (branch?.commit as { sha?: unknown } | undefined)?.sha;
-  if (typeof newest !== "string" || newest === source.commit) return { ...NONE, checkedAt };
-  const compared = await readGitHub(
-    fetcher,
-    `${api}/compare/${source.commit}...${encodeURIComponent(source.branch)}?per_page=1`,
-  );
-  const behind = typeof compared?.ahead_by === "number" ? compared.ahead_by : 0;
+  // A repository without releases answers 404: nothing to tell.
+  const latest = await readGitHub(fetcher, `${api}/releases/latest`);
+  const tag = text(latest?.tag_name);
+  if (!latest || !tag || !TAG.test(tag) || latest.draft === true || latest.prerelease === true)
+    return { ...NONE, checkedAt };
+  let newer: boolean | null = null;
+  if (source.commit) {
+    // Base the release, head the running commit: "behind" or "diverged" means the release
+    // has commits this version lacks. A commit GitHub does not know (404) falls back below.
+    const compared = await readGitHub(
+      fetcher,
+      `${api}/compare/${encodeURIComponent(tag)}...${source.commit}?per_page=1`,
+    );
+    const status = compared?.status;
+    if (status === "identical" || status === "ahead") newer = false;
+    else if (status === "behind" || status === "diverged") newer = true;
+  }
+  if (newer === null) newer = isNewerVersion(tag, source.version);
+  if (!newer) return { ...NONE, checkedAt };
+  const page = text(latest.html_url);
   return {
-    available: behind > 0,
-    behind,
+    available: true,
+    version: tag,
+    name: text(latest.name) ?? tag,
     url:
-      behind > 0
-        ? `https://github.com/${source.repo}/compare/${source.commit.slice(0, 12)}...${source.branch}`
-        : null,
+      page && page.startsWith("https://github.com/")
+        ? page
+        : `https://github.com/${source.repo}/releases/tag/${encodeURIComponent(tag)}`,
+    publishedAt: text(latest.published_at),
     checkedAt,
   };
 }
