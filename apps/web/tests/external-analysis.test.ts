@@ -417,19 +417,21 @@ describe("a new video", () => {
     expect(video).toMatchObject({ status: "failed", attempts: 2, nextAttemptAt: null });
   });
 
-  it("notifies you when it is ready, if you asked to be", async () => {
-    add();
+  it("hands its notification to the alerts, as a YouTube analysis from its channel", async () => {
+    const channel = add();
     videos = [videos[0]!];
-    store.saveExternalSettings({ ...store.getExternalSettings(), notify: true });
     script(() => anthropicMessage(JSON.stringify(summary)));
     const deliver = vi.fn(async () => 2);
     await runCheck({ deps: { ...deps, deliver } });
-    expect(deliver).toHaveBeenCalledWith({
-      title: "New analysis: Crypto Banter",
-      body: "BTC: the next move. Bias long; main scenario: Push to 70k.",
-      tag: "external-NEWEST00001",
-      url: "/external?video=NEWEST00001",
-    });
+    expect(deliver).toHaveBeenCalledWith(
+      {
+        title: "New analysis: Crypto Banter",
+        body: "BTC: the next move. Bias long; main scenario: Push to 70k.",
+        tag: "external-NEWEST00001",
+        url: "/external?video=NEWEST00001",
+      },
+      { kind: "external", source: `external:${channel.channelId}` },
+    );
   });
 
   it("is watched by Gemini when it has no captions and Gemini is the provider", async () => {

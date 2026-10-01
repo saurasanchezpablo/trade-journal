@@ -14,7 +14,7 @@ journal show up without reinstalling.
    - Chrome or Edge on a computer: the install icon in the address bar, or menu → **Install**.
    - Chrome on Android: menu → **Install app** (or **Add to Home screen**).
    - Safari on iPhone or iPad: Share → **Add to Home Screen**.
-3. For alerts on that device, open Charts → Alerts → **Notify this browser** from the installed
+3. For alerts on that device, open Alerts → **Notify this browser** from the installed
    app (see [alerts.md](alerts.md)).
 
 `JOURNAL_APP_NAME` and `JOURNAL_APP_SHORT_NAME` rename the installed app.

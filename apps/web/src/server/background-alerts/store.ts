@@ -38,6 +38,27 @@ export const alertEvents = sqliteTable(
   (table) => [index("alert_events_analysis").on(table.analysisId, table.at)],
 );
 
+/** Every notification the server sent or held back, whatever raised it (newest kept). */
+export const notificationLog = sqliteTable(
+  "notification_log",
+  {
+    id: text("id").primaryKey(),
+    /** `lines`, `zones`, `external`, `digest` or `test`. */
+    kind: text("kind").notNull(),
+    /** What raised it (`external:<channel id>`), when it has one. */
+    source: text("source"),
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+    url: text("url").notNull(),
+    at: text("at").notNull(),
+    /** Browsers and webhooks that accepted it. */
+    delivered: integer("delivered").notNull().default(0),
+    /** Why it was not sent (`paused`, `quiet`, `kind`, `source`), or null. */
+    muted: text("muted"),
+  },
+  (table) => [index("notification_log_at").on(table.at)],
+);
+
 const DDL = `
 CREATE TABLE IF NOT EXISTS background_alert_watches (
  analysis_id TEXT PRIMARY KEY REFERENCES chart_analyses(id) ON DELETE CASCADE,
@@ -53,6 +74,11 @@ CREATE TABLE IF NOT EXISTS alert_events (
  delivered INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS alert_events_analysis ON alert_events(analysis_id, at);
+CREATE TABLE IF NOT EXISTS notification_log (
+ id TEXT PRIMARY KEY, kind TEXT NOT NULL, source TEXT, title TEXT NOT NULL, body TEXT NOT NULL,
+ url TEXT NOT NULL, at TEXT NOT NULL, delivered INTEGER NOT NULL DEFAULT 0, muted TEXT
+);
+CREATE INDEX IF NOT EXISTS notification_log_at ON notification_log(at);
 -- The watcher polls each watched analysis's save stamp; this answers it without reading rows.
 CREATE INDEX IF NOT EXISTS background_alert_stamps ON chart_analyses(id, updated_at);
 `;

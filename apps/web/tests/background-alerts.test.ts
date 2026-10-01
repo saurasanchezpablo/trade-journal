@@ -309,12 +309,10 @@ describe("delivery", () => {
       calls.push({ url, init });
       return new Response(null, { status: url.includes("gone") ? 410 : 201 });
     });
-    const delivered = await push.deliver({
-      title: "Chart alert",
-      body: "x",
-      tag: "t",
-      url: "/charts",
-    });
+    const delivered = await push.deliver(
+      { title: "Chart alert", body: "x", tag: "t", url: "/charts" },
+      { kind: "lines" },
+    );
     expect(delivered).toBe(1);
     const live = calls.find((c) => !c.url.includes("gone"))!;
     const headers = live.init.headers as Record<string, string>;
@@ -333,7 +331,7 @@ describe("delivery", () => {
     expect((await response.json()).delivered).toBe(1);
     const [url, init] = fetcher.mock.calls[0]!;
     expect(url).toBe("https://ntfy.example/alerts");
-    expect(init.body).toBe("Background alerts reach this device.");
+    expect(init.body).toBe("Alerts from the journal reach this device.");
     expect((init.headers as Record<string, string>).Title).toBe("Test alert");
     fetcher.mockRestore();
     await webhookRoute.PUT(json("/api/alerts/webhook", { url: "" }, "PUT"));
@@ -354,7 +352,12 @@ describe("delivery", () => {
         async (url, init) => (sent.push(new Request(url, init)), new Response("ok")),
       );
     const title = "New analysis: 📈 日本の相場";
-    expect(await push.deliver({ title, body: "The body.", tag: "t", url: "/external" })).toBe(1);
+    expect(
+      await push.deliver(
+        { title, body: "The body.", tag: "t", url: "/external" },
+        { kind: "test" },
+      ),
+    ).toBe(1);
     const header = sent[0]!.headers.get("Title")!;
     expect(header).toMatch(/^=\?UTF-8\?B\?[A-Za-z0-9+/=]+\?=$/);
     expect(Buffer.from(header.slice(10, -2), "base64").toString("utf8")).toBe(title);

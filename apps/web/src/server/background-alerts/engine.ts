@@ -13,7 +13,7 @@ import { connectionKey, providerFor } from "../market-data/connections";
 import { RequestError } from "../api";
 import { newId, nowIso } from "../ids";
 import { alertEvents, alertWatches, alertsDb } from "./store";
-import { deliver, type AlertNotification } from "./delivery";
+import { deliver, type AlertNotification, type DeliveryMeta } from "./delivery";
 import { logFailure } from "./log";
 
 /**
@@ -61,7 +61,7 @@ export interface AlertEngineDeps {
   listen: typeof listenLive;
   /** The newest candle for a polled source, or null. */
   latest: (rules: Rules, signal: AbortSignal) => Promise<{ time: number; close: number } | null>;
-  deliver: (notification: AlertNotification) => Promise<number>;
+  deliver: (notification: AlertNotification, meta: DeliveryMeta) => Promise<number>;
   now: () => number;
 }
 
@@ -86,6 +86,14 @@ const defaultLatest: AlertEngineDeps["latest"] = async (rules, signal) => {
 };
 
 // ── Which analyses are watched ──
+
+/** Every analysis switched on, oldest first. */
+export const listWatched = () =>
+  alertsDb()
+    .select({ analysisId: alertWatches.analysisId, since: alertWatches.createdAt })
+    .from(alertWatches)
+    .orderBy(alertWatches.createdAt)
+    .all();
 
 export const isWatched = (analysisId: string) =>
   Boolean(
@@ -300,35 +308,39 @@ export class AlertEngine {
     if (!previous || time < previous.time) return;
     const now = this.deps.now();
     const ready = (key: string) => now - (watch.alertedAt.get(key) ?? 0) > COOLDOWN_MS;
-    const fired: AlertMessage[] = [];
+    const fired: { message: AlertMessage; kind: "lines" | "zones" }[] = [];
     for (const event of zoneEvents(watch.zones, previous.close, close, watch.origins)) {
       const zone = watch.zones.find((z) => z.id === event.zoneId);
       const key = `zone-${event.zoneId}-${event.kind}`;
       if (!zone || !ready(key)) continue;
       watch.alertedAt.set(key, now);
-      fired.push(zoneAlert(watch.analysisId, watch.symbol, event, zone, watch.plan));
+      fired.push({
+        message: zoneAlert(watch.analysisId, watch.symbol, event, zone, watch.plan),
+        kind: "zones",
+      });
     }
     for (const hit of lineCrossings(watch.lines, previous, { time, close }, watch.sides)) {
       if (!ready(hit.drawingId)) continue;
       watch.alertedAt.set(hit.drawingId, now);
       const line = watch.lines.find((l) => l.id === hit.drawingId);
-      fired.push(
-        lineAlert(
+      fired.push({
+        message: lineAlert(
           watch.analysisId,
           watch.symbol,
           hit,
           line?.label ?? drawingLabel(hit.type),
           watch.plan,
         ),
-      );
+        kind: "lines",
+      });
     }
-    for (const message of fired)
-      void this.emit(watch, message).catch((error: unknown) =>
+    for (const { message, kind } of fired)
+      void this.emit(watch, message, kind).catch((error: unknown) =>
         logFailure(`recording an alert for analysis ${watch.analysisId}`, error),
       );
   }
 
-  private async emit(watch: Watch, message: AlertMessage) {
+  private async emit(watch: Watch, message: AlertMessage, kind: "lines" | "zones") {
     const db = alertsDb();
     // Deleted since the last check (its watch is dropped on the next one): nothing to alert
     // for, and its event could not be logged against it.
@@ -361,12 +373,15 @@ export class AlertEngine {
         .where(and(eq(alertEvents.analysisId, watch.analysisId), lt(alertEvents.at, cutoff.at)))
         .run();
     try {
-      const delivered = await this.deps.deliver({
-        title: message.title,
-        body: alertText(message),
-        tag: message.tag,
-        url: analysisEditPath(watch.analysisId),
-      });
+      const delivered = await this.deps.deliver(
+        {
+          title: message.title,
+          body: alertText(message),
+          tag: message.tag,
+          url: analysisEditPath(watch.analysisId),
+        },
+        { kind },
+      );
       db.update(alertEvents).set({ delivered }).where(eq(alertEvents.id, id)).run();
     } catch {
       // The event stays in the log as not delivered.

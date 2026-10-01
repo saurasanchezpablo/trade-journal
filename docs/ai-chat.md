@@ -85,9 +85,10 @@ the weekday you choose), in the journal's timezone. Both are off until you switc
   accounts for that day (so it reads the day note), a weekly review covers all accounts from
   the week's first day to its last. It is saved like any chat, so you can open it and ask
   follow-ups: a recap opens on its journal day, a weekly review on Reports.
-- It is sent through the background alerts delivery ([alerts.md](alerts.md#how-you-are-notified)):
-  the browsers you turned notifications on for, and the webhook (such as an ntfy topic). With
-  neither set up, digests are still written and listed on the card.
+- It is sent through the alerts delivery ([alerts.md](alerts.md#how-you-are-notified)): the
+  browsers you turned notifications on for, and the webhook (such as an ntfy topic), as the
+  Alerts page's **AI digests** row chooses (quiet hours and a pause hold it too). With neither
+  set up, or held back, digests are still written and listed on the card.
 - The notification says how many trades were reviewed and opens the chat. **Put the start of
   the review in the notification** adds its first sentences instead; they can include amounts,
   which then show on lock screens and in webhook messages.

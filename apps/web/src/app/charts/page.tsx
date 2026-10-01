@@ -116,6 +116,11 @@ import { recentSymbols, type RecentSymbol } from "@/lib/recent-symbols";
 import { postJson, useApi } from "@/lib/use-api";
 import { cn, fmtNumber } from "@/lib/utils";
 import { BackgroundAlerts } from "@/components/background-alerts";
+import {
+  openChartAlerts,
+  readOpenChartAlerts,
+  type OpenChartAlerts,
+} from "@/lib/alert-preferences";
 import { TimeframeBar } from "@/components/timeframe-bar";
 import { OverlaysPanel } from "@/components/overlays-panel";
 import { ZonesPanel } from "@/components/zones-panel";
@@ -220,7 +225,6 @@ const SAVE_DELAY_MS = 1200;
 /** Snapshots are heavier than drawings; refresh the journal image at most this often. */
 const SNAPSHOT_EVERY_MS = 15_000;
 const ALERT_COOLDOWN_MS = 60_000;
-const ALERTS_KEY = "journal-chart-alerts-v1";
 
 /** What a save needs from the chart, kept after each edit so a save still works once the
  *  chart has unmounted (navigating away within the save delay). */
@@ -306,7 +310,8 @@ interface Shared {
   changeShownTimeframes: (next: Resolution[]) => void;
   overlayOptions: OverlayOptions;
   changeOverlays: (next: OverlayOptions) => void;
-  alertsOn: boolean;
+  /** What the open chart alerts on, in this browser (also set on the Alerts page). */
+  alertKinds: OpenChartAlerts;
   toggleAlerts: () => Promise<void>;
 }
 
@@ -372,16 +377,18 @@ function ChartLab() {
   const [overlayOptions, setOverlayOptions] = useState<OverlayOptions>(DEFAULT_OVERLAYS);
   const overlaysRef = useRef(overlayOptions);
   overlaysRef.current = overlayOptions;
-  const [alertsOn, setAlertsOn] = useState(false);
+  const [alertKinds, setAlertKinds] = useState<OpenChartAlerts>(() =>
+    readOpenChartAlerts(null, null),
+  );
   useEffect(() => {
     setRecent(recentSymbols.read());
     setShownTimeframes(timeframePreference.read());
     setOverlayOptions(overlayPreference.read());
-    try {
-      setAlertsOn(localStorage.getItem(ALERTS_KEY) === "on");
-    } catch {
-      // Stays off.
-    }
+    setAlertKinds(openChartAlerts.read());
+    // Changed on the Alerts page in another tab.
+    const onStorage = () => setAlertKinds(openChartAlerts.read());
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
   }, []);
   const changeShownTimeframes = useCallback((next: Resolution[]) => {
     setShownTimeframes(next);
@@ -392,16 +399,12 @@ function ChartLab() {
     overlayPreference.write(next);
   }, []);
   const toggleAlerts = useCallback(async () => {
-    const next = !alertsOn;
-    setAlertsOn(next);
-    try {
-      localStorage.setItem(ALERTS_KEY, next ? "on" : "off");
-    } catch {
-      // Per-page only.
-    }
-    if (next && typeof Notification !== "undefined" && Notification.permission === "default")
+    const next = { ...alertKinds, on: !alertKinds.on };
+    setAlertKinds(next);
+    openChartAlerts.write(next);
+    if (next.on && typeof Notification !== "undefined" && Notification.permission === "default")
       await Notification.requestPermission().catch(() => "denied");
-  }, [alertsOn]);
+  }, [alertKinds]);
 
   // A year back (events accumulate from when the feed was enabled) and two weeks ahead.
   const [calendarWindow] = useState(() => {
@@ -489,7 +492,7 @@ function ChartLab() {
       changeShownTimeframes,
       overlayOptions,
       changeOverlays,
-      alertsOn,
+      alertKinds,
       toggleAlerts,
     }),
     [
@@ -511,7 +514,7 @@ function ChartLab() {
       changeShownTimeframes,
       overlayOptions,
       changeOverlays,
-      alertsOn,
+      alertKinds,
       toggleAlerts,
     ],
   );
@@ -566,8 +569,9 @@ const ChartBoard = memo(function ChartBoard({
     shownTimeframes,
     overlayOptions,
     changeOverlays,
-    alertsOn,
+    alertKinds,
   } = shared;
+  const alertsOn = alertKinds.on;
   const today = dayKeyOf(new Date().toISOString(), settings?.timeZone ?? "UTC");
 
   // ── Selection ──
@@ -662,7 +666,7 @@ const ChartBoard = memo(function ChartBoard({
     board,
     resolution,
     drawings,
-    alertsOn,
+    alertKinds,
     indicators,
     zones,
     plan,
@@ -676,7 +680,7 @@ const ChartBoard = memo(function ChartBoard({
     board,
     resolution,
     drawings,
-    alertsOn,
+    alertKinds,
     indicators,
     zones,
     plan,
@@ -1225,15 +1229,18 @@ const ChartBoard = memo(function ChartBoard({
       const bar = { time: update.bar.time, close: update.bar.close };
       const previous = lastClose.current;
       lastClose.current = bar;
-      if (!previous || !state.current.alertsOn || bar.time < previous.time) return;
+      const kinds = state.current.alertKinds;
+      if (!previous || !kinds.on || bar.time < previous.time) return;
       const now = Date.now();
       const zoneSymbol = state.current.board?.symbol ?? "";
+      // Zone origins and line sides follow price either way, so turning a kind on never
+      // fires for a crossing that happened while it was off.
       const zoneHits = zoneEvents(
         state.current.zones,
         previous.close,
         bar.close,
         zoneOrigins.current,
-      );
+      ).filter(() => kinds.zones);
       for (const event of zoneHits) {
         const zone = state.current.zones.find((z) => z.id === event.zoneId);
         const key = `zone-${event.zoneId}-${event.kind}`;
@@ -1260,7 +1267,10 @@ const ChartBoard = memo(function ChartBoard({
         previous,
         bar,
         lineSides.current,
-      ).filter((hit) => now - (alertedAt.current.get(hit.drawingId) ?? 0) > ALERT_COOLDOWN_MS);
+      ).filter(
+        (hit) =>
+          kinds.lines && now - (alertedAt.current.get(hit.drawingId) ?? 0) > ALERT_COOLDOWN_MS,
+      );
       if (!hits.length) return;
       const symbol = state.current.board?.symbol ?? "";
       for (const hit of hits) {
@@ -1396,7 +1406,7 @@ const ChartBoard = memo(function ChartBoard({
   const indicatorAlertAt = useRef(new Map<string, number>());
   const onIndicatorAlert = useCallback(
     (alert: IndicatorAlert) => {
-      if (!state.current.alertsOn) return;
+      if (!state.current.alertKinds.on || !state.current.alertKinds.indicators) return;
       const now = Date.now();
       const key = `${alert.indicator}|${alert.message}`;
       // A script can alert on every tick of a bar; one notice per message per 30 s.
@@ -2311,7 +2321,19 @@ const ChartBoard = memo(function ChartBoard({
               <p className="text-xs text-muted-foreground">
                 While this page is open and live, get an alert when the price crosses a visible
                 horizontal line, ray or trend line, enters or breaks a support/resistance zone, or
-                when an indicator calls <code>alert()</code>.
+                when an indicator calls <code>alert()</code>
+                {alertsOn && (!alertKinds.lines || !alertKinds.zones || !alertKinds.indicators)
+                  ? ` (only ${
+                      [
+                        alertKinds.lines && "lines",
+                        alertKinds.zones && "zones",
+                        alertKinds.indicators && "indicators",
+                      ]
+                        .filter(Boolean)
+                        .join(", ") || "none"
+                    }, as chosen on the Alerts page)`
+                  : ""}
+                .
               </p>
               {alerts.length === 0 ? (
                 <p className="text-xs text-muted-foreground">No alerts yet.</p>

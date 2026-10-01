@@ -341,21 +341,14 @@ function ExternalAnalysis() {
                   />
                   minutes
                 </label>
-                <label className="flex items-start gap-2 text-xs">
-                  <input
-                    type="checkbox"
-                    className="mt-0.5"
-                    checked={data.settings.notify}
-                    onChange={(e) => void saveSettings({ notify: e.target.checked })}
-                  />
-                  <span>
-                    Notify me when a summary is ready (the browsers and webhook set up under{" "}
-                    <Link href="/charts" className="underline">
-                      Charts → Alerts
-                    </Link>
-                    ).
-                  </span>
-                </label>
+                <p className="text-xs">
+                  Notifications when a summary is ready, and which channels send them: YouTube
+                  analyses on the{" "}
+                  <Link href="/alerts" className="underline">
+                    Alerts
+                  </Link>{" "}
+                  page.
+                </p>
                 <p className="text-xs text-muted-foreground">
                   Videos are read from their captions (sent to your AI provider to summarise).
                   Automatic captions can take a few hours to appear, so a new video is tried again

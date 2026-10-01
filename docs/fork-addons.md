@@ -38,6 +38,7 @@ touches as little as possible.
 | `apps/web/src/components/shell.tsx` (performance)                                        | `NavLink` prefetches on hover, focus or touch (`prefetch={false}` plus `router.prefetch`).                                                                        | Re-add the three handlers and `prefetch={false}`.                           |
 | `apps/web/src/components/shell.tsx` (external analysis)                                  | An "External analysis" entry in `NAV` (icon `MonitorPlay`).                                                                                                       | Re-add the entry and the icon import.                                       |
 | `apps/web/src/components/shell.tsx` (backtesting)                                        | A "Backtesting" entry in `NAV` after Charts (icon `FlaskConical`).                                                                                                | Re-add the entry and the icon import.                                       |
+| `apps/web/src/components/shell.tsx` (alerts)                                             | An "Alerts" entry in `NAV` after External analysis (icon `BellRing`).                                                                                             | Re-add the entry and the icon import.                                       |
 | `apps/web/src/components/shell.tsx` (update notice)                                      | `<UpdateNotice />` at the end of the sidebar footer.                                                                                                              | Re-add the import and the element.                                          |
 | `Dockerfile`, `docker-compose.yml` (update notice)                                       | A `JOURNAL_BUILD_COMMIT` build argument, kept as an environment variable in the image.                                                                            | Re-add the `ARG`/`ENV` pair and the compose `build.args`.                   |
 | `packages/core/src/index.ts` (backtesting)                                               | `export * from "./backtest";` for the fork's `packages/core/src/backtest.ts`.                                                                                     | Re-add the export.                                                          |
@@ -85,9 +86,11 @@ structure and re-apply the fix; each one has a test that fails without it.
 - Installable app: `app/manifest.ts`, `app/icons/[name]/route.tsx`, `app/apple-icon.tsx`,
   `app/icon.tsx` (the tab icon),
   `components/app-icon.tsx`, `lib/pwa.ts`, `instrumentation-client.ts`, `public/sw.js`.
-- Background alerts: `server/background-alerts/*`, `instrumentation.ts`,
-  `instrumentation-node.ts`, `app/api/alerts/**`, `components/background-alerts.tsx`,
-  `lib/alert-messages.ts`, tests `background-alerts.test.ts` and `web-push.test.ts`.
+- Background alerts and the Alerts page: `server/background-alerts/*` (with the preferences
+  and `notification_log`), `instrumentation.ts`, `instrumentation-node.ts`, `app/api/alerts/**`,
+  `app/alerts/page.tsx`, `components/alerts/*`, `components/background-alerts.tsx`,
+  `lib/alert-messages.ts`, `lib/alert-preferences.ts`, tests `background-alerts.test.ts`,
+  `alert-preferences.test.ts` and `web-push.test.ts`.
 - Single sign-on: `server/oidc/*` (configuration, provider client, sessions and login
   transactions in their own tables), `app/api/auth/oidc/**`, `app/api/auth/logout/route.ts`,
   `components/sign-out.tsx`, `lib/auth-redirect.ts`, `docs/authentication.md`, tests

@@ -5,10 +5,16 @@ import { aiConfigured } from "../ai";
 import { readAiRequest } from "../ai-scope";
 import { chatTurn } from "../ai-agent/chat";
 import { createConversation } from "../ai-agent/store";
-import { deliver as deliverAlert, type AlertNotification } from "../background-alerts/delivery";
+import {
+  deliver as deliverAlert,
+  type AlertNotification,
+  type DeliveryMeta,
+} from "../background-alerts/delivery";
 import { weekContext } from "../journal-history";
 import { recurringLessonsText } from "../lessons";
 import { getTimeZone } from "../settings";
+import { MUTE_REASONS, routeAlert } from "@/lib/alert-preferences";
+import { getAlertPreferences } from "../background-alerts/preferences";
 import { queryTrades } from "../trades-query";
 import { summaryOf, type DigestKind } from "./schedule";
 import { claimDigest, finishDigest, getDigestSettings, type Digest } from "./store";
@@ -20,7 +26,7 @@ import { claimDigest, finishDigest, getDigestSettings, type Digest } from "./sto
  */
 
 export interface DigestDeps {
-  deliver: (notification: AlertNotification) => Promise<number>;
+  deliver: (notification: AlertNotification, meta: DeliveryMeta) => Promise<number>;
 }
 
 const defaults: DigestDeps = { deliver: deliverAlert };
@@ -161,21 +167,29 @@ async function write(kind: DigestKind, period: string, deps: DigestDeps): Promis
     };
 
   const settings = getDigestSettings();
-  const delivered = await deps.deliver({
-    title: plan.title,
-    body: settings.summaryInNotification
-      ? summaryOf(text)
-      : `${plan.count}. Tap to read it and ask follow-ups.`,
-    tag: `digest-${kind}-${period}`,
-    url: plan.url(conversation.id),
-  });
+  const delivered = await deps.deliver(
+    {
+      title: plan.title,
+      body: settings.summaryInNotification
+        ? summaryOf(text)
+        : `${plan.count}. Tap to read it and ask follow-ups.`,
+      tag: `digest-${kind}-${period}`,
+      url: plan.url(conversation.id),
+    },
+    { kind: "digest" },
+  );
+  const held = delivered
+    ? null
+    : routeAlert(getAlertPreferences(), { kind: "digest" }, Date.now(), getTimeZone()).muted;
   return {
     status: "sent",
     conversationId: conversation.id,
     title: plan.title,
     detail: delivered
       ? `Sent to ${delivered} device${delivered === 1 ? "" : "s"} or webhook${delivered === 1 ? "" : "s"}.`
-      : "Written, but no browser or webhook is set up to receive it.",
+      : held
+        ? `Written; its notification was held back (${MUTE_REASONS[held]}, see the Alerts page).`
+        : "Written, but no browser or webhook is set up to receive it.",
     delivered,
   };
 }

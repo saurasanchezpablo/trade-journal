@@ -1,6 +1,10 @@
 import { aiConfigured } from "../ai";
 import { getAiProvider } from "../settings";
-import { deliver as deliverAlert, type AlertNotification } from "../background-alerts/delivery";
+import {
+  deliver as deliverAlert,
+  type AlertNotification,
+  type DeliveryMeta,
+} from "../background-alerts/delivery";
 import { fetchFeed, fetchTranscript, type VideoTranscript } from "./youtube";
 import {
   getChannel,
@@ -34,7 +38,7 @@ const MAX_ATTEMPTS = 2;
 /** Network and AI, replaced in tests. */
 export interface ProcessDeps {
   now: () => number;
-  deliver: (notification: AlertNotification) => Promise<number>;
+  deliver: (notification: AlertNotification, meta: DeliveryMeta) => Promise<number>;
   transcript: (videoId: string) => Promise<VideoTranscript>;
 }
 const defaults: ProcessDeps = {
@@ -219,15 +223,18 @@ async function summarize(video: ExternalVideo, force: boolean, deps: ProcessDeps
       attempts: 0,
       nextAttemptAt: null,
     });
-    if (settings.notify)
-      await deps
-        .deliver({
+    // Whether and where it goes is the alert preferences' call (Alerts page).
+    await deps
+      .deliver(
+        {
           title: `New analysis: ${input.channelTitle || "YouTube"}`,
           body: `${video.title}. Bias ${summary.bias}${summary.mainScenario ? `; main scenario: ${summary.mainScenario.title}` : ""}.`,
           tag: `external-${videoId}`,
           url: `/external?video=${videoId}`,
-        })
-        .catch(() => 0);
+        },
+        { kind: "external", source: `external:${video.channelId}` },
+      )
+      .catch(() => 0);
   } catch (error) {
     // Failed summaries in a row: one after a success, a wait or a paste starts again at one.
     const attempts = (video.status === "failed" ? video.attempts : 0) + 1;

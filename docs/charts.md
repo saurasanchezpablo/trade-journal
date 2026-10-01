@@ -305,11 +305,13 @@ horizontal line, horizontal ray, ray, extended line or trend line (trend lines a
 along their slope, within their span), and when price enters or breaks a support/resistance
 zone. A crossing means a close strictly on the other side: touching a line and turning back
 does not alert, and resting on a line alerts once price leaves it on the other side. Alerts appear in the card and, if you allow it, as browser notifications. Each line or
-zone alerts at most once a minute per kind. Alerts only run while the page is open; there
-is no background service.
+zone alerts at most once a minute per kind. Alerts only run while the page is open. Which of
+lines, zones and indicator alerts the page raises is chosen per browser on the Alerts page
+(**While a chart is open**).
 
 With **Keep watching when this page is closed**, the server takes over these line and zone
-alerts and notifies your browsers, the installed app or a webhook; see [alerts.md](alerts.md).
+alerts and notifies your browsers, the installed app or a webhook, as set on the Alerts page;
+see [alerts.md](alerts.md).
 
 ## Your trades on the chart
 

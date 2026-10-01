@@ -1,15 +1,19 @@
 import { eq } from "drizzle-orm";
+import { routeAlert, type AlertKind } from "@/lib/alert-preferences";
 import { decryptJson, encryptJson } from "../crypto";
-import { deleteSetting, getSetting, setSetting } from "../settings";
+import { deleteSetting, getSetting, getTimeZone, setSetting } from "../settings";
 import { RequestError } from "../api";
 import { nowIso } from "../ids";
 import { alertsDb, pushSubscriptions } from "./store";
+import { getAlertPreferences, logNotification } from "./preferences";
 import { generateVapidKeys, sendPush, type PushTarget, type VapidKeys } from "./web-push";
 
 /**
  * Alert delivery: Web Push to every subscribed browser (Chrome, Firefox, Edge and Safari
  * carry it through their push services, encrypted end to end with this server's own VAPID
- * keys), and optionally one webhook such as an ntfy topic. Nothing else is contacted.
+ * keys), and optionally one webhook such as an ntfy topic. Nothing else is contacted. Your
+ * alert preferences (Alerts page) choose, per kind of alert, which of the two it reaches,
+ * and hold everything during quiet hours or a pause; every notification is logged.
  */
 const VAPID_PUBLIC = "push:vapidPublic";
 const VAPID_PRIVATE = "push:vapidPrivateEnc";
@@ -146,12 +150,41 @@ export function headerText(value: string): string {
   return `=?UTF-8?B?${Buffer.from(flat, "utf8").toString("base64")}?=`;
 }
 
-/** Send to every browser and the webhook; returns how many accepted it. */
-export async function deliver(notification: AlertNotification): Promise<number> {
+/** What kind of alert a notification is, for the preferences; a test always goes out. */
+export interface DeliveryMeta {
+  kind: AlertKind | "test";
+  /** What raised it, which can be muted on its own (`external:<channel id>`). */
+  source?: string;
+}
+
+/**
+ * Send to the browsers and the webhook the preferences choose for this kind of alert;
+ * returns how many accepted it (0 when it was held back, which the log records).
+ */
+export async function deliver(
+  notification: AlertNotification,
+  meta: DeliveryMeta,
+  now = Date.now(),
+): Promise<number> {
+  const route = routeAlert(getAlertPreferences(), meta, now, getTimeZone());
+  const log = (delivered: number) =>
+    logNotification({
+      kind: meta.kind,
+      source: meta.source ?? null,
+      title: notification.title,
+      body: notification.body,
+      url: notification.url,
+      delivered,
+      muted: route.muted,
+    });
+  if (!route.push && !route.webhook) {
+    log(0);
+    return 0;
+  }
   const keys = vapidKeys();
   const payload = JSON.stringify(notification);
   const db = alertsDb();
-  const rows = db.select().from(pushSubscriptions).all();
+  const rows = route.push ? db.select().from(pushSubscriptions).all() : [];
   const results = await Promise.all(
     rows.map(async (row) => {
       try {
@@ -181,7 +214,7 @@ export async function deliver(notification: AlertNotification): Promise<number> 
     }),
   );
   let delivered = results.reduce<number>((a, b) => a + b, 0);
-  const hook = webhookUrl();
+  const hook = route.webhook ? webhookUrl() : null;
   if (hook) {
     const origin = process.env.JOURNAL_PUBLIC_URL?.replace(/\/+$/, "");
     try {
@@ -202,5 +235,6 @@ export async function deliver(notification: AlertNotification): Promise<number> 
       // Recorded as not delivered.
     }
   }
+  log(delivered);
   return delivered;
 }

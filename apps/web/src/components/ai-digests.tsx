@@ -246,8 +246,8 @@ export function AiDigests({ timeZone }: { timeZone: string }) {
           {nowhere ? (
             <span>
               No browser or webhook receives notifications yet: turn them on under{" "}
-              <Link href="/charts" className="underline">
-                Charts → Alerts
+              <Link href="/alerts" className="underline">
+                Alerts
               </Link>
               . Digests are still written and listed here.
             </span>
@@ -255,10 +255,10 @@ export function AiDigests({ timeZone }: { timeZone: string }) {
             <span>
               Sent to {delivery.browsers} browser{delivery.browsers === 1 ? "" : "s"}
               {delivery.webhook ? " and the webhook" : ""} set up under{" "}
-              <Link href="/charts" className="underline">
-                Charts → Alerts
+              <Link href="/alerts" className="underline">
+                Alerts
               </Link>
-              .
+              , where AI digests can also be held back or sent to one of them only.
             </span>
           )}
         </p>

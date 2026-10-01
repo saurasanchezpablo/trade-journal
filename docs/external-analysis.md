@@ -37,8 +37,10 @@ it at once.
 - **Failures.** A failed summary is retried once an hour later, then waits for you (time spent
   waiting for captions does not count). **Summarise now** and **Paste transcript** are
   refused while the video is being summarised; try again when it is done.
-- **Notifications.** Optionally, a notification when a summary is ready, through the
-  browsers and webhook set up for background alerts ([alerts.md](alerts.md)).
+- **Notifications.** A notification when a summary is ready, through the browsers and
+  webhook set up on the Alerts page, if its **YouTube analyses** row is on there; each channel
+  can be muted on its own ([alerts.md](alerts.md)). The page's former **Notify me** switch
+  (`notify` in the settings) only decides until the Alerts page's choices are saved.
 
 The transcript is sent to your AI provider to be summarised; nothing else leaves the server.
 YouTube is reached through its public feed and the player endpoint its apps use (the web

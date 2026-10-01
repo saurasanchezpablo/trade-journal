@@ -26,6 +26,7 @@ import {
   X,
   MonitorPlay,
   FlaskConical,
+  BellRing,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { LuxAlgoMark } from "@/components/luxalgo-mark";
@@ -44,6 +45,7 @@ const NAV = [
   { href: "/charts", label: "Charts", icon: CandlestickChart },
   { href: "/backtest", label: "Backtesting", icon: FlaskConical },
   { href: "/external", label: "External analysis", icon: MonitorPlay },
+  { href: "/alerts", label: "Alerts", icon: BellRing },
   { href: "/trades", label: "Trades", icon: ListOrdered },
   { href: "/reports", label: "Reports", icon: BarChart3 },
   { href: "/prop-firms", label: "Prop firms", icon: Landmark },
