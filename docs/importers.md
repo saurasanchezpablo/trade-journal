@@ -226,6 +226,9 @@ trades. Before correcting data:
 There is no automatic bulk time shift: files can use different zones, explicit
 offsets, and daylight-saving rules. A fixed hour adjustment is not reliable.
 
+A single wrong value (a price, a time, a missing or extra fill) can be corrected on the
+trade itself with **Edit fills**; see [trade-corrections.md](trade-corrections.md).
+
 ## Parsing fixes and earlier imports
 
 A fill's dedup identity is its symbol, side, quantity, price and timestamp (plus the source

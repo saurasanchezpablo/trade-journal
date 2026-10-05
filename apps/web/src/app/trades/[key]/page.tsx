@@ -9,7 +9,10 @@ import { AiNotice } from "@/components/ai-notice";
 import { Checkbox } from "@/components/ui/checkbox";
 
 import { use, useEffect, useMemo, useRef, useState } from "react";
-import { Sparkles, Star } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Pencil, Sparkles, Star } from "lucide-react";
+import { TradeFillsEditor } from "@/components/trade-fills-editor";
+import { FillCorrections } from "@/components/fill-corrections";
 import { FilterBar } from "@/components/filter-bar";
 import { Pnl } from "@/components/pnl";
 import { MonetaryValue, MonetaryField } from "@/components/privacy";
@@ -50,7 +53,7 @@ import { useAutosave } from "@/lib/use-autosave";
 import { postJson, useApi } from "@/lib/use-api";
 import { NOT_A_NUMBER, parseDecimalInput } from "@/lib/number-input";
 import { fmtDuration, fmtMoney, fmtNumber, fmtPercent } from "@/lib/utils";
-import { tradeKeyFromSegment } from "@/lib/trade-links";
+import { tradeKeyFromSegment, tradePath } from "@/lib/trade-links";
 import { formatTimestamp } from "@/lib/timezone";
 
 interface TradeDetail {
@@ -87,6 +90,8 @@ interface TradeDetail {
 
 interface ExecutionRow {
   id: string;
+  symbol: string;
+  source: string;
   side: "buy" | "sell";
   quantity: number;
   price: number;
@@ -111,6 +116,9 @@ function TradeView({ tradeKey }: { tradeKey: string }) {
   const [critiqueCharts, setCritiqueCharts] = useState<AiAnalysisUsed[]>([]);
   const [aiCharts, setAiCharts] = useAiCharts();
   const [aiError, setAiError] = useState<string | null>(null);
+  const [editingFills, setEditingFills] = useState(false);
+  const [correctionsSeen, setCorrectionsSeen] = useState(0);
+  const router = useRouter();
 
   if (!data) {
     return (
@@ -256,45 +264,79 @@ function TradeView({ tradeKey }: { tradeKey: string }) {
           )}
 
           <Card>
-            <CardHeader>
-              <CardTitle>Executions</CardTitle>
-              <p className="text-xs text-muted-foreground">Times in {timeZone}</p>
+            <CardHeader className="flex-row items-start justify-between gap-2 space-y-0">
+              <div className="space-y-1.5">
+                <CardTitle>Executions</CardTitle>
+                <p className="text-xs text-muted-foreground">Times in {timeZone}</p>
+              </div>
+              {!editingFills && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  title="Correct a wrong price, quantity, side, fee, time or symbol, or add or remove a fill"
+                  onClick={() => setEditingFills(true)}
+                >
+                  <Pencil /> Edit fills
+                </Button>
+              )}
             </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Time</TableHead>
-                    <TableHead>Side</TableHead>
-                    <TableHead>Quantity</TableHead>
-                    <TableHead>Price</TableHead>
-                    <TableHead>Fee</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {[...executions]
-                    .sort((a, b) => a.executedAt.localeCompare(b.executedAt))
-                    .map((execution) => (
-                      <TableRow key={execution.id}>
-                        <TableCell className="text-muted-foreground">
-                          {formatTimestamp(execution.executedAt, timeZone)}
-                        </TableCell>
-                        <TableCell>
-                          <span className={execution.side === "buy" ? "text-profit" : "text-loss"}>
-                            {execution.side === "buy" ? "▲ BUY" : "▼ SELL"}
-                          </span>
-                        </TableCell>
-                        <TableCell className="tnum">{fmtNumber(execution.quantity, 4)}</TableCell>
-                        <TableCell className="tnum">
-                          <MonetaryValue>{fmtNumber(execution.price)}</MonetaryValue>
-                        </TableCell>
-                        <TableCell className="tnum text-muted-foreground">
-                          <MonetaryValue>{fmtMoney(execution.fee)}</MonetaryValue>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                </TableBody>
-              </Table>
+            <CardContent className="space-y-3">
+              {editingFills ? (
+                <TradeFillsEditor
+                  tradeKey={trade.key}
+                  symbol={executions[0]?.symbol ?? trade.symbol}
+                  fills={executions}
+                  timeZone={timeZone}
+                  imported={executions.some((e) => e.source !== "manual")}
+                  onCancel={() => setEditingFills(false)}
+                  onSaved={(next) => {
+                    setEditingFills(false);
+                    setCorrectionsSeen((n) => n + 1);
+                    if (!next) router.push("/trades");
+                    else if (next !== trade.key) router.replace(tradePath(next));
+                    else refresh();
+                  }}
+                />
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Time</TableHead>
+                      <TableHead>Side</TableHead>
+                      <TableHead>Quantity</TableHead>
+                      <TableHead>Price</TableHead>
+                      <TableHead>Fee</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {[...executions]
+                      .sort((a, b) => a.executedAt.localeCompare(b.executedAt))
+                      .map((execution) => (
+                        <TableRow key={execution.id}>
+                          <TableCell className="text-muted-foreground">
+                            {formatTimestamp(execution.executedAt, timeZone)}
+                          </TableCell>
+                          <TableCell>
+                            <span
+                              className={execution.side === "buy" ? "text-profit" : "text-loss"}
+                            >
+                              {execution.side === "buy" ? "▲ BUY" : "▼ SELL"}
+                            </span>
+                          </TableCell>
+                          <TableCell className="tnum">{fmtNumber(execution.quantity, 4)}</TableCell>
+                          <TableCell className="tnum">
+                            <MonetaryValue>{fmtNumber(execution.price)}</MonetaryValue>
+                          </TableCell>
+                          <TableCell className="tnum text-muted-foreground">
+                            <MonetaryValue>{fmtMoney(execution.fee)}</MonetaryValue>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                  </TableBody>
+                </Table>
+              )}
+              <FillCorrections tradeKey={trade.key} timeZone={timeZone} version={correctionsSeen} />
             </CardContent>
           </Card>
         </div>

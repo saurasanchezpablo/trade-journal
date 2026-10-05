@@ -7,6 +7,7 @@ import { getJournalDefaults } from "./settings";
 import { defaultFee } from "@/lib/journal-defaults";
 import { requireValue } from "./api";
 import { deleteTradeReferences } from "./trade-references";
+import { removedFillHashes } from "./fill-corrections";
 
 export interface InsertResult {
   inserted: number;
@@ -173,9 +174,15 @@ export const insertExecutions = (
       }
     }
     const noteExecutionIds = new Set<string>();
+    // Imported or synced fills removed by hand on their trade stay removed.
+    const removed = source === "manual" ? null : removedFillHashes(accountId);
     for (const row of usable) {
       const id = newId();
       const contentHash = executionHash(row);
+      if (removed?.has(contentHash)) {
+        duplicates++;
+        continue;
+      }
       const metadata = source === "import" ? storedImportMetadata(row) : row.importMetadata;
       const result = tx
         .insert(executions)
