@@ -1,5 +1,6 @@
 "use client";
 
+import { tr } from "./i18n";
 import { startTransition, useCallback, useEffect, useRef, useState } from "react";
 import { acquireJson } from "./api-request";
 
@@ -81,6 +82,10 @@ export const postJson = async <T = unknown>(
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const data = (await response.json()) as T & { error?: string };
-  if (!response.ok) throw new Error(data.error ?? `Request failed (${response.status})`);
+  // The server writes its messages in English; shown in the journal's language.
+  if (!response.ok)
+    throw new Error(
+      data.error ? tr(data.error) : tr("Request failed ({status})", { status: response.status }),
+    );
   return data;
 };

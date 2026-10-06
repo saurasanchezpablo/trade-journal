@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import { JournalDefaultSettings } from "@/components/journal-default-settings";
 import { MarketDataSettings } from "@/components/market-data-settings";
 import { AiSettings } from "@/components/ai-settings";
+import { LanguageSettings } from "@/components/language-settings";
 import { Download } from "lucide-react";
 import { FilterBar } from "@/components/filter-bar";
 import { Button } from "@/components/ui/button";
@@ -78,6 +79,7 @@ function Settings() {
     <div>
       <FilterBar title="Settings" />
       <div className="mx-auto max-w-2xl space-y-3 p-4">
+        <LanguageSettings />
         <JournalDefaultSettings />
         <MarketDataSettings />
         <Card>

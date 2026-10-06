@@ -34,6 +34,7 @@ import { PrivacyToggle } from "./privacy";
 import { ThemeToggle } from "./theme";
 import { SignOutButton } from "./sign-out";
 import { UpdateNotice } from "./update-notice";
+import { useT } from "./i18n";
 import { PageTransition } from "./page-transition";
 import { Button } from "./ui/button";
 import { HoverHint } from "./ui/tooltip";
@@ -104,6 +105,7 @@ function NavLink({
 }
 
 export function Shell({ children }: { children: React.ReactNode }) {
+  const t = useT();
   const pathname = usePathname();
   const search = useSearchParams();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -166,7 +168,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   if (pathname === "/login") return <>{children}</>;
   const navigation = (collapsed = false) => (
     <nav
-      aria-label="Journal navigation"
+      aria-label={t("Journal navigation")}
       className="journal-sidebar-navigation min-h-0 flex-1 space-y-0.5 overflow-x-hidden overflow-y-auto overscroll-contain p-2"
       onClick={(event) => {
         if ((event.target as HTMLElement).closest("a")) setMenuOpen(false);
@@ -176,7 +178,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         <NavLink
           key={href}
           href={href === "/prop-firms" ? href : filterQuery.size ? `${href}?${filterQuery}` : href}
-          label={label}
+          label={t(label)}
           icon={icon}
           collapsed={collapsed}
           active={href === "/" ? pathname === "/" : pathname.startsWith(href)}
@@ -187,7 +189,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         <NavLink
           key={href}
           href={filterQuery.size ? `${href}?${filterQuery}` : href}
-          label={label}
+          label={t(label)}
           icon={icon}
           collapsed={collapsed}
           active={pathname.startsWith(href)}
@@ -198,7 +200,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const footer = (
     <div className="journal-sidebar-footer space-y-1 border-t p-3 text-xs text-muted-foreground">
       <div>
-        Open source ·{" "}
+        {t("Open source")} ·{" "}
         <a
           href="https://github.com/LuxAlgo/trade-journal"
           className="underline underline-offset-2 hover:text-foreground"
@@ -208,7 +210,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           GitHub
         </a>
       </div>
-      <div>Not investment advice.</div>
+      <div>{t("Not investment advice.")}</div>
       <UpdateNotice />
     </div>
   );
@@ -221,7 +223,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
               variant="ghost"
               size="icon"
               className="h-9 w-9 shrink-0"
-              aria-label="Open navigation"
+              aria-label={t("Open navigation")}
             >
               <Menu />
             </Button>
@@ -242,7 +244,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
                     variant="ghost"
                     size="icon"
                     className="ml-auto h-8 w-8"
-                    aria-label="Close navigation"
+                    aria-label={t("Close navigation")}
                   >
                     <X />
                   </Button>
@@ -285,10 +287,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
             size="icon"
             className="journal-sidebar-trigger absolute h-7 w-7 rounded-full bg-background shadow-sm"
             onClick={toggleSidebar}
-            aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            aria-label={sidebarCollapsed ? t("Expand sidebar") : t("Collapse sidebar")}
             aria-expanded={!sidebarCollapsed}
             aria-keyshortcuts="Meta+B Control+B"
-            title={`${sidebarCollapsed ? "Expand" : "Collapse"} sidebar (⌘B)`}
+            title={`${sidebarCollapsed ? t("Expand sidebar") : t("Collapse sidebar")} (⌘B)`}
           >
             {sidebarCollapsed ? (
               <PanelLeftOpen className="h-3.5 w-3.5" />
