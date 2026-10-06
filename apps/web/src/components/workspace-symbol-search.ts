@@ -5,7 +5,22 @@ import {
   type WorkspaceSource,
   type WorkspaceSymbolRow,
 } from "@/lib/chart-workspace";
+import { tr } from "@/lib/i18n";
 import type { RecentSymbol } from "@/lib/recent-symbols";
+
+/** The row descriptions `lib/chart-workspace` writes in English ("Recent · Binance"), in
+ *  the journal's language. */
+const ROW_KINDS = ["On a chart", "Recent", "Open as typed"] as const;
+export function localizeSymbolRow<T extends { description?: string }>(row: T): T {
+  const description = row.description;
+  if (!description) return row;
+  for (const kind of ROW_KINDS) {
+    const prefix = `${kind} · `;
+    if (description.startsWith(prefix))
+      return { ...row, description: `${tr(kind)} · ${description.slice(prefix.length)}` };
+  }
+  return row;
+}
 
 /**
  * The workspace's symbol search, fed by the journal's sources. Vela's picker filters a list
@@ -49,12 +64,14 @@ export function attachSymbolSearch(
       ...typedSymbols(sources, input.value),
     ];
     const seen = new Set<string>();
-    return rows.filter((row) => {
-      const key = `${row.provider}:${row.ticker.toUpperCase()}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
+    return rows
+      .filter((row) => {
+        const key = `${row.provider}:${row.ticker.toUpperCase()}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .map(localizeSymbolRow);
   });
 
   let timer: ReturnType<typeof setTimeout> | null = null;

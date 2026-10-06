@@ -3,6 +3,7 @@
 import type { BacktestReport, BacktestSideReport } from "@luxalgo/journal-core";
 import { EquityArea } from "@/components/charts/equity-area";
 import { Pnl } from "@/components/pnl";
+import { useI18n } from "@/components/i18n";
 import { MonetaryValue } from "@/components/privacy";
 import { fmtAmount } from "@/lib/backtest-replay";
 import { fmtMoney, fmtNumber, fmtPercent } from "@/lib/utils";
@@ -56,8 +57,9 @@ export function BacktestReportView({
   currency: string;
   initialBalance: number;
 }) {
+  const { t, tn, tx } = useI18n();
   if (report.trades === 0)
-    return <p className="text-sm text-muted-foreground">No closed trades yet.</p>;
+    return <p className="text-sm text-muted-foreground">{t("No closed trades yet.")}</p>;
   const money = (value: number | null) =>
     value === null ? "–" : <MonetaryValue>{fmtMoney(value, currency)}</MonetaryValue>;
   const amount = (value: number | null) =>
@@ -65,7 +67,7 @@ export function BacktestReportView({
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3 lg:grid-cols-5">
-        <Stat label="Net profit">
+        <Stat label={t("Net profit")}>
           <Pnl value={report.netProfit} currency={currency} />
           {report.returnPct !== null && (
             <span className="ml-1 text-xs text-muted-foreground">
@@ -74,55 +76,69 @@ export function BacktestReportView({
             </span>
           )}
         </Stat>
-        <Stat label="Closed trades">
+        <Stat label={t("Closed trades")}>
           {report.trades}{" "}
           <span className="text-xs text-muted-foreground">
-            {report.wins} W · {report.losses} L · {report.breakeven} BE
+            {t("{wins} W · {losses} L · {breakeven} BE", {
+              wins: report.wins,
+              losses: report.losses,
+              breakeven: report.breakeven,
+            })}
           </span>
         </Stat>
-        <Stat label="Win rate">{fmtPercent(report.winRate)}</Stat>
-        <Stat label="Profit factor">
+        <Stat label={t("Win rate")}>{fmtPercent(report.winRate)}</Stat>
+        <Stat label={t("Profit factor")}>
           {ratio(report.profitFactor, report.profitFactorIsInfinite)}
         </Stat>
-        <Stat label="Average R">{rText(report.avgR)}</Stat>
-        <Stat label="Expectancy (avg trade)">
+        <Stat label={t("Average R")}>{rText(report.avgR)}</Stat>
+        <Stat label={t("Expectancy (avg trade)")}>
           {report.avgTrade === null ? "–" : <Pnl value={report.avgTrade} currency={currency} />}
         </Stat>
-        <Stat label="Avg win / avg loss">
+        <Stat label={t("Avg win / avg loss")}>
           {amount(report.avgWin)} / {amount(report.avgLoss)}{" "}
           <span className="text-xs text-muted-foreground">({ratio(report.payoff)})</span>
         </Stat>
-        <Stat label="Largest win / loss">
+        <Stat label={t("Largest win / loss")}>
           {money(report.largestWin)} / {money(report.largestLoss)}
         </Stat>
-        <Stat label="Max drawdown">
+        <Stat label={t("Max drawdown")}>
           {money(-report.maxDrawdown)}{" "}
           <span className="text-xs text-muted-foreground">
             ({fmtPercent(report.maxDrawdownPct)})
           </span>
         </Stat>
-        <Stat label="Streaks">
-          {report.maxConsecutiveWins} wins · {report.maxConsecutiveLosses} losses
+        <Stat label={t("Streaks")}>
+          {t("{wins} wins · {losses} losses", {
+            wins: report.maxConsecutiveWins,
+            losses: report.maxConsecutiveLosses,
+          })}
         </Stat>
-        <Stat label="Gross profit / loss">
+        <Stat label={t("Gross profit / loss")}>
           {money(report.grossProfit)} / {money(-report.grossLoss)}
         </Stat>
-        <Stat label="Commission paid">{amount(report.commission)}</Stat>
-        <Stat label="Avg candles in a trade">
+        <Stat label={t("Commission paid")}>{amount(report.commission)}</Stat>
+        <Stat label={t("Avg candles in a trade")}>
           {report.avgBars === null ? "–" : fmtNumber(report.avgBars, 1)}
         </Stat>
-        <Stat label="Starting balance">{amount(initialBalance)}</Stat>
-        <Stat label="Candle-order calls">
+        <Stat label={t("Starting balance")}>{amount(initialBalance)}</Stat>
+        <Stat label={t("Candle-order calls")}>
           {report.ambiguous}
           <span className="ml-1 text-xs text-muted-foreground">
-            trade{report.ambiguous === 1 ? "" : "s"} decided by the same-candle rule
+            {tn(
+              report.ambiguous,
+              "trade decided by the same-candle rule",
+              "trades decided by the same-candle rule",
+            )}
           </span>
         </Stat>
       </div>
       <EquityArea
         currency={currency}
         data={report.equity.map((point, i) => ({
-          t: i === 0 ? "Start" : new Date(point.time).toISOString().slice(0, 16).replace("T", " "),
+          t:
+            i === 0
+              ? t("Start")
+              : new Date(point.time).toISOString().slice(0, 16).replace("T", " "),
           cumNetPnl: point.equity - initialBalance,
         }))}
       />
@@ -131,17 +147,17 @@ export function BacktestReportView({
           <thead className="text-xs text-muted-foreground">
             <tr className="text-left">
               <th className="py-1 pr-3 font-normal" />
-              <th className="py-1 pr-3 font-normal">Trades</th>
-              <th className="py-1 pr-3 font-normal">Win rate</th>
-              <th className="py-1 pr-3 font-normal">Net profit</th>
-              <th className="py-1 pr-3 font-normal">Profit factor</th>
-              <th className="py-1 font-normal">Avg R</th>
+              <th className="py-1 pr-3 font-normal">{t("Trades")}</th>
+              <th className="py-1 pr-3 font-normal">{t("Win rate")}</th>
+              <th className="py-1 pr-3 font-normal">{t("Net profit")}</th>
+              <th className="py-1 pr-3 font-normal">{t("Profit factor")}</th>
+              <th className="py-1 font-normal">{t("Avg R")}</th>
             </tr>
           </thead>
           <tbody>
-            <SideRow label="All" side={report} currency={currency} />
-            <SideRow label="Long" side={report.long} currency={currency} />
-            <SideRow label="Short" side={report.short} currency={currency} />
+            <SideRow label={tx("trades", "All")} side={report} currency={currency} />
+            <SideRow label={t("Long")} side={report.long} currency={currency} />
+            <SideRow label={t("Short")} side={report.short} currency={currency} />
           </tbody>
         </table>
       </div>

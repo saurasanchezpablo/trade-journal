@@ -22,6 +22,7 @@ import {
   type PropAudit,
 } from "@/lib/prop-firms";
 import { randomId } from "@/lib/random-id";
+import { useI18n } from "./i18n";
 export type PropModal =
   | { kind: "account"; account?: PropAccount; parent?: PropAccount }
   | {
@@ -44,6 +45,17 @@ export type PropModal =
       name: string;
     }
   | { kind: "import" };
+/** Titles per entry kind, kept whole so each translates as one sentence. */
+const EDIT_TITLES: Record<PropEntry["kind"], string> = {
+  expense: "Edit expense",
+  refund: "Edit refund",
+  payout: "Edit payout",
+};
+const DETAIL_TITLES: Record<PropEntry["kind"], string> = {
+  expense: "Expense details",
+  refund: "Refund details",
+  payout: "Payout details",
+};
 type Props = { modal: PropModal; data: PropData; close: () => void; refresh: () => void };
 export function PropFirmModal(props: Props) {
   const { modal, close } = props;
@@ -105,6 +117,7 @@ function Form({
   children: ReactNode;
   submit: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <>
       <DialogHeader>
@@ -127,7 +140,7 @@ function Form({
           </p>
         )}
         <Button type="submit" disabled={busy}>
-          {busy ? "Saving…" : "Save record"}
+          {busy ? t("Saving…") : t("Save record")}
         </Button>
       </form>
     </>
@@ -156,6 +169,8 @@ function AccountForm({
   refresh,
 }: Props & { modal: Extract<PropModal, { kind: "account" }> }) {
   const old = modal.account;
+  const { t, tx } = useI18n();
+  const show = (value: string) => tx("prop", label(value));
   const [id] = useState(() => old?.id ?? randomId());
   const [values, set] = useState(() =>
     old
@@ -182,7 +197,7 @@ function AccountForm({
   );
   const { busy, error, save } = useSave(close, refresh);
   const input = (key: keyof typeof values, title: string, required = false) => (
-    <Field label={title}>
+    <Field label={t(title)}>
       <Input
         value={values[key]}
         required={required}
@@ -199,12 +214,14 @@ function AccountForm({
     <Form
       title={
         old
-          ? "Edit prop account"
+          ? t("Edit prop account")
           : modal.parent
-            ? "Track next attempt or phase"
-            : "Track a prop account"
+            ? t("Track next attempt or phase")
+            : t("Track a prop account")
       }
-      description="Keep each evaluation, reset attempt and funding phase as its own record. Account size is nominal capital, not money you spent."
+      description={t(
+        "Keep each evaluation, reset attempt and funding phase as its own record. Account size is nominal capital, not money you spent.",
+      )}
       busy={busy}
       error={error}
       submit={() =>
@@ -214,19 +231,19 @@ function AccountForm({
       <div className="grid gap-3 sm:grid-cols-2">
         {input("firm", "Firm name", true)}
         {input("name", "Account / attempt name", true)}
-        <Field label="Program">
+        <Field label={t("Program")}>
           <OptionSelect
             value={values.program}
             onValueChange={(program) => set({ ...values, program })}
           >
             {PROP_PROGRAMS.map((v) => (
               <option key={v} value={v}>
-                {label(v)}
+                {show(v)}
               </option>
             ))}
           </OptionSelect>
         </Field>
-        <Field label="Status">
+        <Field label={t("Status")}>
           <OptionSelect
             value={values.status}
             onValueChange={(status) =>
@@ -240,37 +257,37 @@ function AccountForm({
           >
             {PROP_STATES.map((v) => (
               <option key={v} value={v}>
-                {label(v)}
+                {show(v)}
               </option>
             ))}
           </OptionSelect>
         </Field>
         {input("currency", "Currency code", true)}
         {input("size", "Nominal account size (optional)")}
-        <Field label="Opened on">
+        <Field label={t("Opened on")}>
           <DatePicker
-            label="Prop account opening date"
+            label={t("Prop account opening date")}
             value={values.openedOn}
             max={data.today}
             onValueChange={(openedOn) => set({ ...values, openedOn })}
           />
         </Field>
         {values.status !== "active" && (
-          <Field label="Resolved on">
+          <Field label={t("Resolved on")}>
             <DatePicker
-              label="Prop account closing date"
+              label={t("Prop account closing date")}
               value={values.closedOn}
               max={data.today}
               onValueChange={(closedOn) => set({ ...values, closedOn })}
             />
           </Field>
         )}
-        <Field label="Previous attempt / phase">
+        <Field label={t("Previous attempt / phase")}>
           <OptionSelect
             value={values.parentId}
             onValueChange={(parentId) => set({ ...values, parentId })}
           >
-            <option value="">None</option>
+            <option value="">{t("None")}</option>
             {data.accounts
               .filter(
                 (a) =>
@@ -285,12 +302,12 @@ function AccountForm({
               ))}
           </OptionSelect>
         </Field>
-        <Field label="Link journal account (optional)">
+        <Field label={t("Link journal account (optional)")}>
           <OptionSelect
             value={values.journalAccountId}
             onValueChange={(journalAccountId) => set({ ...values, journalAccountId })}
           >
-            <option value="">No journal link</option>
+            <option value="">{t("No journal link")}</option>
             {journal?.accounts.map((a) => (
               <option key={a.id} value={a.id}>
                 {a.name}
@@ -300,15 +317,16 @@ function AccountForm({
         </Field>
       </div>
       <details>
-        <summary className="cursor-pointer text-sm">Renewal reminder</summary>
+        <summary className="cursor-pointer text-sm">{t("Renewal reminder")}</summary>
         <p className="my-2 text-xs text-muted-foreground">
-          A reminder only. Record an expense when charged; nothing is charged or added
-          automatically.
+          {t(
+            "A reminder only. Record an expense when charged; nothing is charged or added automatically.",
+          )}
         </p>
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Next renewal">
+          <Field label={t("Next renewal")}>
             <DatePicker
-              label="Next renewal date"
+              label={t("Next renewal date")}
               value={values.renewalOn}
               onValueChange={(renewalOn) => set({ ...values, renewalOn })}
             />
@@ -320,10 +338,10 @@ function AccountForm({
           variant="ghost"
           onClick={() => set({ ...values, renewalOn: "", renewalAmount: "" })}
         >
-          Clear reminder
+          {t("Clear reminder")}
         </Button>
       </details>
-      <Field label="Notes / rules / breach reason">
+      <Field label={t("Notes / rules / breach reason")}>
         <textarea
           className={`${fieldClass} h-24 py-2`}
           value={values.notes}
@@ -342,6 +360,8 @@ function EntryForm({
 }: Props & { modal: Extract<PropModal, { kind: "entry" }> }) {
   const old = modal.entry,
     expense = modal.expense;
+  const { t, tx } = useI18n();
+  const show = (value: string) => tx("prop", label(value));
   const [id] = useState(() => old?.id ?? randomId());
   const initialAccount = data.accounts.find(
     (a) => a.id === (old?.accountId ?? expense?.accountId ?? modal.accountId),
@@ -367,7 +387,7 @@ function EntryForm({
     refund = kind === "refund";
   const { busy, error, save } = useSave(close, refresh);
   const input = (key: keyof typeof values, title: string, required = false, disabled = false) => (
-    <Field label={title}>
+    <Field label={t(title)}>
       <Input
         required={required}
         disabled={disabled}
@@ -385,17 +405,21 @@ function EntryForm({
     <Form
       title={
         old
-          ? `Edit ${kind}`
+          ? t(EDIT_TITLES[kind])
           : payout
-            ? "Log a payout request"
+            ? t("Log a payout request")
             : refund
-              ? "Record an expense refund"
-              : "Record prop spending"
+              ? t("Record an expense refund")
+              : t("Record prop spending")
       }
       description={
         payout
-          ? "A request is not income. Record actual bank receipts separately, including partial payments. This does not request a payout from your firm."
-          : "Record cash that actually changed hands. Include taxes and fees in the amount paid. Do not duplicate trading commissions already included elsewhere."
+          ? t(
+              "A request is not income. Record actual bank receipts separately, including partial payments. This does not request a payout from your firm.",
+            )
+          : t(
+              "Record cash that actually changed hands. Include taxes and fees in the amount paid. Do not duplicate trading commissions already included elsewhere.",
+            )
       }
       busy={busy}
       error={error}
@@ -404,7 +428,7 @@ function EntryForm({
       }
     >
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Prop account">
+        <Field label={t("Prop account")}>
           <OptionSelect
             disabled={Boolean(old || refund)}
             value={values.accountId}
@@ -413,13 +437,15 @@ function EntryForm({
               set({ ...values, accountId, firm: a?.firm ?? "", currency: a?.currency ?? "" });
             }}
           >
-            <option value="">{payout ? "Choose a funded account" : "Shared firm expense"}</option>
+            <option value="">
+              {payout ? t("Choose a funded account") : t("Shared firm expense")}
+            </option>
             {data.accounts
               .filter((a) => !payout || ["funded", "instant_funded", "live"].includes(a.program))
               .map((a) => (
                 <option key={a.id} value={a.id}>
                   {a.firm} · {a.name}
-                  {a.archived ? " (archived)" : ""}
+                  {a.archived ? ` ${t("(archived)")}` : ""}
                 </option>
               ))}
           </OptionSelect>
@@ -427,14 +453,14 @@ function EntryForm({
         {input("firm", "Firm", true, Boolean(values.accountId || old || refund))}
         {input("currency", "Currency", true, Boolean(values.accountId || old || refund))}
         {!payout && !refund && (
-          <Field label="Expense category">
+          <Field label={t("Expense category")}>
             <OptionSelect
               value={values.category}
               onValueChange={(category) => set({ ...values, category })}
             >
               {EXPENSE_CATEGORIES.map((v) => (
                 <option key={v} value={v}>
-                  {label(v)}
+                  {show(v)}
                 </option>
               ))}
             </OptionSelect>
@@ -446,14 +472,15 @@ function EntryForm({
             {input("splitPercent", "Your share (%)", true)}
             {input("fee", "Fees withheld from your share", true)}
             <p className="col-span-full text-xs text-muted-foreground">
-              If your amount is already after the firm split, enter 100% and only fees still to be
-              deducted. Never deduct the split twice.
+              {t(
+                "If your amount is already after the firm split, enter 100% and only fees still to be deducted. Never deduct the split twice.",
+              )}
             </p>
           </>
         )}
-        <Field label={payout ? "Request date" : "Cash date"}>
+        <Field label={payout ? t("Request date") : t("Cash date")}>
           <DatePicker
-            label={payout ? "Payout request date" : "Transaction date"}
+            label={payout ? t("Payout request date") : t("Transaction date")}
             value={values.occurredOn}
             max={data.today}
             onValueChange={(occurredOn) => set({ ...values, occurredOn })}
@@ -461,14 +488,14 @@ function EntryForm({
         </Field>
         {payout && (
           <>
-            <Field label="Expected payment date (optional)">
+            <Field label={t("Expected payment date (optional)")}>
               <DatePicker
-                label="Expected payout date"
+                label={t("Expected payout date")}
                 value={values.dueOn}
                 onValueChange={(dueOn) => set({ ...values, dueOn })}
               />
             </Field>
-            <Field label="Payout status">
+            <Field label={t("Payout status")}>
               <OptionSelect
                 value={values.status}
                 onValueChange={(status) =>
@@ -477,7 +504,7 @@ function EntryForm({
               >
                 {PAYOUT_STATES.filter((s) => old || s !== "completed").map((v) => (
                   <option key={v} value={v}>
-                    {label(v)}
+                    {show(v)}
                   </option>
                 ))}
               </OptionSelect>
@@ -486,7 +513,7 @@ function EntryForm({
         )}
         {input("reference", "Invoice / payment reference")}
       </div>
-      <Field label="Notes">
+      <Field label={t("Notes")}>
         <textarea
           className={`${fieldClass} h-20 py-2`}
           value={values.notes}
@@ -495,8 +522,10 @@ function EntryForm({
       </Field>
       {refund && (
         <p className="text-xs text-muted-foreground">
-          Linked expense: {values.parentId}. Refunds reduce costs and are shown separately from
-          payout income.
+          {t(
+            "Linked expense: {id}. Refunds reduce costs and are shown separately from payout income.",
+            { id: values.parentId },
+          )}
         </p>
       )}
       {old && input("reason", "Reason for change", true)}
@@ -510,6 +539,7 @@ function ReceiptForm({
   refresh,
 }: Props & { modal: Extract<PropModal, { kind: "receipt" }> }) {
   const { payout } = modal;
+  const { t } = useI18n();
   const [id] = useState(() => randomId());
   const [values, set] = useState({
     kind: "receipt",
@@ -521,8 +551,11 @@ function ReceiptForm({
   const { busy, error, save } = useSave(close, refresh);
   return (
     <Form
-      title="Record payout cash movement"
-      description={`Record the actual net amount credited or returned in ${payout.currency}. If your bank converted currencies, use the statement's original-currency amount; this tracker does not invent an exchange rate.`}
+      title={t("Record payout cash movement")}
+      description={t(
+        "Record the actual net amount credited or returned in {currency}. If your bank converted currencies, use the statement's original-currency amount; this tracker does not invent an exchange rate.",
+        { currency: payout.currency },
+      )}
       busy={busy}
       error={error}
       submit={() =>
@@ -536,35 +569,35 @@ function ReceiptForm({
       }
     >
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Movement">
+        <Field label={t("Movement")}>
           <OptionSelect value={values.kind} onValueChange={(kind) => set({ ...values, kind })}>
-            <option value="receipt">Money received</option>
-            <option value="reversal">Money returned / reversed</option>
+            <option value="receipt">{t("Money received")}</option>
+            <option value="reversal">{t("Money returned / reversed")}</option>
           </OptionSelect>
         </Field>
-        <Field label={`Actual amount (${payout.currency})`}>
+        <Field label={t("Actual amount ({currency})", { currency: payout.currency })}>
           <Input
             required
             value={values.amount}
             onChange={(e) => set({ ...values, amount: e.target.value })}
           />
         </Field>
-        <Field label="Settlement date">
+        <Field label={t("Settlement date")}>
           <DatePicker
-            label="Settlement date"
+            label={t("Settlement date")}
             value={values.occurredOn}
             max={data.today}
             onValueChange={(occurredOn) => set({ ...values, occurredOn })}
           />
         </Field>
-        <Field label="Bank reference">
+        <Field label={t("Bank reference")}>
           <Input
             value={values.reference}
             onChange={(e) => set({ ...values, reference: e.target.value })}
           />
         </Field>
       </div>
-      <Field label="Notes">
+      <Field label={t("Notes")}>
         <textarea
           className={`${fieldClass} h-20 py-2`}
           value={values.notes}
@@ -572,8 +605,9 @@ function ReceiptForm({
         />
       </Field>
       <p className="text-xs text-muted-foreground">
-        Keep the request open for partial payments. Once the final payment arrives, edit the payout
-        status to Completed; a difference from the expected amount remains visible.
+        {t(
+          "Keep the request open for partial payments. Once the final payment arrives, edit the payout status to Completed; a difference from the expected amount remains visible.",
+        )}
       </p>
     </Form>
   );
@@ -583,15 +617,20 @@ function ChangeForm({
   close,
   refresh,
 }: Props & { modal: Extract<PropModal, { kind: "change" }> }) {
+  const { t } = useI18n();
   const [reason, setReason] = useState("");
   const { busy, error, save } = useSave(close, refresh);
   return (
     <Form
-      title={modal.name}
+      title={t(modal.name)}
       description={
         modal.action === "account.archive"
-          ? "Archiving hides the account from the active list. Its cash history remains in returns. You can restore it later."
-          : "Voided records stay in the audit trail and are excluded from cash totals. They can be restored. Voiding a payout also excludes its receipts."
+          ? t(
+              "Archiving hides the account from the active list. Its cash history remains in returns. You can restore it later.",
+            )
+          : t(
+              "Voided records stay in the audit trail and are excluded from cash totals. They can be restored. Voiding a payout also excludes its receipts.",
+            )
       }
       busy={busy}
       error={error}
@@ -606,13 +645,14 @@ function ChangeForm({
         })
       }
     >
-      <Field label="Reason">
+      <Field label={t("Reason")}>
         <Input required value={reason} onChange={(e) => setReason(e.target.value)} />
       </Field>
     </Form>
   );
 }
 function Detail({ modal, data }: Props & { modal: Extract<PropModal, { kind: "detail" }> }) {
+  const { t } = useI18n();
   const account = modal.type === "account" ? data.accounts.find((a) => a.id === modal.id) : null;
   const entry = modal.type === "entry" ? data.entries.find((e) => e.id === modal.id) : null;
   const { data: history } = useApi<{ history: PropAudit[] }>(
@@ -621,23 +661,27 @@ function Detail({ modal, data }: Props & { modal: Extract<PropModal, { kind: "de
   return (
     <>
       <DialogHeader>
-        <DialogTitle>{account?.name ?? `${label(entry?.kind ?? "Entry")} details`}</DialogTitle>
+        <DialogTitle>
+          {account?.name ?? t(entry ? DETAIL_TITLES[entry.kind] : "Entry details")}
+        </DialogTitle>
         <DialogDescription>
           {account?.firm ?? entry?.firm} · {modal.id}
         </DialogDescription>
       </DialogHeader>
       <p className="whitespace-pre-wrap text-sm">
-        {account?.notes || entry?.notes || "No notes added."}
+        {account?.notes || entry?.notes || t("No notes added.")}
       </p>
       {account && (
         <>
           <p className="break-all text-xs text-muted-foreground">
-            Account ID for CSV imports: {account.id}
+            {t("Account ID for CSV imports: {id}", { id: account.id })}
           </p>
           {account.parentId && (
             <p className="text-sm">
-              Previous attempt / phase:{" "}
-              {data.accounts.find((a) => a.id === account.parentId)?.name ?? account.parentId}
+              {t("Previous attempt / phase: {name}", {
+                name:
+                  data.accounts.find((a) => a.id === account.parentId)?.name ?? account.parentId,
+              })}
             </p>
           )}
           {account.journalAccountId && (
@@ -645,28 +689,30 @@ function Detail({ modal, data }: Props & { modal: Extract<PropModal, { kind: "de
               className="text-sm underline"
               href={`/trades?accounts=${encodeURIComponent(account.journalAccountId)}`}
             >
-              Open linked journal trades
+              {t("Open linked journal trades")}
             </a>
           )}
         </>
       )}
       <Attachments type={modal.type === "account" ? "prop-account" : "prop-entry"} id={modal.id} />
       <details>
-        <summary className="cursor-pointer text-sm">Edit history · latest 100 changes</summary>
+        <summary className="cursor-pointer text-sm">
+          {t("Edit history · latest 100 changes")}
+        </summary>
         <div className="mt-3 space-y-3">
           {history?.history.map((item) => (
             <details key={item.id} className="rounded-md border p-2 text-xs">
               <summary className="cursor-pointer">
                 {item.createdAt} ·{" "}
-                {item.reason.startsWith("CSV import") ? "CSV import" : item.reason}
+                {item.reason.startsWith("CSV import") ? t("CSV import") : item.reason}
               </summary>
-              <p className="my-2 font-medium">Before</p>
+              <p className="my-2 font-medium">{t("Before")}</p>
               <pre className="whitespace-pre-wrap break-all">
                 {item.beforeJson
                   ? JSON.stringify(JSON.parse(item.beforeJson), null, 2)
-                  : "New record"}
+                  : t("New record")}
               </pre>
-              <p className="my-2 font-medium">After</p>
+              <p className="my-2 font-medium">{t("After")}</p>
               <pre className="whitespace-pre-wrap break-all">
                 {JSON.stringify(JSON.parse(item.afterJson), null, 2)}
               </pre>
@@ -678,6 +724,7 @@ function Detail({ modal, data }: Props & { modal: Extract<PropModal, { kind: "de
   );
 }
 function ImportForm({ close, refresh }: Props) {
+  const { t, tn } = useI18n();
   const [content, setContent] = useState(""),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
@@ -705,24 +752,24 @@ function ImportForm({ close, refresh }: Props) {
   return (
     <>
       <DialogHeader>
-        <DialogTitle>Import prop cash CSV</DialogTitle>
+        <DialogTitle>{t("Import prop cash CSV")}</DialogTitle>
         <DialogDescription>
-          Import settled expenses, refunds and net payouts. Preview validates every row; an import
-          is all-or-nothing and repeated stable IDs are skipped.
+          {t(
+            "Import settled expenses, refunds and net payouts. Preview validates every row; an import is all-or-nothing and repeated stable IDs are skipped.",
+          )}
         </DialogDescription>
       </DialogHeader>
       <a className="text-sm underline" href="/prop-cash-template.csv" download>
-        Download generic cash header template
+        {t("Download generic cash header template")}
       </a>
       <p className="text-xs text-muted-foreground">
-        Use kind expense, refund or payout; date YYYY-MM-DD; positive amount in currency units. A
-        payout amount is cash already received after splits and fees. Payouts need account_id from
-        an account’s Details. A refund’s expense_id references its original CSV row ID. Put expenses
-        before their refunds. This is not a broker statement importer.
+        {t(
+          "Use kind expense, refund or payout; date YYYY-MM-DD; positive amount in currency units. A payout amount is cash already received after splits and fees. Payouts need account_id from an account’s Details. A refund’s expense_id references its original CSV row ID. Put expenses before their refunds. This is not a broker statement importer.",
+        )}
       </p>
       <Input
         type="file"
-        aria-label="Prop cash CSV file"
+        aria-label={t("Prop cash CSV file")}
         accept=".csv,text/csv"
         disabled={busy}
         onChange={async (e) => {
@@ -732,18 +779,18 @@ function ImportForm({ close, refresh }: Props) {
           setError("");
           if (!file) return;
           if (file.size > 2 * 1024 * 1024) {
-            setError("Use a CSV up to 2 MB / 1,000 rows.");
+            setError(t("Use a CSV up to 2 MB / 1,000 rows."));
             return;
           }
           try {
             setContent(decodeImportFile(await file.arrayBuffer()));
           } catch {
-            setError("Could not read CSV.");
+            setError(t("Could not read CSV."));
           }
         }}
       />
       <Button variant="outline" disabled={!content || busy} onClick={() => void act("preview")}>
-        {busy ? "Validating…" : "Validate & preview"}
+        {busy ? t("Validating…") : t("Validate & preview")}
       </Button>
       {error && (
         <p role="alert" className="text-sm text-destructive">
@@ -753,7 +800,10 @@ function ImportForm({ close, refresh }: Props) {
       {result && (
         <>
           <p className="text-sm">
-            {result.imported} new records · {result.skipped} already imported.
+            {t("{imported} new records · {skipped} already imported.", {
+              imported: result.imported,
+              skipped: result.skipped,
+            })}
           </p>
           <div className="space-y-2">
             {result.sample.map((row) => (
@@ -763,7 +813,7 @@ function ImportForm({ close, refresh }: Props) {
             ))}
           </div>
           <Button disabled={busy || result.imported === 0} onClick={() => void act("import")}>
-            Import {result.imported} records
+            {tn(result.imported, "Import {count} record", "Import {count} records")}
           </Button>
         </>
       )}

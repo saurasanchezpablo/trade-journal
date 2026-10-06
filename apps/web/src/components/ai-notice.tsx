@@ -5,6 +5,7 @@ import { useId } from "react";
 import { ArrowUpRight, CircleAlert, Sparkles, X } from "lucide-react";
 import { aiFeedback } from "@/lib/ai-feedback";
 import { Button } from "./ui/button";
+import { useI18n } from "./i18n";
 
 export function AiNotice({
   error,
@@ -15,6 +16,7 @@ export function AiNotice({
   onRetry: () => void;
   onDismiss: () => void;
 }) {
+  const { t } = useI18n();
   const feedback = aiFeedback(error);
   const id = useId();
   const Icon = feedback.tone === "error" ? CircleAlert : Sparkles;
@@ -57,7 +59,7 @@ export function AiNotice({
             className="mt-3 h-8 text-xs"
             onClick={onRetry}
           >
-            Try again
+            {t("Try again")}
           </Button>
         ) : null}
       </div>
@@ -66,7 +68,7 @@ export function AiNotice({
         variant="ghost"
         size="icon"
         className="-mr-1 -mt-1 h-7 w-7 shrink-0 text-muted-foreground"
-        aria-label="Dismiss AI notice"
+        aria-label={t("Dismiss AI notice")}
         onClick={onDismiss}
       >
         <X className="h-3.5 w-3.5" />

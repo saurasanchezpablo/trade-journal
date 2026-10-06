@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Play, Save, Trash2, X } from "lucide-react";
 import { declaredTitle, errorLine, MAX_SCRIPT_NAME } from "@/lib/chart-indicators";
 import { cn } from "@/lib/utils";
+import { useI18n } from "./i18n";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Input } from "./ui/input";
@@ -19,6 +20,7 @@ export interface EditorDraft {
 }
 
 const INDENT = "    ";
+const CODE_NAMES = { input: "input.*()", plotshape: "plotshape()", alert: "alert()" } as const;
 /** Lines that open an indented Pine block: control flow, `x = if …`, and `f() =>`. */
 const BLOCK_OPENER = /^(if|else|for|while|switch)\b|=\s*(if|switch)\b|=>\s*$/;
 
@@ -40,6 +42,7 @@ export function PineEditor({
   onDelete?: (scriptId: string) => Promise<void>;
   onClose: () => void;
 }) {
+  const { t } = useI18n();
   const [name, setName] = useState(draft.name);
   const [source, setSource] = useState(draft.source);
   const [scriptId, setScriptId] = useState(draft.scriptId);
@@ -50,7 +53,7 @@ export function PineEditor({
   const code = useRef<HTMLTextAreaElement>(null);
   const gutter = useRef<HTMLDivElement>(null);
   const current = (): EditorDraft => ({
-    name: name.trim() || declaredTitle(source) || "My indicator",
+    name: name.trim() || declaredTitle(source) || t("My indicator"),
     source,
     scriptId,
     chartIndicatorId,
@@ -72,7 +75,7 @@ export function PineEditor({
       await work();
     } catch (cause) {
       setStatus("");
-      setError(cause instanceof Error ? cause.message : "It did not work.");
+      setError(cause instanceof Error ? cause.message : t("It did not work."));
     } finally {
       inFlight.current = false;
       setBusy(false);
@@ -81,14 +84,14 @@ export function PineEditor({
   const run = () =>
     source.trim()
       ? exclusive(async () => {
-          setStatus("Running…");
+          setStatus(t("Running…"));
           const result = await onRun(current());
           if (result.error) {
             setError(result.error);
             setStatus("");
           } else {
             if (result.chartIndicatorId) setChartIndicatorId(result.chartIndicatorId);
-            setStatus("Running on the chart.");
+            setStatus(t("Running on the chart."));
           }
         })
       : Promise.resolve();
@@ -100,7 +103,7 @@ export function PineEditor({
           else {
             if (result.scriptId) setScriptId(result.scriptId);
             if (!name.trim()) setName(current().name);
-            setStatus("Saved to My indicators.");
+            setStatus(t("Saved to My indicators."));
           }
         })
       : Promise.resolve();
@@ -108,12 +111,12 @@ export function PineEditor({
   return (
     <Card>
       <CardHeader className="flex-row flex-wrap items-center justify-between gap-2 space-y-0">
-        <CardTitle>Pine Script editor</CardTitle>
+        <CardTitle>{t("Pine Script editor")}</CardTitle>
         <Button
           type="button"
           variant="ghost"
           size="icon"
-          aria-label="Close editor"
+          aria-label={t("Close editor")}
           onClick={onClose}
         >
           <X />
@@ -122,17 +125,17 @@ export function PineEditor({
       <CardContent className="space-y-3">
         <div className="flex flex-wrap items-end gap-2">
           <div className="min-w-48 flex-1 space-y-1">
-            <Label htmlFor="pine-name">Name</Label>
+            <Label htmlFor="pine-name">{t("Name")}</Label>
             <Input
               id="pine-name"
               value={name}
               maxLength={MAX_SCRIPT_NAME}
-              placeholder={declaredTitle(source) ?? "My indicator"}
+              placeholder={declaredTitle(source) ?? t("My indicator")}
               onChange={(event) => setName(event.target.value)}
             />
           </div>
           <Button type="button" disabled={busy || !source.trim()} onClick={() => void run()}>
-            <Play /> Run on chart
+            <Play /> {t("Run on chart")}
           </Button>
           <Button
             type="button"
@@ -140,7 +143,7 @@ export function PineEditor({
             disabled={busy || !source.trim()}
             onClick={() => void save()}
           >
-            <Save /> {scriptId ? "Save changes" : "Save to My indicators"}
+            <Save /> {scriptId ? t("Save changes") : t("Save to My indicators")}
           </Button>
           {scriptId && onDelete && (
             <Button
@@ -151,18 +154,18 @@ export function PineEditor({
               onClick={() => {
                 if (
                   !confirm(
-                    "Delete this indicator from My indicators? Charts using it keep their copy.",
+                    t("Delete this indicator from My indicators? Charts using it keep their copy."),
                   )
                 )
                   return;
                 void exclusive(async () => {
                   await onDelete(scriptId);
                   setScriptId(null);
-                  setStatus("Deleted from My indicators.");
+                  setStatus(t("Deleted from My indicators."));
                 });
               }}
             >
-              <Trash2 /> Delete
+              <Trash2 /> {t("Delete")}
             </Button>
           )}
         </div>
@@ -183,7 +186,7 @@ export function PineEditor({
           </div>
           <textarea
             ref={code}
-            aria-label="Pine Script code"
+            aria-label={t("Pine Script code")}
             spellCheck={false}
             autoCapitalize="off"
             autoCorrect="off"
@@ -228,7 +231,7 @@ export function PineEditor({
         </div>
         {error && (
           <p role="alert" className="whitespace-pre-wrap font-mono text-xs text-destructive">
-            {badLine ? `Line ${badLine}: ` : ""}
+            {badLine ? t("Line {line}: ", { line: badLine }) : ""}
             {error}
           </p>
         )}
@@ -238,9 +241,14 @@ export function PineEditor({
           </p>
         )}
         <p className="text-xs text-muted-foreground">
-          Pine Script v5/v6 through PineTS. Ctrl/⌘ + Enter runs, Ctrl/⌘ + S saves. Inputs from{" "}
-          <code>input.*()</code> appear in the indicator&apos;s settings on the chart;{" "}
-          <code>plotshape()</code> marks signals and <code>alert()</code> sends them to Line alerts.
+          {t(
+            "Pine Script v5/v6 through PineTS. Ctrl/⌘ + Enter runs, Ctrl/⌘ + S saves. Inputs from {input} appear in the indicator's settings on the chart; {plotshape} marks signals and {alert} sends them to Line alerts.",
+          )
+            // The function names stay code: each `{name}` becomes its <code> element.
+            .split(/\{(input|plotshape|alert)\}/)
+            .map((part, i) =>
+              i % 2 ? <code key={i}>{CODE_NAMES[part as keyof typeof CODE_NAMES]}</code> : part,
+            )}
         </p>
       </CardContent>
     </Card>

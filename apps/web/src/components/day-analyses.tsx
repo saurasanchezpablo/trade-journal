@@ -9,6 +9,7 @@ import { DayReview } from "./day-review";
 import { postJson, useApi } from "@/lib/use-api";
 import { formatTimestamp } from "@/lib/timezone";
 import { useFilters } from "./filter-bar";
+import { useI18n } from "./i18n";
 import {
   analysisEditPath,
   analysisLabel,
@@ -34,6 +35,7 @@ export function DayAnalyses({
   note: string;
   onInsert: (markdown: string) => void;
 }) {
+  const { t, tn } = useI18n();
   const { data, error, refresh } = useApi<{ snapshots: AnalysisSnapshotSummary[] }>(
     `/api/analysis-snapshots?day=${date}`,
   );
@@ -44,7 +46,9 @@ export function DayAnalyses({
   const remove = async (s: AnalysisSnapshotSummary) => {
     if (
       !confirm(
-        `Remove this day's version of ${analysisLabel(toLabel(s))}? The live analysis stays.`,
+        t("Remove this day's version of {label}? The live analysis stays.", {
+          label: analysisLabel(toLabel(s)),
+        }),
       )
     )
       return;
@@ -57,25 +61,29 @@ export function DayAnalyses({
       );
       refresh();
     } catch (cause) {
-      setProblem(cause instanceof Error ? cause.message : "Could not remove it.");
+      setProblem(cause instanceof Error ? cause.message : t("Could not remove it."));
     }
   };
   return (
     <Card>
       <CardHeader className="flex-row flex-wrap items-center justify-between gap-2">
-        <CardTitle>Chart analyses this day</CardTitle>
+        <CardTitle>{t("Chart analyses this day")}</CardTitle>
         <Button asChild variant="outline" size="sm">
           <Link href={`/charts?day=${date}`}>
             <CandlestickChart />
-            Open Charts
+            {t("Open Charts")}
           </Link>
         </Button>
       </CardHeader>
       <CardContent className="space-y-3">
         <p className="text-xs text-muted-foreground">
           {today
-            ? "Analyses you edit today are saved here as they stand, and stop changing when the day ends. The live chart keeps evolving."
-            : "Each analysis as it was at the end of this day. Later changes to the live chart do not alter it."}
+            ? t(
+                "Analyses you edit today are saved here as they stand, and stop changing when the day ends. The live chart keeps evolving.",
+              )
+            : t(
+                "Each analysis as it was at the end of this day. Later changes to the live chart do not alter it.",
+              )}
         </p>
         {error && (
           <p role="alert" className="text-sm text-destructive">
@@ -88,7 +96,9 @@ export function DayAnalyses({
           </p>
         )}
         {data && snapshots.length === 0 && (
-          <p className="text-sm text-muted-foreground">No chart analysis was edited this day.</p>
+          <p className="text-sm text-muted-foreground">
+            {t("No chart analysis was edited this day.")}
+          </p>
         )}
         <div className="grid gap-3 md:grid-cols-2">
           {snapshots.map((s) => {
@@ -98,18 +108,18 @@ export function DayAnalyses({
               <figure key={s.analysisId} className="overflow-hidden rounded-lg border bg-card">
                 <Link
                   href={snapshotViewPath(s.analysisId, date)}
-                  aria-label={`Open ${label} as of ${date}`}
+                  aria-label={t("Open {label} as of {date}", { label, date })}
                 >
                   {s.hasImage ? (
                     <img
                       src={`${snapshotImagePath(s.analysisId, date)}?v=${encodeURIComponent(s.updatedAt)}`}
-                      alt={`${label} on ${date}`}
+                      alt={t("{label} on {date}", { label, date })}
                       loading="lazy"
                       className="block h-auto w-full"
                     />
                   ) : (
                     <span className="block p-6 text-center text-sm text-muted-foreground">
-                      No picture was saved for this day.
+                      {t("No picture was saved for this day.")}
                     </span>
                   )}
                 </Link>
@@ -117,17 +127,18 @@ export function DayAnalyses({
                   <div className="flex items-center justify-between gap-2">
                     <span className="min-w-0 truncate font-medium">{label}</span>
                     <span className="shrink-0 text-muted-foreground">
-                      {s.drawingCount} drawing{s.drawingCount === 1 ? "" : "s"} ·{" "}
-                      {today ? "updated" : "last saved"}{" "}
-                      {formatTimestamp(s.updatedAt, timeZone).slice(11, 16)}
+                      {tn(s.drawingCount, "{count} drawing", "{count} drawings")} ·{" "}
+                      {t(today ? "updated {time}" : "last saved {time}", {
+                        time: formatTimestamp(s.updatedAt, timeZone).slice(11, 16),
+                      })}
                     </span>
                   </div>
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                     <Link href={snapshotViewPath(s.analysisId, date)} className="underline">
-                      View this version
+                      {t("View this version")}
                     </Link>
                     <Link href={analysisEditPath(s.analysisId)} className="underline">
-                      Live chart
+                      {t("Live chart")}
                     </Link>
                     <button
                       type="button"
@@ -136,12 +147,12 @@ export function DayAnalyses({
                       onClick={() => onInsert(snapshotMarkdown(toLabel(s), date))}
                     >
                       <FilePlus2 aria-hidden="true" className="size-3" />
-                      {inNote ? "In the note" : "Add to note"}
+                      {inNote ? t("In the note") : t("Add to note")}
                     </button>
                     <button
                       type="button"
                       className="ml-auto inline-flex items-center gap-1 text-muted-foreground hover:text-destructive"
-                      aria-label={`Remove ${label} from this day`}
+                      aria-label={t("Remove {label} from this day", { label })}
                       onClick={() => void remove(s)}
                     >
                       <Trash2 aria-hidden="true" className="size-3" />

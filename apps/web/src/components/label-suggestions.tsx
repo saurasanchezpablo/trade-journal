@@ -7,6 +7,7 @@ import { acquireJson } from "@/lib/api-request";
 import { formatTimestamp } from "@/lib/timezone";
 import { Button } from "./ui/button";
 import { AiNotice } from "./ai-notice";
+import { useI18n } from "./i18n";
 
 export interface LabelSuggestion {
   key: string;
@@ -87,8 +88,8 @@ export function rebasePatch(
 const rebased = async (key: string, s: LabelSuggestion, wanted: LabelPatch) =>
   wanted.tags || wanted.mistakes ? rebasePatch(s, wanted, await savedLabels(key)) : wanted;
 
-const applyFailed = (cause: unknown) =>
-  cause instanceof Error ? cause.message : "Could not apply the labels";
+const applyFailed = (cause: unknown, t: (text: string) => string) =>
+  cause instanceof Error ? cause.message : t("Could not apply the labels");
 
 function Chips({
   suggestion,
@@ -97,6 +98,7 @@ function Chips({
   suggestion: LabelSuggestion;
   onApply: (patch: LabelPatch) => void;
 }) {
+  const { t } = useI18n();
   const chip = (label: string, kind: "tags" | "mistakes") => (
     <button
       key={`${kind}-${label}`}
@@ -110,11 +112,15 @@ function Chips({
         })
       }
       className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs hover:bg-accent"
-      aria-label={`Add ${kind === "tags" ? "tag" : "mistake"} ${label}`}
+      aria-label={
+        kind === "tags" ? t("Add tag {label}", { label }) : t("Add mistake {label}", { label })
+      }
     >
-      + {kind === "mistakes" ? "mistake: " : ""}
+      + {kind === "mistakes" ? t("mistake: ") : ""}
       {label}
-      {suggestion.newLabels.includes(label) && <span className="text-muted-foreground">(new)</span>}
+      {suggestion.newLabels.includes(label) && (
+        <span className="text-muted-foreground">{t("(new)")}</span>
+      )}
     </button>
   );
   const nothing =
@@ -124,10 +130,10 @@ function Chips({
   return (
     <div className="space-y-1.5">
       {nothing ? (
-        <p className="text-xs text-muted-foreground">Nothing to add.</p>
+        <p className="text-xs text-muted-foreground">{t("Nothing to add.")}</p>
       ) : (
         <div className="flex flex-wrap items-center gap-1.5">
-          {suggestion.tags.map((t) => chip(t, "tags"))}
+          {suggestion.tags.map((tag) => chip(tag, "tags"))}
           {suggestion.mistakes.map((m) => chip(m, "mistakes"))}
           {suggestion.rating !== null && suggestion.rating !== suggestion.currentRating && (
             <button
@@ -135,7 +141,7 @@ function Chips({
               onClick={() => onApply({ rating: suggestion.rating! })}
               className="inline-flex items-center rounded-full border px-2 py-0.5 text-xs hover:bg-accent"
             >
-              Rate {suggestion.rating} of 5
+              {t("Rate {rating} of 5", { rating: suggestion.rating })}
             </button>
           )}
         </div>
@@ -153,6 +159,7 @@ export function TradeLabelSuggestions({
   tradeKey: string;
   onApply: (patch: LabelPatch) => Promise<void> | void;
 }) {
+  const { t } = useI18n();
   const [suggestion, setSuggestion] = useState<LabelSuggestion | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -162,7 +169,7 @@ export function TradeLabelSuggestions({
     try {
       setSuggestion((await request([tradeKey])).suggestions[0] ?? null);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "No suggestions");
+      setError(cause instanceof Error ? cause.message : t("No suggestions"));
     } finally {
       setBusy(false);
     }
@@ -176,7 +183,7 @@ export function TradeLabelSuggestions({
       patch = await rebased(tradeKey, suggestion, wanted);
       await onApply(patch);
     } catch (cause) {
-      setApplyError(applyFailed(cause));
+      setApplyError(applyFailed(cause, t));
       return;
     }
     // What was applied is no longer suggested.
@@ -187,7 +194,7 @@ export function TradeLabelSuggestions({
             currentTags: patch.tags ?? s.currentTags,
             currentMistakes: patch.mistakes ?? s.currentMistakes,
             currentRating: patch.rating ?? s.currentRating,
-            tags: s.tags.filter((t) => !patch.tags?.includes(t)),
+            tags: s.tags.filter((tag) => !patch.tags?.includes(tag)),
             mistakes: s.mistakes.filter((m) => !patch.mistakes?.includes(m)),
           }
         : s,
@@ -205,11 +212,11 @@ export function TradeLabelSuggestions({
           onClick={() => void ask()}
         >
           <Sparkles />
-          {busy ? "Thinking…" : "Suggest labels"}
+          {busy ? t("Thinking…") : t("Suggest labels")}
         </Button>
         {Object.keys(all).length > 0 && (
           <Button type="button" size="sm" variant="ghost" onClick={() => void apply(all)}>
-            Apply all
+            {t("Apply all")}
           </Button>
         )}
       </div>
@@ -236,6 +243,7 @@ export function BulkLabelSuggestions({
   timeZone: string;
   onChanged: () => void;
 }) {
+  const { t } = useI18n();
   const [list, setList] = useState<LabelSuggestion[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -245,7 +253,7 @@ export function BulkLabelSuggestions({
     try {
       setList((await request(keys)).suggestions);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "No suggestions");
+      setError(cause instanceof Error ? cause.message : t("No suggestions"));
     } finally {
       setBusy(false);
     }
@@ -262,7 +270,7 @@ export function BulkLabelSuggestions({
     try {
       for (const [s, body] of items) if (Object.keys(body).length) await send(s, body);
     } catch (cause) {
-      setApplyError(applyFailed(cause));
+      setApplyError(applyFailed(cause, t));
     } finally {
       onChanged();
     }
@@ -277,15 +285,15 @@ export function BulkLabelSuggestions({
           size="sm"
           variant="outline"
           disabled={busy || keys.length === 0 || keys.length > 20}
-          title={keys.length > 20 ? "Select at most 20 trades" : undefined}
+          title={keys.length > 20 ? t("Select at most 20 trades") : undefined}
           onClick={() => void ask()}
         >
           <Sparkles />
-          {busy ? "Thinking…" : "Suggest labels"}
+          {busy ? t("Thinking…") : t("Suggest labels")}
         </Button>
         {list && list.some((s) => Object.keys(wholePatch(s)).length) && (
           <Button type="button" size="sm" variant="ghost" onClick={() => void applyAll()}>
-            Apply all suggestions
+            {t("Apply all suggestions")}
           </Button>
         )}
       </div>
@@ -298,7 +306,7 @@ export function BulkLabelSuggestions({
         </p>
       )}
       {list && (
-        <ul className="divide-y rounded-md border" aria-label="Label suggestions">
+        <ul className="divide-y rounded-md border" aria-label={t("Label suggestions")}>
           {list.map((s) => (
             <li key={s.key} className="space-y-1 px-3 py-2">
               <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
@@ -315,7 +323,7 @@ export function BulkLabelSuggestions({
                     variant="ghost"
                     onClick={() => void patch([s, wholePatch(s)])}
                   >
-                    Apply
+                    {t("Apply")}
                   </Button>
                 )}
               </div>

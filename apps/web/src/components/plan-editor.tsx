@@ -10,6 +10,7 @@ import {
   type PlanScenario,
 } from "@/lib/analysis-plan";
 import { cn } from "@/lib/utils";
+import { useI18n } from "./i18n";
 import { Button } from "./ui/button";
 
 const BIASES: { value: Bias; label: string }[] = [
@@ -46,6 +47,7 @@ export function PlanEditor({
   /** The price of the horizontal line last selected on the chart, if any. */
   pickPrice: () => number | null;
 }) {
+  const { t } = useI18n();
   const setScenario = (id: string, patch: Partial<PlanScenario>) =>
     onChange({
       ...plan,
@@ -53,8 +55,8 @@ export function PlanEditor({
     });
   return (
     <fieldset className="space-y-2" disabled={disabled}>
-      <legend className="text-sm font-medium">Plan</legend>
-      <div className="flex flex-wrap items-center gap-1" role="radiogroup" aria-label="Bias">
+      <legend className="text-sm font-medium">{t("Plan")}</legend>
+      <div className="flex flex-wrap items-center gap-1" role="radiogroup" aria-label={t("Bias")}>
         {BIASES.map((b) => (
           <button
             key={b.value}
@@ -67,16 +69,16 @@ export function PlanEditor({
               plan.bias === b.value ? "border-primary bg-primary/15" : "hover:bg-accent",
             )}
           >
-            {b.label}
+            {t(b.label)}
           </button>
         ))}
         <select
-          aria-label="Playbook"
+          aria-label={t("Playbook")}
           value={plan.playbookId ?? ""}
           onChange={(e) => onChange({ ...plan, playbookId: e.target.value || null })}
           className="ml-auto h-7 max-w-40 rounded-md border bg-background px-1 text-xs"
         >
-          <option value="">No playbook</option>
+          <option value="">{t("No playbook")}</option>
           {playbooks.map((p) => (
             <option key={p.id} value={p.id}>
               {p.name}
@@ -90,25 +92,27 @@ export function PlanEditor({
             <input
               value={s.name}
               maxLength={80}
-              placeholder={`Scenario ${i + 1}, e.g. "Breakout above the range"`}
-              aria-label={`Scenario ${i + 1} name`}
+              placeholder={t('Scenario {number}, e.g. "Breakout above the range"', {
+                number: i + 1,
+              })}
+              aria-label={t("Scenario {number} name", { number: i + 1 })}
               onChange={(e) => setScenario(s.id, { name: e.target.value })}
               className="h-7 min-w-0 flex-1 rounded-md border bg-background px-2 text-xs"
             />
             <select
-              aria-label={`Scenario ${i + 1} direction`}
+              aria-label={t("Scenario {number} direction", { number: i + 1 })}
               value={s.direction}
               onChange={(e) =>
                 setScenario(s.id, { direction: e.target.value as PlanScenario["direction"] })
               }
               className="h-7 rounded-md border bg-background px-1 text-xs"
             >
-              <option value="long">Long</option>
-              <option value="short">Short</option>
+              <option value="long">{t("Long")}</option>
+              <option value="short">{t("Short")}</option>
             </select>
             <button
               type="button"
-              aria-label={`Remove scenario ${i + 1}`}
+              aria-label={t("Remove scenario {number}", { number: i + 1 })}
               className="flex size-7 items-center justify-center rounded text-muted-foreground hover:text-destructive"
               onClick={() =>
                 onChange({ ...plan, scenarios: plan.scenarios.filter((x) => x.id !== s.id) })
@@ -120,17 +124,22 @@ export function PlanEditor({
           <div className="grid grid-cols-3 gap-1">
             {PRICES.map(({ key, label }) => (
               <label key={key} className="space-y-0.5 text-[11px] text-muted-foreground">
-                {label}
+                {t(label)}
                 <span className="flex items-center gap-0.5">
                   <PriceInput
                     value={s[key]}
-                    label={`Scenario ${i + 1} ${label.toLowerCase()}`}
+                    label={t(`Scenario {number} ${label.toLowerCase()}`, { number: i + 1 })}
                     onValue={(price) => setScenario(s.id, { [key]: price })}
                   />
                   <button
                     type="button"
-                    title="Use the price of the horizontal line you last selected on the chart"
-                    aria-label={`Set scenario ${i + 1} ${label.toLowerCase()} from the last selected line`}
+                    title={t("Use the price of the horizontal line you last selected on the chart")}
+                    aria-label={t(
+                      `Set scenario {number} ${label.toLowerCase()} from the last selected line`,
+                      {
+                        number: i + 1,
+                      },
+                    )}
                     className="flex size-6 shrink-0 items-center justify-center rounded hover:bg-accent"
                     onClick={() => {
                       const price = pickPrice();
@@ -145,14 +154,14 @@ export function PlanEditor({
           </div>
           {scenarioWarning(s) && (
             <p role="alert" className="text-[11px] text-destructive">
-              {scenarioWarning(s)}
+              {t(scenarioWarning(s) ?? "")}
             </p>
           )}
           <input
             value={s.note}
             maxLength={1000}
-            placeholder="Condition or note, e.g. after a retest on 15m"
-            aria-label={`Scenario ${i + 1} note`}
+            placeholder={t("Condition or note, e.g. after a retest on 15m")}
+            aria-label={t("Scenario {number} note", { number: i + 1 })}
             onChange={(e) => setScenario(s.id, { note: e.target.value })}
             className="h-7 w-full rounded-md border bg-background px-2 text-xs"
           />
@@ -181,11 +190,12 @@ export function PlanEditor({
           })
         }
       >
-        <Plus /> Scenario
+        <Plus /> {t("Scenario")}
       </Button>
       <p className="text-[11px] text-muted-foreground">
-        Each journal day grades these: it suggests played out, invalidated or not triggered from the
-        day&apos;s candles, and you confirm it there.
+        {t(
+          "Each journal day grades these: it suggests played out, invalidated or not triggered from the day's candles, and you confirm it there.",
+        )}
       </p>
     </fieldset>
   );

@@ -1,4 +1,5 @@
 import { aiConfigured } from "../ai";
+import { serverT, serverTx } from "../i18n";
 import { getAiProvider } from "../settings";
 import {
   deliver as deliverAlert,
@@ -228,8 +229,17 @@ async function summarize(video: ExternalVideo, force: boolean, deps: ProcessDeps
     await deps
       .deliver(
         {
-          title: `New analysis: ${input.channelTitle || "YouTube"}`,
-          body: `${video.title}. Bias ${summary.bias}${summary.mainScenario ? `; main scenario: ${summary.mainScenario.title}` : ""}.`,
+          title: serverT("New analysis: {channel}", { channel: input.channelTitle || "YouTube" }),
+          body: serverT(
+            summary.mainScenario
+              ? "{title}. Bias {bias}; main scenario: {scenario}."
+              : "{title}. Bias {bias}.",
+            {
+              title: video.title,
+              bias: serverTx("bias", summary.bias),
+              scenario: summary.mainScenario?.title ?? "",
+            },
+          ),
           tag: `external-${videoId}`,
           url: `/external?video=${videoId}`,
         },

@@ -1,7 +1,8 @@
 /**
  * Lessons written in day notes: the "**Keep**" and "**Fix**" lists AI recaps end with (and
  * that you can edit or write yourself). Read from the note, not from the model's answer, so
- * only what you kept counts.
+ * only what you kept counts. Spanish headings count too ("Mantener", "Corregir"), as a
+ * journal in Spanish writes them.
  */
 
 export interface DayLessons {
@@ -9,7 +10,17 @@ export interface DayLessons {
   fix: string[];
 }
 
-const HEADING = /^\s*(?:#{1,6}\s*)?\*{0,2}\s*(keep|fix)\s*\*{0,2}\s*:?\s*\*{0,2}\s*$/i;
+const HEADING =
+  /^\s*(?:#{1,6}\s*)?\*{0,2}\s*(keep|fix|mantener|conservar|corregir|mejorar|arreglar)\s*\*{0,2}\s*:?\s*\*{0,2}\s*$/i;
+const SECTION: Record<string, keyof DayLessons> = {
+  keep: "keep",
+  mantener: "keep",
+  conservar: "keep",
+  fix: "fix",
+  corregir: "fix",
+  mejorar: "fix",
+  arreglar: "fix",
+};
 const ITEM = /^\s*(?:[-*+]|\d+[.)])\s+(.+?)\s*$/;
 
 /** Every Keep and Fix item in a note, in order, without duplicates. */
@@ -19,7 +30,7 @@ export function lessonsFrom(markdown: string): DayLessons {
   for (const line of markdown.split(/\r?\n/)) {
     const heading = line.match(HEADING);
     if (heading) {
-      section = heading[1]!.toLowerCase() as keyof DayLessons;
+      section = SECTION[heading[1]!.toLowerCase()] ?? null;
       continue;
     }
     const item = line.match(ITEM);

@@ -31,6 +31,20 @@ Closing thoughts, not a list.
     expect(lessonsFrom("")).toEqual({ keep: [], fix: [] });
   });
 
+  it("reads the same lists written in Spanish", () => {
+    const note = `## Resumen de la IA
+
+**Mantener**
+- Esperé al retesteo
+
+### Corregir:
+- Moví el stop antes de tiempo`;
+    expect(lessonsFrom(note)).toEqual({
+      keep: ["Esperé al retesteo"],
+      fix: ["Moví el stop antes de tiempo"],
+    });
+  });
+
   it("a week is the seven days ending on the chosen day", () => {
     expect(weekEnding("2026-03-01")).toEqual([
       "2026-02-23",

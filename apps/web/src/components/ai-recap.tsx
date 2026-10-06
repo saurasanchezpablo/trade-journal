@@ -8,6 +8,7 @@ import { useState } from "react";
 import { postAiStream } from "@/lib/ai-stream";
 import { useAiRequest, type AiScope } from "@/lib/use-ai-request";
 import { AiChartsToggle, useAiCharts, type AiAnalysisUsed } from "./ai-charts-option";
+import { useI18n } from "./i18n";
 
 /** The parent keys this component by date, filters and timezone. */
 export function AiRecap({
@@ -23,6 +24,7 @@ export function AiRecap({
   disabled: boolean;
   onRecap: (result: { recap: string; scope: AiScope; analyses?: AiAnalysisUsed[] }) => void;
 }) {
+  const { t } = useI18n();
   const { run, busy, error, dismiss } = useAiRequest();
   const [charts, setCharts] = useAiCharts();
   // The recap as it is written; it joins the note once complete.
@@ -55,14 +57,14 @@ export function AiRecap({
           disabled={busy || disabled}
         >
           <Sparkles />
-          {busy ? "Writing…" : "AI recap"}
+          {busy ? t("Writing…") : t("AI recap")}
         </Button>
         <AiChartsToggle checked={charts} onChange={setCharts} />
       </div>
       {busy && preview && (
         <p
           aria-live="polite"
-          aria-label="Recap being written"
+          aria-label={t("Recap being written")}
           className="whitespace-pre-wrap rounded-md border p-3 text-sm leading-relaxed text-muted-foreground"
         >
           {preview}

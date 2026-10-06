@@ -12,6 +12,7 @@ import {
   YAxis,
 } from "recharts";
 import { fmtMoney, fmtPercent } from "@/lib/utils";
+import { useI18n } from "../i18n";
 import { usePrivacy } from "../privacy";
 import { tooltipStyle, useVizTokens } from "./tokens";
 import { ChartFrame } from "./chart-frame";
@@ -37,14 +38,15 @@ export function EquityArea({
   currency?: string;
   curve?: "monotone" | "stepAfter";
 }) {
-  const t = useVizTokens();
+  const { t } = useI18n();
+  const tokens = useVizTokens();
   const id = useId().replace(/:/g, "");
   const privacy = usePrivacy();
   const privateMode = privacy && valueFormat === "money";
   const formatValue = (value: number) =>
     valueFormat === "percent" ? fmtPercent(value, 2) : fmtMoney(value, currency);
-  if (!t) return <div style={{ height }} />;
-  const line = t.brand;
+  if (!tokens) return <div style={{ height }} />;
+  const line = tokens.brand;
   const top = Math.max(0, ...data.map((point) => point.cumNetPnl));
   const bottom = Math.min(0, ...data.map((point) => point.cumNetPnl));
   const zero = top === bottom ? 100 : (top / (top - bottom)) * 100;
@@ -59,26 +61,26 @@ export function EquityArea({
           <defs>
             <linearGradient id={`${id}-line`} x1="0" y1="0" x2="0" y2="1">
               <stop offset={`${zero}%`} stopColor={line} />
-              <stop offset={`${zero}%`} stopColor={t.loss} />
+              <stop offset={`${zero}%`} stopColor={tokens.loss} />
             </linearGradient>
             <linearGradient id={`${id}-fill`} x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor={line} stopOpacity={0.3} />
               <stop offset={`${zero}%`} stopColor={line} stopOpacity={0.035} />
-              <stop offset={`${zero}%`} stopColor={t.loss} stopOpacity={0.035} />
-              <stop offset="100%" stopColor={t.loss} stopOpacity={0.3} />
+              <stop offset={`${zero}%`} stopColor={tokens.loss} stopOpacity={0.035} />
+              <stop offset="100%" stopColor={tokens.loss} stopOpacity={0.3} />
             </linearGradient>
           </defs>
-          <CartesianGrid stroke={t.gridline} strokeWidth={1} vertical={false} />
+          <CartesianGrid stroke={tokens.gridline} strokeWidth={1} vertical={false} />
           <XAxis
             dataKey="t"
-            tick={{ fill: t.inkMuted, fontSize: 11 }}
+            tick={{ fill: tokens.inkMuted, fontSize: 11 }}
             tickLine={false}
-            axisLine={{ stroke: t.baseline }}
+            axisLine={{ stroke: tokens.baseline }}
             minTickGap={48}
             tickFormatter={(value: string) => value.slice(0, 10)}
           />
           <YAxis
-            tick={{ fill: t.inkMuted, fontSize: 11 }}
+            tick={{ fill: tokens.inkMuted, fontSize: 11 }}
             tickLine={false}
             axisLine={false}
             width={70}
@@ -87,17 +89,20 @@ export function EquityArea({
               privateMode ? "••••" : formatValue(value).replace(".00", "")
             }
           />
-          <ReferenceLine y={0} stroke={t.baseline} />
+          <ReferenceLine y={0} stroke={tokens.baseline} />
           <Tooltip
-            contentStyle={tooltipStyle(t)}
+            contentStyle={tooltipStyle(tokens)}
             labelFormatter={(value) => String(value).slice(0, 10)}
-            formatter={(value) => [privateMode ? "Hidden" : formatValue(Number(value)), valueLabel]}
-            cursor={{ stroke: t.inkMuted, strokeDasharray: "3 3" }}
+            formatter={(value) => [
+              privateMode ? t("Hidden") : formatValue(Number(value)),
+              t(valueLabel),
+            ]}
+            cursor={{ stroke: tokens.inkMuted, strokeDasharray: "3 3" }}
           />
           <Area
             type={curve}
             dataKey="cumNetPnl"
-            stroke={bottom < 0 ? (top > 0 ? `url(#${id}-line)` : t.loss) : line}
+            stroke={bottom < 0 ? (top > 0 ? `url(#${id}-line)` : tokens.loss) : line}
             strokeWidth={2}
             fill={`url(#${id}-fill)`}
             baseValue={0}
@@ -107,8 +112,8 @@ export function EquityArea({
                 cx={cx}
                 cy={cy}
                 r={4}
-                fill={payload.cumNetPnl < 0 ? t.loss : line}
-                stroke={t.card}
+                fill={payload.cumNetPnl < 0 ? tokens.loss : line}
+                stroke={tokens.card}
                 strokeWidth={2}
               />
             )}

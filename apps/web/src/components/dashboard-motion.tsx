@@ -308,7 +308,7 @@ export interface DashboardCardSnapshot {
 /** Copy the visible card, including canvas charts and the currently selected tab. */
 export function snapshotDashboardCard(surface: HTMLElement, event: Event): DashboardCardSnapshot {
   const bounds = surface.getBoundingClientRect();
-  const handle = surface.querySelector("button[aria-label^='Rearrange']")?.getBoundingClientRect();
+  const handle = surface.querySelector("[data-dashboard-handle]")?.getBoundingClientRect();
   const pointer =
     event instanceof MouseEvent
       ? {

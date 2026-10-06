@@ -6,6 +6,7 @@ import { BellRing, Send } from "lucide-react";
 import { postJson, useApi } from "@/lib/use-api";
 import { Button } from "./ui/button";
 import { SectionCard } from "./section-card";
+import { useI18n } from "./i18n";
 
 interface DigestSettings {
   recap: { enabled: boolean; time: string; weekdays: number[] };
@@ -32,16 +33,11 @@ interface DigestState {
   aiConfigured: boolean;
 }
 
-const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const WEEKDAY_NAMES = [
-  "Sunday",
-  "Monday",
-  "Tuesday",
-  "Wednesday",
-  "Thursday",
-  "Friday",
-  "Saturday",
-];
+/** Weekday names from Sunday (index 0), in a language: 2023-01-01 was a Sunday. */
+const weekdayNames = (locale: string, weekday: "short" | "long") =>
+  Array.from({ length: 7 }, (_, i) =>
+    new Date(Date.UTC(2023, 0, 1 + i)).toLocaleDateString(locale, { weekday, timeZone: "UTC" }),
+  );
 const STATUS: Record<Digest["status"], string> = {
   running: "Writing",
   sent: "Sent",
@@ -62,6 +58,20 @@ const chatUrl = (d: Digest) =>
  * up for background alerts.
  */
 export function AiDigests({ timeZone }: { timeZone: string }) {
+  const { t, tx, intl } = useI18n();
+  const WEEKDAYS = weekdayNames(intl, "short");
+  const WEEKDAY_NAMES = weekdayNames(intl, "long");
+  // A sentence with a link in it: the translation keeps "{link}" where the link goes.
+  const withLink = (text: string, link: React.ReactNode, vars?: Record<string, number>) => {
+    const [before, after] = t(text, vars).split("{link}");
+    return (
+      <>
+        {before}
+        {link}
+        {after}
+      </>
+    );
+  };
   const { data, refresh } = useApi<DigestState>("/api/ai/digests");
   const [saved, setSaved] = useState<DigestState | null>(null);
   const [error, setError] = useState("");
@@ -75,7 +85,7 @@ export function AiDigests({ timeZone }: { timeZone: string }) {
     try {
       setSaved(await postJson<DigestState>("/api/ai/digests", next, "PUT"));
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not save.");
+      setError(cause instanceof Error ? cause.message : t("Could not save."));
       setSaved(null);
       refresh();
     }
@@ -86,7 +96,7 @@ export function AiDigests({ timeZone }: { timeZone: string }) {
     try {
       await postJson("/api/ai/digests/run", { kind });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not send it.");
+      setError(cause instanceof Error ? cause.message : t("Could not send it."));
     } finally {
       setSending(null);
       setSaved(null);
@@ -98,34 +108,39 @@ export function AiDigests({ timeZone }: { timeZone: string }) {
   const nowhere = delivery && !delivery.browsers && !delivery.webhook;
   const summary = settings
     ? [
-        settings.recap.enabled ? `recap at ${settings.recap.time}` : "",
+        settings.recap.enabled ? t("recap at {time}", { time: settings.recap.time }) : "",
         settings.weekly.enabled
-          ? `weekly on ${WEEKDAYS[settings.weekly.weekday]} ${settings.weekly.time}`
+          ? t("weekly on {day} {time}", {
+              day: WEEKDAYS[settings.weekly.weekday] ?? "",
+              time: settings.weekly.time,
+            })
           : "",
       ]
         .filter(Boolean)
-        .join(", ") || "off"
+        .join(", ") || tx("digest", "off")
     : undefined;
 
   return (
     <SectionCard
       id="journal-ai-digests"
-      title="Scheduled digests"
+      title={t("Scheduled digests")}
       summary={summary}
       contentClassName="space-y-3 text-sm"
     >
       <p className="text-xs text-muted-foreground">
-        The AI writes a session recap and a weekly review on schedule, in {timeZone}, and sends them
-        to your devices. Each is saved as a chat you can open and ask follow-ups in. Days with no
-        closed trades or note are skipped.
+        {t(
+          "The AI writes a session recap and a weekly review on schedule, in {timeZone}, and sends them to your devices. Each is saved as a chat you can open and ask follow-ups in. Days with no closed trades or note are skipped.",
+          { timeZone },
+        )}
       </p>
       {current && !current.aiConfigured && (
         <p role="status" className="text-xs">
-          Add an AI provider key in{" "}
-          <Link href="/settings" className="underline">
-            Settings
-          </Link>{" "}
-          first.
+          {withLink(
+            "Add an AI provider key in {link} first.",
+            <Link href="/settings" className="underline">
+              {t("Settings")}
+            </Link>,
+          )}
         </p>
       )}
       {settings && (
@@ -142,11 +157,11 @@ export function AiDigests({ timeZone }: { timeZone: string }) {
                   })
                 }
               />
-              Session recap at
+              {t("Session recap at")}
             </label>
             <input
               type="time"
-              aria-label="Recap time"
+              aria-label={t("Recap time")}
               value={settings.recap.time}
               onChange={(e) =>
                 e.target.value &&
@@ -154,13 +169,13 @@ export function AiDigests({ timeZone }: { timeZone: string }) {
               }
               className="h-8 rounded-md border bg-background px-2 text-sm"
             />
-            <span className="text-muted-foreground">on</span>
-            <div className="flex flex-wrap gap-1" role="group" aria-label="Recap weekdays">
+            <span className="text-muted-foreground">{tx("digest", "on")}</span>
+            <div className="flex flex-wrap gap-1" role="group" aria-label={t("Recap weekdays")}>
               {WEEKDAYS.map((name, day) => {
                 const on = settings.recap.weekdays.includes(day);
                 return (
                   <button
-                    key={name}
+                    key={day}
                     type="button"
                     aria-pressed={on}
                     onClick={() =>
@@ -194,10 +209,10 @@ export function AiDigests({ timeZone }: { timeZone: string }) {
                   })
                 }
               />
-              Weekly review on
+              {t("Weekly review on")}
             </label>
             <select
-              aria-label="Weekly review day"
+              aria-label={t("Weekly review day")}
               value={settings.weekly.weekday}
               onChange={(e) =>
                 void save({
@@ -208,15 +223,15 @@ export function AiDigests({ timeZone }: { timeZone: string }) {
               className="h-8 rounded-md border bg-background px-2 text-sm"
             >
               {WEEKDAY_NAMES.map((name, day) => (
-                <option key={name} value={day}>
+                <option key={day} value={day}>
                   {name}
                 </option>
               ))}
             </select>
-            <span className="text-muted-foreground">at</span>
+            <span className="text-muted-foreground">{tx("digest", "at")}</span>
             <input
               type="time"
-              aria-label="Weekly review time"
+              aria-label={t("Weekly review time")}
               value={settings.weekly.time}
               onChange={(e) =>
                 e.target.value &&
@@ -233,9 +248,9 @@ export function AiDigests({ timeZone }: { timeZone: string }) {
               onChange={(e) => void save({ ...settings, summaryInNotification: e.target.checked })}
             />
             <span>
-              Put the start of the review in the notification. It can include amounts, which then
-              show on lock screens and in webhook messages (an ntfy.sh topic can be read by anyone
-              who knows its name).
+              {t(
+                "Put the start of the review in the notification. It can include amounts, which then show on lock screens and in webhook messages (an ntfy.sh topic can be read by anyone who knows its name).",
+              )}
             </span>
           </label>
         </div>
@@ -245,20 +260,28 @@ export function AiDigests({ timeZone }: { timeZone: string }) {
           <BellRing className="mt-0.5 size-3.5 shrink-0" aria-hidden />
           {nowhere ? (
             <span>
-              No browser or webhook receives notifications yet: turn them on under{" "}
-              <Link href="/alerts" className="underline">
-                Alerts
-              </Link>
-              . Digests are still written and listed here.
+              {withLink(
+                "No browser or webhook receives notifications yet: turn them on under {link}. Digests are still written and listed here.",
+                <Link href="/alerts" className="underline">
+                  {t("Alerts")}
+                </Link>,
+              )}
             </span>
           ) : (
             <span>
-              Sent to {delivery.browsers} browser{delivery.browsers === 1 ? "" : "s"}
-              {delivery.webhook ? " and the webhook" : ""} set up under{" "}
-              <Link href="/alerts" className="underline">
-                Alerts
-              </Link>
-              , where AI digests can also be held back or sent to one of them only.
+              {withLink(
+                delivery.webhook
+                  ? delivery.browsers === 1
+                    ? "Sent to {count} browser and the webhook set up under {link}, where AI digests can also be held back or sent to one of them only."
+                    : "Sent to {count} browsers and the webhook set up under {link}, where AI digests can also be held back or sent to one of them only."
+                  : delivery.browsers === 1
+                    ? "Sent to {count} browser set up under {link}, where AI digests can also be held back or sent to one of them only."
+                    : "Sent to {count} browsers set up under {link}, where AI digests can also be held back or sent to one of them only.",
+                <Link href="/alerts" className="underline">
+                  {t("Alerts")}
+                </Link>,
+                { count: delivery.browsers },
+              )}
             </span>
           )}
         </p>
@@ -275,10 +298,10 @@ export function AiDigests({ timeZone }: { timeZone: string }) {
           >
             <Send />
             {sending === kind
-              ? "Writing…"
+              ? t("Writing…")
               : kind === "day"
-                ? "Send today's recap now"
-                : "Send this week's review now"}
+                ? t("Send today's recap now")
+                : t("Send this week's review now")}
           </Button>
         ))}
       </div>
@@ -288,7 +311,7 @@ export function AiDigests({ timeZone }: { timeZone: string }) {
         </p>
       )}
       {current && current.digests.length > 0 && (
-        <ul className="divide-y rounded-md border" aria-label="Recent digests">
+        <ul className="divide-y rounded-md border" aria-label={t("Recent digests")}>
           {current.digests.map((d) => {
             const url = chatUrl(d);
             return (
@@ -297,17 +320,17 @@ export function AiDigests({ timeZone }: { timeZone: string }) {
                   <span className="block truncate">
                     {d.title ||
                       (d.kind === "day"
-                        ? `Session recap · ${d.period}`
-                        : `Weekly review · ${d.period}`)}
+                        ? t("Session recap · {period}", { period: d.period })
+                        : t("Weekly review · {period}", { period: d.period }))}
                   </span>
                   <span className="block text-xs text-muted-foreground">
-                    {STATUS[d.status]}
-                    {d.detail ? `: ${d.detail}` : ""}
+                    {tx("digest", STATUS[d.status])}
+                    {d.detail ? `: ${t(d.detail)}` : ""}
                   </span>
                 </span>
                 {url && (
                   <Link href={url} className="text-xs underline">
-                    Open
+                    {t("Open")}
                   </Link>
                 )}
               </li>

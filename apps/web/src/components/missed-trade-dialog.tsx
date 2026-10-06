@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "./ui/dial
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Textarea } from "./ui/textarea";
+import { useI18n } from "./i18n";
 
 /**
  * Log a setup you saw but did not take, at the chart point you clicked. It is saved to
@@ -53,6 +54,7 @@ function Form({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const { t, tx, intl } = useI18n();
   const { data } = useApi<{ playbooks: { id: string; name: string }[] }>("/api/playbooks");
   const [direction, setDirection] = useState<"long" | "short">("long");
   const [entry, setEntry] = useState(String(Number(point.price.toPrecision(8))));
@@ -66,7 +68,7 @@ function Form({
   const save = async () => {
     const values = { entry: price(entry), stop: price(stop), target: price(target) };
     if (Object.values(values).some((v) => v !== null && !Number.isFinite(v)))
-      return setError("Prices must be numbers.");
+      return setError(t("Prices must be numbers."));
     setSaving(true);
     setError("");
     try {
@@ -81,7 +83,7 @@ function Form({
       onSaved();
       onClose();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not save the missed trade.");
+      setError(cause instanceof Error ? cause.message : t("Could not save the missed trade."));
     } finally {
       setSaving(false);
     }
@@ -94,12 +96,15 @@ function Form({
         void save();
       }}
     >
-      <DialogTitle>Missed trade</DialogTitle>
+      <DialogTitle>{t("Missed trade")}</DialogTitle>
       <DialogDescription>
-        {symbol} at {new Date(point.time).toLocaleString()} · {fmtNumber(point.price)}. Kept out of
-        your trading stats.
+        {t("{symbol} at {time} · {price}. Kept out of your trading stats.", {
+          symbol,
+          time: new Date(point.time).toLocaleString(intl),
+          price: fmtNumber(point.price),
+        })}
       </DialogDescription>
-      <div role="radiogroup" aria-label="Direction" className="flex gap-1">
+      <div role="radiogroup" aria-label={t("Direction")} className="flex gap-1">
         {(["long", "short"] as const).map((d) => (
           <Button
             key={d}
@@ -110,25 +115,25 @@ function Form({
             size="sm"
             onClick={() => setDirection(d)}
           >
-            {d === "long" ? "Long" : "Short"}
+            {d === "long" ? t("Long") : t("Short")}
           </Button>
         ))}
       </div>
       <div className="grid grid-cols-3 gap-2">
-        <Field id="missed-entry" label="Entry" value={entry} onChange={setEntry} />
-        <Field id="missed-stop" label="Stop" value={stop} onChange={setStop} />
-        <Field id="missed-target" label="Target" value={target} onChange={setTarget} />
+        <Field id="missed-entry" label={t("Entry")} value={entry} onChange={setEntry} />
+        <Field id="missed-stop" label={tx("chart level", "Stop")} value={stop} onChange={setStop} />
+        <Field id="missed-target" label={t("Target")} value={target} onChange={setTarget} />
       </div>
       {data && data.playbooks.length > 0 && (
         <div className="space-y-1">
-          <Label htmlFor="missed-playbook">Playbook</Label>
+          <Label htmlFor="missed-playbook">{t("Playbook")}</Label>
           <select
             id="missed-playbook"
             value={playbookId}
             onChange={(e) => setPlaybookId(e.target.value)}
             className="h-9 w-full rounded-md border bg-background px-2 text-sm"
           >
-            <option value="">None</option>
+            <option value="">{t("None")}</option>
             {data.playbooks.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
@@ -138,7 +143,7 @@ function Form({
         </div>
       )}
       <div className="space-y-1">
-        <Label htmlFor="missed-notes">Why you passed</Label>
+        <Label htmlFor="missed-notes">{t("Why you passed")}</Label>
         <Textarea
           id="missed-notes"
           rows={3}
@@ -153,10 +158,10 @@ function Form({
       )}
       <div className="flex justify-end gap-2">
         <Button type="button" variant="ghost" onClick={onClose}>
-          Cancel
+          {t("Cancel")}
         </Button>
         <Button type="submit" disabled={saving}>
-          {saving ? "Saving…" : "Save missed trade"}
+          {saving ? t("Saving…") : t("Save missed trade")}
         </Button>
       </div>
     </form>
@@ -174,6 +179,7 @@ function Field({
   value: string;
   onChange: (v: string) => void;
 }) {
+  const { t } = useI18n();
   return (
     <div className="space-y-1">
       <Label htmlFor={id}>{label}</Label>
@@ -181,7 +187,7 @@ function Field({
         id={id}
         inputMode="decimal"
         value={value}
-        placeholder="optional"
+        placeholder={t("optional")}
         onChange={(e) => onChange(e.target.value)}
       />
     </div>

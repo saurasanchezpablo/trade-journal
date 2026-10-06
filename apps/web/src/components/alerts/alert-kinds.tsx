@@ -16,17 +16,14 @@ import {
   type AlertRoute,
 } from "@/lib/alert-preferences";
 import { postJson, useApi } from "@/lib/use-api";
+import { useI18n, useT } from "@/components/i18n";
 
 interface Channel {
   channelId: string;
   title: string;
 }
 
-const PAUSES = [
-  { label: "1 hour", hours: 1 },
-  { label: "4 hours", hours: 4 },
-  { label: "24 hours", hours: 24 },
-];
+const PAUSES = [1, 4, 24];
 
 /**
  * What you receive and where: each kind of alert on or off for the browsers and for the
@@ -34,6 +31,7 @@ const PAUSES = [
  * which applies them to every notification.
  */
 export function AlertKinds({ hasWebhook, devices }: { hasWebhook: boolean; devices: number }) {
+  const { t, tn, tx, intl } = useI18n();
   const {
     data,
     error: loadError,
@@ -74,7 +72,7 @@ export function AlertKinds({ hasWebhook, devices }: { hasWebhook: boolean; devic
         if (seq === sent.current) setPrefs(result.preferences);
       })
       .catch((cause: unknown) => {
-        setError(cause instanceof Error ? cause.message : "Could not save.");
+        setError(cause instanceof Error ? cause.message : t("Could not save."));
         refresh();
       });
   };
@@ -87,8 +85,8 @@ export function AlertKinds({ hasWebhook, devices }: { hasWebhook: boolean; devic
 
   if (!prefs)
     return (
-      <SectionCard id="alerts-kinds" title="What you receive">
-        <p className="text-sm text-muted-foreground">{loadError ?? "Loading…"}</p>
+      <SectionCard id="alerts-kinds" title={t("What you receive")}>
+        <p className="text-sm text-muted-foreground">{loadError ?? t("Loading…")}</p>
       </SectionCard>
     );
 
@@ -99,8 +97,12 @@ export function AlertKinds({ hasWebhook, devices }: { hasWebhook: boolean; devic
   return (
     <SectionCard
       id="alerts-kinds"
-      title="What you receive"
-      summary={paused ? "Paused" : `${on} of ${ALERT_KINDS.length} kinds on`}
+      title={t("What you receive")}
+      summary={
+        paused
+          ? tx("alerts", "Paused")
+          : t("{on} of {total} kinds on", { on, total: ALERT_KINDS.length })
+      }
       contentClassName="space-y-4"
     >
       {paused ? (
@@ -110,13 +112,13 @@ export function AlertKinds({ hasWebhook, devices }: { hasWebhook: boolean; devic
         >
           <Pause className="size-4" aria-hidden="true" />
           <span className="mr-auto">
-            Paused until{" "}
-            {new Date(prefs.pausedUntil!).toLocaleString(undefined, {
-              timeZone,
-              dateStyle: "medium",
-              timeStyle: "short",
+            {t("Paused until {time}: nothing is sent (alerts are still logged).", {
+              time: new Date(prefs.pausedUntil!).toLocaleString(intl, {
+                timeZone,
+                dateStyle: "medium",
+                timeStyle: "short",
+              }),
             })}
-            : nothing is sent (alerts are still logged).
           </span>
           <Button
             type="button"
@@ -124,23 +126,23 @@ export function AlertKinds({ hasWebhook, devices }: { hasWebhook: boolean; devic
             variant="outline"
             onClick={() => save({ pausedUntil: null })}
           >
-            <Play /> Resume
+            <Play /> {t("Resume")}
           </Button>
         </div>
       ) : (
         <div className="flex flex-wrap items-center gap-2 text-sm">
-          <span className="text-muted-foreground">Pause everything for</span>
-          {PAUSES.map((pause) => (
+          <span className="text-muted-foreground">{t("Pause everything for")}</span>
+          {PAUSES.map((hours) => (
             <Button
-              key={pause.hours}
+              key={hours}
               type="button"
               size="sm"
               variant="outline"
               onClick={() =>
-                save({ pausedUntil: new Date(Date.now() + pause.hours * 3_600_000).toISOString() })
+                save({ pausedUntil: new Date(Date.now() + hours * 3_600_000).toISOString() })
               }
             >
-              {pause.label}
+              {tn(hours, "{count} hour", "{count} hours")}
             </Button>
           ))}
         </div>
@@ -150,14 +152,18 @@ export function AlertKinds({ hasWebhook, devices }: { hasWebhook: boolean; devic
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-xs text-muted-foreground">
-              <th className="py-1.5 pr-3 font-normal">Alert</th>
+              <th className="py-1.5 pr-3 font-normal">{t("Alert")}</th>
               <th className="w-24 px-2 py-1.5 text-center font-normal">
-                Browsers
-                <span className="block text-[11px]">{devices ? `${devices} on` : "none yet"}</span>
+                {t("Browsers")}
+                <span className="block text-[11px]">
+                  {devices ? t("{count} on", { count: devices }) : t("none yet")}
+                </span>
               </th>
               <th className="w-24 px-2 py-1.5 text-center font-normal">
-                Webhook
-                <span className="block text-[11px]">{hasWebhook ? "set up" : "none yet"}</span>
+                {t("Webhook")}
+                <span className="block text-[11px]">
+                  {hasWebhook ? t("set up") : t("none yet")}
+                </span>
               </th>
             </tr>
           </thead>
@@ -167,8 +173,8 @@ export function AlertKinds({ hasWebhook, devices }: { hasWebhook: boolean; devic
               return (
                 <tr key={kind} className="align-top">
                   <td className="py-2 pr-3">
-                    <span className="font-medium">{label.title}</span>
-                    <span className="block text-xs text-muted-foreground">{label.detail}</span>
+                    <span className="font-medium">{t(label.title)}</span>
+                    <span className="block text-xs text-muted-foreground">{t(label.detail)}</span>
                     {kind === "external" && channels.length > 0 && (
                       <ChannelMutes
                         channels={channels}
@@ -179,9 +185,9 @@ export function AlertKinds({ hasWebhook, devices }: { hasWebhook: boolean; devic
                     )}
                     {kind === "digest" && (
                       <span className="block text-xs text-muted-foreground">
-                        When they are written:{" "}
+                        {t("When they are written:")}{" "}
                         <Link href="/journal" className="underline">
-                          Daily journal → Scheduled digests
+                          {t("Daily journal → Scheduled digests")}
                         </Link>
                         .
                       </span>
@@ -190,7 +196,7 @@ export function AlertKinds({ hasWebhook, devices }: { hasWebhook: boolean; devic
                   {(["push", "webhook"] as const).map((target) => (
                     <td key={target} className="px-2 py-2 text-center">
                       <Checkbox
-                        aria-label={`${label.title}: ${target === "push" ? "browsers" : "webhook"}`}
+                        aria-label={`${t(label.title)}: ${target === "push" ? t("browsers") : t("webhook")}`}
                         checked={prefs.kinds[kind][target]}
                         onCheckedChange={(checked) =>
                           setRoute(kind, { [target]: checked === true })
@@ -213,18 +219,18 @@ export function AlertKinds({ hasWebhook, devices }: { hasWebhook: boolean; devic
               save({ quiet: { ...prefs.quiet, enabled: checked === true } })
             }
           />
-          <Moon className="size-4" aria-hidden="true" /> Quiet hours
+          <Moon className="size-4" aria-hidden="true" /> {t("Quiet hours")}
         </label>
         <div className="flex flex-wrap items-center gap-2 text-sm">
-          <span className="text-muted-foreground">Hold every alert from</span>
+          <span className="text-muted-foreground">{t("Hold every alert from")}</span>
           <TimeField
-            label="Quiet hours start"
+            label={t("Quiet hours start")}
             value={prefs.quiet.from}
             onChange={(from) => save({ quiet: { ...prefs.quiet, from } })}
           />
-          <span className="text-muted-foreground">to</span>
+          <span className="text-muted-foreground">{tx("time range", "to")}</span>
           <TimeField
-            label="Quiet hours end"
+            label={t("Quiet hours end")}
             value={prefs.quiet.to}
             onChange={(to) => save({ quiet: { ...prefs.quiet, to } })}
           />
@@ -233,9 +239,9 @@ export function AlertKinds({ hasWebhook, devices }: { hasWebhook: boolean; devic
         <p className="text-xs text-muted-foreground">
           {prefs.quiet.enabled
             ? quietNow
-              ? "Quiet hours now: alerts are logged but not sent."
-              : "Alerts held in quiet hours are logged, not sent later."
-            : "Off: alerts go out at any hour."}
+              ? t("Quiet hours now: alerts are logged but not sent.")
+              : t("Alerts held in quiet hours are logged, not sent later.")
+            : t("Off: alerts go out at any hour.")}
         </p>
       </div>
       {error && (
@@ -281,9 +287,10 @@ function ChannelMutes({
   disabled: boolean;
   onChange: (muted: string[]) => void;
 }) {
+  const t = useT();
   return (
     <fieldset className="mt-2 space-y-1" disabled={disabled}>
-      <legend className="text-xs text-muted-foreground">Channels</legend>
+      <legend className="text-xs text-muted-foreground">{t("Channels")}</legend>
       <div className="flex flex-wrap gap-x-4 gap-y-1">
         {channels.map((channel) => {
           const key = `external:${channel.channelId}`;

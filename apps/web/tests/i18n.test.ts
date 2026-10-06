@@ -39,3 +39,37 @@ describe("translating", () => {
     expect(translateIn("es", "button", "Open")).toBe("Abrir");
   });
 });
+
+describe("alerts in the journal's language", () => {
+  it("a chart alert and its plan note read in Spanish, and in English by default", async () => {
+    const { setActiveLocale } = await import("../src/lib/i18n");
+    const { lineAlert, alertText } = await import("../src/lib/alert-messages");
+    const plan = {
+      bias: "long" as const,
+      playbookId: null,
+      scenarios: [
+        {
+          id: "s",
+          name: "Reclaim",
+          direction: "long" as const,
+          trigger: 100,
+          target: 108,
+          invalidation: 97,
+          notes: "",
+        },
+      ],
+    };
+    const hit = { drawingId: "d", direction: "up" as const, price: 100 };
+    try {
+      setActiveLocale("es");
+      const message = lineAlert("a", "BTCUSDT", hit, "Línea", plan as never);
+      expect(message.title).toBe("Alerta del gráfico");
+      expect(alertText(message)).toBe(
+        'BTCUSDT cruzó por encima de Línea en 100\nPlan: activa "Reclaim" (largo), objetivo 108, invalidado por debajo de 97.',
+      );
+    } finally {
+      setActiveLocale("en");
+    }
+    expect(lineAlert("a", "BTCUSDT", hit, "Line", plan as never).title).toBe("Chart alert");
+  });
+});

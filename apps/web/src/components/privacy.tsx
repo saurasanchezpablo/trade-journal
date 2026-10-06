@@ -5,6 +5,7 @@ import { Eye, EyeOff } from "lucide-react";
 import { Button } from "./ui/button";
 import { HoverHint } from "./ui/tooltip";
 import { PRIVACY_KEY, LEGACY_LAYOUT_KEY, privacyPreference } from "@/lib/privacy-preference";
+import { useI18n, useT } from "./i18n";
 
 const PrivacyContext = createContext({ enabled: true, ready: false, error: "", toggle: () => {} });
 export const usePrivacy = () => useContext(PrivacyContext).enabled;
@@ -60,6 +61,7 @@ export function PrivacyToggle({
   iconOnly?: boolean;
 }) {
   const { enabled, ready, error, toggle } = useContext(PrivacyContext);
+  const { t, tx } = useI18n();
   return (
     <div className={compact ? "relative shrink-0" : "space-y-2"}>
       <Button
@@ -72,15 +74,19 @@ export function PrivacyToggle({
         }
         size="sm"
         variant={enabled ? "secondary" : "outline"}
-        aria-label={`Privacy mode ${enabled ? "on" : "off"}`}
+        aria-label={enabled ? t("Privacy mode on") : t("Privacy mode off")}
         aria-pressed={enabled}
         disabled={!ready}
         onClick={toggle}
-        title="Hide balances, P&L and trade prices across the journal"
+        title={t("Hide balances, P&L and trade prices across the journal")}
       >
         {enabled ? <EyeOff /> : <Eye />}
-        {!iconOnly && (compact ? "Privacy" : "Privacy mode")}
-        {!iconOnly && <span className="ml-auto text-xs">{enabled ? "On" : "Off"}</span>}
+        {!iconOnly && (compact ? t("Privacy") : t("Privacy mode"))}
+        {!iconOnly && (
+          <span className="ml-auto text-xs">
+            {enabled ? tx("toggle", "On") : tx("toggle", "Off")}
+          </span>
+        )}
       </Button>
       {error && (
         <p
@@ -91,7 +97,7 @@ export function PrivacyToggle({
               : "text-xs text-destructive"
           }
         >
-          {error}
+          {t(error)}
         </p>
       )}
     </div>
@@ -99,7 +105,8 @@ export function PrivacyToggle({
 }
 
 export function MonetaryValue({ children }: { children: ReactNode }) {
-  return usePrivacy() ? <span aria-label="Monetary value hidden">••••</span> : children;
+  const t = useT();
+  return usePrivacy() ? <span aria-label={t("Monetary value hidden")}>••••</span> : children;
 }
 
 export function MonetaryField({
@@ -110,11 +117,12 @@ export function MonetaryField({
   sensitive?: boolean;
 }) {
   const enabled = usePrivacy();
+  const t = useT();
   return enabled && sensitive ? (
-    <HoverHint content="Turn off privacy mode to edit this value">
+    <HoverHint content={t("Turn off privacy mode to edit this value")}>
       <div
         className="flex h-9 items-center rounded-md border px-3 text-sm"
-        aria-label="Monetary value hidden"
+        aria-label={t("Monetary value hidden")}
         tabIndex={0}
       >
         ••••

@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/table";
 import { fillRequest, newRow, rowOf, type FillRow, type StoredFill } from "@/lib/fill-editor";
 import { postJson } from "@/lib/use-api";
+import { useI18n } from "./i18n";
 
 /**
  * Correct a trade's fills in place: change a time, side, quantity, price or fee, the symbol,
@@ -42,6 +43,7 @@ export function TradeFillsEditor({
   onSaved: (key: string | null) => void;
   onCancel: () => void;
 }) {
+  const { t } = useI18n();
   const [rows, setRows] = useState<FillRow[]>(() =>
     [...fills]
       .sort((a, b) => a.executedAt.localeCompare(b.executedAt))
@@ -69,7 +71,7 @@ export function TradeFillsEditor({
       );
       onSaved(result.key);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "The fills could not be saved.");
+      setError(cause instanceof Error ? cause.message : t("The fills could not be saved."));
     } finally {
       setBusy(false);
     }
@@ -79,7 +81,7 @@ export function TradeFillsEditor({
     <div className="space-y-3">
       <div className="flex flex-wrap items-end gap-3">
         <div className="w-40 space-y-1">
-          <Label htmlFor="fills-symbol">Symbol</Label>
+          <Label htmlFor="fills-symbol">{t("Symbol")}</Label>
           <Input
             id="fills-symbol"
             value={name}
@@ -88,23 +90,24 @@ export function TradeFillsEditor({
           />
         </div>
         <p className="min-w-0 flex-1 text-xs text-muted-foreground">
-          The trade is recalculated from these fills; a fill can also start or end another trade (a
-          new symbol or an earlier exit).
+          {t(
+            "The trade is recalculated from these fills; a fill can also start or end another trade (a new symbol or an earlier exit).",
+          )}
           {imported &&
-            " Imported fills keep matching their statement: importing it again does not bring back the old values or a fill removed here."}
+            ` ${t("Imported fills keep matching their statement: importing it again does not bring back the old values or a fill removed here.")}`}
         </p>
       </div>
       <div className="overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Time</TableHead>
-              <TableHead>Side</TableHead>
-              <TableHead>Quantity</TableHead>
-              <TableHead>Price</TableHead>
-              <TableHead>Fee</TableHead>
+              <TableHead>{t("Time")}</TableHead>
+              <TableHead>{t("Side")}</TableHead>
+              <TableHead>{t("Quantity")}</TableHead>
+              <TableHead>{t("Price")}</TableHead>
+              <TableHead>{t("Fee")}</TableHead>
               <TableHead className="w-10">
-                <span className="sr-only">Remove</span>
+                <span className="sr-only">{t("Remove")}</span>
               </TableHead>
             </TableRow>
           </TableHeader>
@@ -115,25 +118,25 @@ export function TradeFillsEditor({
                   <Input
                     type="datetime-local"
                     step={1}
-                    aria-label={`Fill ${i + 1} time`}
+                    aria-label={t("Fill {fill} time", { fill: i + 1 })}
                     value={row.time}
                     onChange={(e) => set(i, { time: e.target.value })}
                   />
                 </TableCell>
                 <TableCell className="min-w-28">
                   <OptionSelect
-                    aria-label={`Fill ${i + 1} side`}
+                    aria-label={t("Fill {fill} side", { fill: i + 1 })}
                     value={row.side}
                     onValueChange={(side) => set(i, { side: side as FillRow["side"] })}
                   >
-                    <option value="buy">Buy</option>
-                    <option value="sell">Sell</option>
+                    <option value="buy">{t("Buy")}</option>
+                    <option value="sell">{t("Sell")}</option>
                   </OptionSelect>
                 </TableCell>
                 <TableCell className="min-w-24">
                   <Input
                     inputMode="decimal"
-                    aria-label={`Fill ${i + 1} quantity`}
+                    aria-label={t("Fill {fill} quantity", { fill: i + 1 })}
                     value={row.quantity}
                     onChange={(e) => set(i, { quantity: e.target.value })}
                   />
@@ -142,7 +145,7 @@ export function TradeFillsEditor({
                   <MonetaryField>
                     <Input
                       inputMode="decimal"
-                      aria-label={`Fill ${i + 1} price`}
+                      aria-label={t("Fill {fill} price", { fill: i + 1 })}
                       value={row.price}
                       onChange={(e) => set(i, { price: e.target.value })}
                     />
@@ -152,7 +155,7 @@ export function TradeFillsEditor({
                   <MonetaryField>
                     <Input
                       inputMode="decimal"
-                      aria-label={`Fill ${i + 1} fee`}
+                      aria-label={t("Fill {fill} fee", { fill: i + 1 })}
                       value={row.fee}
                       onChange={(e) => set(i, { fee: e.target.value })}
                     />
@@ -164,7 +167,7 @@ export function TradeFillsEditor({
                     size="icon"
                     variant="ghost"
                     className="size-8"
-                    aria-label={`Remove fill ${i + 1}`}
+                    aria-label={t("Remove fill {fill}", { fill: i + 1 })}
                     disabled={rows.length === 1}
                     onClick={() => setRows((current) => current.filter((_, j) => j !== i))}
                   >
@@ -183,14 +186,14 @@ export function TradeFillsEditor({
           variant="outline"
           onClick={() => setRows((current) => [...current, newRow(current)])}
         >
-          <Plus /> Add a fill
+          <Plus /> {t("Add a fill")}
         </Button>
         <span className="ml-auto" />
         <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={onCancel}>
-          Cancel
+          {t("Cancel")}
         </Button>
         <Button type="button" size="sm" disabled={busy} onClick={() => void save()}>
-          {busy ? "Saving…" : "Save the fills"}
+          {busy ? t("Saving…") : t("Save the fills")}
         </Button>
       </div>
       {error && (

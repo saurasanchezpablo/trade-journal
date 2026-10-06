@@ -5,6 +5,7 @@ import type { BacktestOrderType, BacktestSide } from "@luxalgo/journal-core";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { OptionSelect } from "@/components/ui/option-select";
+import { useI18n } from "@/components/i18n";
 import { MonetaryValue } from "@/components/privacy";
 import { fmtAmount, orderSize } from "@/lib/backtest-replay";
 import type { SessionSettings } from "@/lib/backtest-session";
@@ -21,6 +22,20 @@ export interface TicketOrder {
 }
 
 const trimmed = (value: number) => String(Number(value.toPrecision(10)));
+
+/** The place button's wording: side and order type in one sentence each. */
+const PLACE_LABELS: Record<BacktestSide, Record<BacktestOrderType, string>> = {
+  long: {
+    market: "Buy {qty} at market",
+    limit: "Buy {qty} limit at {price}",
+    stop: "Buy {qty} stop at {price}",
+  },
+  short: {
+    market: "Sell {qty} at market",
+    limit: "Sell {qty} limit at {price}",
+    stop: "Sell {qty} stop at {price}",
+  },
+};
 
 /**
  * The order ticket: side, market, limit or stop, the stop loss and take profit (or a target
@@ -41,6 +56,7 @@ export function OrderTicket({
   disabled: string | null;
   onPlace: (order: TicketOrder) => string | null;
 }) {
+  const { t, tx } = useI18n();
   const id = useId();
   const [side, setSide] = useState<BacktestSide>("long");
   const [type, setType] = useState<BacktestOrderType>("market");
@@ -98,7 +114,7 @@ export function OrderTicket({
   const field = (name: string) => `${id}-${name}`;
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-2 gap-2" role="group" aria-label="Side">
+      <div className="grid grid-cols-2 gap-2" role="group" aria-label={t("Side")}>
         {(["long", "short"] as const).map((value) => (
           <Button
             key={value}
@@ -113,29 +129,29 @@ export function OrderTicket({
             )}
             onClick={() => setSide(value)}
           >
-            {value === "long" ? "Buy" : "Sell"}
+            {tx("order side", value === "long" ? "Buy" : "Sell")}
           </Button>
         ))}
       </div>
       <div className="grid grid-cols-2 gap-2">
         <div>
           <label htmlFor={field("type")} className="text-xs text-muted-foreground">
-            Order type
+            {t("Order type")}
           </label>
           <OptionSelect
             id={field("type")}
-            aria-label="Order type"
+            aria-label={t("Order type")}
             value={type}
             onValueChange={(value) => setType(value as BacktestOrderType)}
           >
-            <option value="market">Market</option>
-            <option value="limit">Limit</option>
-            <option value="stop">Stop</option>
+            <option value="market">{tx("order type", "Market")}</option>
+            <option value="limit">{tx("order type", "Limit")}</option>
+            <option value="stop">{tx("order type", "Stop")}</option>
           </OptionSelect>
         </div>
         <div>
           <label htmlFor={field("entry")} className="text-xs text-muted-foreground">
-            {type === "market" ? "Price now" : "Order price"}
+            {t(type === "market" ? "Price now" : "Order price")}
           </label>
           <Input
             id={field("entry")}
@@ -148,7 +164,7 @@ export function OrderTicket({
         </div>
         <div>
           <label htmlFor={field("stop")} className="text-xs text-muted-foreground">
-            Stop loss
+            {t("Stop loss")}
           </label>
           <Input
             id={field("stop")}
@@ -160,7 +176,7 @@ export function OrderTicket({
         </div>
         <div>
           <label htmlFor={field("target")} className="text-xs text-muted-foreground">
-            Take profit
+            {t("Take profit")}
           </label>
           <Input
             id={field("target")}
@@ -172,7 +188,7 @@ export function OrderTicket({
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-1.5 text-xs">
-        <span className="text-muted-foreground">Target at</span>
+        <span className="text-muted-foreground">{t("Target at")}</span>
         {[1, 2, 3].map((multiple) => (
           <Button
             key={multiple}
@@ -189,25 +205,26 @@ export function OrderTicket({
       </div>
       <div>
         <label htmlFor={field("qty")} className="text-xs text-muted-foreground">
-          Quantity (empty: from your risk)
+          {t("Quantity (empty: from your risk)")}
         </label>
         <Input
           id={field("qty")}
           inputMode="decimal"
           value={qty}
-          placeholder={sized?.qty ? trimmed(sized.qty) : "set a stop loss"}
+          placeholder={sized?.qty ? trimmed(sized.qty) : t("set a stop loss")}
           aria-invalid={typedQty === undefined}
           onChange={(event) => setQty(event.target.value)}
         />
         <p className="mt-1 text-xs text-muted-foreground">
-          Risk per trade: <MonetaryValue>{fmtAmount(riskBudget, settings.currency)}</MonetaryValue>
+          {t("Risk per trade:")}{" "}
+          <MonetaryValue>{fmtAmount(riskBudget, settings.currency)}</MonetaryValue>
           {settings.riskMode === "percent"
-            ? ` (${fmtNumber(settings.riskValue)}% of the balance)`
+            ? ` ${t("({percent}% of the balance)", { percent: fmtNumber(settings.riskValue) })}`
             : ""}
           {riskAtStop !== null && (
             <>
               {" "}
-              · at the stop:{" "}
+              · {t("at the stop:")}{" "}
               <MonetaryValue>{fmtAmount(riskAtStop, settings.currency)}</MonetaryValue>
             </>
           )}
@@ -215,7 +232,7 @@ export function OrderTicket({
       </div>
       {(error || disabled) && (
         <p role="alert" className="text-xs text-destructive">
-          {error || disabled}
+          {error ? t(error) : disabled}
         </p>
       )}
       <Button
@@ -224,8 +241,10 @@ export function OrderTicket({
         disabled={Boolean(disabled) || price === null}
         onClick={place}
       >
-        {side === "long" ? "Buy" : "Sell"} {finalQty > 0 ? trimmed(finalQty) : ""}{" "}
-        {type === "market" ? "at market" : `${type} at ${entryPrice ?? "…"}`}
+        {t(PLACE_LABELS[side][type], {
+          qty: finalQty > 0 ? trimmed(finalQty) : "",
+          price: entryPrice ?? "…",
+        }).replace(/\s+/g, " ")}
       </Button>
     </div>
   );

@@ -20,6 +20,7 @@ import {
   type ToolStyle,
 } from "@/lib/chart-preferences";
 import { RESOLUTIONS, type Resolution } from "@/lib/market-data";
+import { useI18n, useT } from "./i18n";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "./ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
@@ -81,6 +82,7 @@ export function ChartAppearance({
   journalTimeZone: string;
   onOpenVelaSettings: () => void;
 }) {
+  const { t, tx } = useI18n();
   const [templateName, setTemplateName] = useState("");
   const symbolPrefs: SymbolPrefs = (symbolKey && prefs.symbols[symbolKey]) || {};
   const symbolScope = Boolean(symbolKey && symbolPrefs.style);
@@ -137,28 +139,30 @@ export function ChartAppearance({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[min(92vh,900px)] max-w-3xl overflow-y-auto">
-        <DialogTitle>Chart appearance</DialogTitle>
+        <DialogTitle>{t("Chart appearance")}</DialogTitle>
         <DialogDescription>
-          Changes apply to the chart at once and are saved for every browser.
+          {t("Changes apply to the chart at once and are saved for every browser.")}
         </DialogDescription>
         <Tabs defaultValue="look">
           <TabsList className="flex-wrap">
-            <TabsTrigger value="look">Look</TabsTrigger>
+            <TabsTrigger value="look">{t("Look")}</TabsTrigger>
             <TabsTrigger value="symbol" disabled={!symbolKey}>
-              Symbol
+              {t("Symbol")}
             </TabsTrigger>
-            <TabsTrigger value="drawings">Drawings</TabsTrigger>
-            <TabsTrigger value="defaults">Defaults</TabsTrigger>
+            <TabsTrigger value="drawings">{t("Drawings")}</TabsTrigger>
+            <TabsTrigger value="defaults">{t("Defaults")}</TabsTrigger>
           </TabsList>
 
           <TabsContent value="look" className="space-y-4 pt-3">
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-accent/30 px-3 py-2 text-sm">
               <span>
-                Editing{" "}
-                <strong>
-                  {symbolScope ? `the look of ${symbol} only` : "the look of every chart"}
-                </strong>
-                {symbolScope ? "" : symbol ? ` (${symbol} has no look of its own)` : ""}.
+                {symbolScope
+                  ? t("Editing the look of {symbol} only.", { symbol: symbol ?? "" })
+                  : symbol
+                    ? t("Editing the look of every chart ({symbol} has no look of its own).", {
+                        symbol,
+                      })
+                    : t("Editing the look of every chart.")}
               </span>
               {symbolKey && (
                 <label className="flex items-center gap-1.5 text-xs">
@@ -167,12 +171,12 @@ export function ChartAppearance({
                     checked={symbolScope}
                     onChange={(e) => setSymbol({ style: e.target.checked ? {} : undefined })}
                   />
-                  Own look for {symbol}
+                  {t("Own look for {symbol}", { symbol: symbol ?? "" })}
                 </label>
               )}
             </div>
 
-            <Section title="Looks">
+            <Section title={t("Looks")}>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 {templates.map((template) => {
                   const look = mergeStyle((base ?? {}) as StyleDiff, template.style);
@@ -185,17 +189,17 @@ export function ChartAppearance({
                         className="flex w-full flex-col gap-1 rounded-md border p-2 text-left text-xs hover:bg-accent"
                       >
                         <LookPreview look={look} />
-                        <span className="truncate">{template.name}</span>
+                        <span className="truncate">{saved ? template.name : t(template.name)}</span>
                       </button>
                       {saved && (
                         <button
                           type="button"
-                          aria-label={`Delete the look ${template.name}`}
+                          aria-label={t("Delete the look {name}", { name: template.name })}
                           className="absolute right-1 top-1 rounded bg-background/80 p-0.5 text-muted-foreground hover:text-destructive"
                           onClick={() =>
                             onChange({
                               ...prefs,
-                              templates: prefs.templates.filter((t) => t.id !== template.id),
+                              templates: prefs.templates.filter((item) => item.id !== template.id),
                             })
                           }
                         >
@@ -212,8 +216,8 @@ export function ChartAppearance({
                   maxLength={60}
                   onChange={(e) => setTemplateName(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && saveTemplate()}
-                  placeholder="Name this look to reuse it"
-                  aria-label="Name for the current look"
+                  placeholder={t("Name this look to reuse it")}
+                  aria-label={t("Name for the current look")}
                   className="h-8 min-w-0 flex-1 rounded-md border bg-background px-2 text-sm"
                 />
                 <Button
@@ -223,14 +227,14 @@ export function ChartAppearance({
                   disabled={!templateName.trim()}
                   onClick={saveTemplate}
                 >
-                  <Plus /> Save look
+                  <Plus /> {t("Save look")}
                 </Button>
               </div>
             </Section>
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <Section title="Series">
-                <Field label="Chart type">
+              <Section title={t("Series")}>
+                <Field label={t("Chart type")}>
                   <select
                     value={String(value("series.style") ?? "candles")}
                     onChange={(e) => set("series.style", e.target.value)}
@@ -238,14 +242,14 @@ export function ChartAppearance({
                   >
                     {CHART_TYPES.map(([id, label]) => (
                       <option key={id} value={id}>
-                        {label}
+                        {t(label)}
                       </option>
                     ))}
                   </select>
                 </Field>
-                <Field label="Rising">
+                <Field label={t("Rising")}>
                   <ColorInput
-                    label="Rising colour"
+                    label={t("Rising colour")}
                     value={value("candles.upColor")}
                     onChange={(c) =>
                       setMany([
@@ -258,9 +262,9 @@ export function ChartAppearance({
                     }
                   />
                 </Field>
-                <Field label="Falling">
+                <Field label={t("Falling")}>
                   <ColorInput
-                    label="Falling colour"
+                    label={t("Falling colour")}
                     value={value("candles.downColor")}
                     onChange={(c) =>
                       setMany([
@@ -274,23 +278,23 @@ export function ChartAppearance({
                   />
                 </Field>
                 <Toggle
-                  label="Filled bodies"
+                  label={t("Filled bodies")}
                   checked={value("candles.bodyVisible") !== false}
                   onChange={(v) => set("candles.bodyVisible", v)}
                 />
                 <Toggle
-                  label="Borders"
+                  label={t("Borders")}
                   checked={value("candles.borderVisible") === true}
                   onChange={(v) => set("candles.borderVisible", v)}
                 />
                 <Toggle
-                  label="Wicks"
+                  label={t("Wicks")}
                   checked={value("candles.wickVisible") !== false}
                   onChange={(v) => set("candles.wickVisible", v)}
                 />
-                <Field label="Line colour">
+                <Field label={t("Line colour")}>
                   <ColorInput
-                    label="Line colour"
+                    label={t("Line colour")}
                     value={value("line.color")}
                     onChange={(c) =>
                       setMany([
@@ -300,9 +304,9 @@ export function ChartAppearance({
                     }
                   />
                 </Field>
-                <Field label="Line width">
+                <Field label={t("Line width")}>
                   <NumberInput
-                    label="Line width"
+                    label={t("Line width")}
                     min={1}
                     max={6}
                     value={value("line.width")}
@@ -316,31 +320,31 @@ export function ChartAppearance({
                 </Field>
               </Section>
 
-              <Section title="Canvas">
-                <Field label="Background">
+              <Section title={t("Canvas")}>
+                <Field label={t("Background")}>
                   <ColorInput
-                    label="Background colour"
+                    label={t("Background colour")}
                     value={value("layout.background")}
                     onChange={(c) => set("layout.background", c)}
                   />
                 </Field>
-                <Field label="Text">
+                <Field label={t("Text")}>
                   <ColorInput
-                    label="Text colour"
+                    label={t("Text colour")}
                     value={value("layout.textColor")}
                     onChange={(c) => set("layout.textColor", c)}
                   />
                 </Field>
-                <Field label="Text size">
+                <Field label={t("Text size")}>
                   <NumberInput
-                    label="Text size"
+                    label={t("Text size")}
                     min={8}
                     max={18}
                     value={value("layout.fontSize")}
                     onChange={(n) => set("layout.fontSize", n)}
                   />
                 </Field>
-                <Field label="Grid">
+                <Field label={t("Grid")}>
                   <span className="flex items-center gap-2">
                     <label className="flex items-center gap-1 text-xs">
                       <input
@@ -348,7 +352,7 @@ export function ChartAppearance({
                         checked={value("grid.vertLines.visible") !== false}
                         onChange={(e) => set("grid.vertLines.visible", e.target.checked)}
                       />
-                      Vertical
+                      {t("Vertical")}
                     </label>
                     <label className="flex items-center gap-1 text-xs">
                       <input
@@ -356,10 +360,10 @@ export function ChartAppearance({
                         checked={value("grid.horzLines.visible") !== false}
                         onChange={(e) => set("grid.horzLines.visible", e.target.checked)}
                       />
-                      Horizontal
+                      {t("Horizontal")}
                     </label>
                     <ColorInput
-                      label="Grid colour"
+                      label={t("Grid colour")}
                       value={value("grid.horzLines.color")}
                       onChange={(c) =>
                         setMany([
@@ -370,29 +374,29 @@ export function ChartAppearance({
                     />
                   </span>
                 </Field>
-                <Field label="Crosshair">
+                <Field label={t("Crosshair")}>
                   <span className="flex items-center gap-2">
                     <ColorInput
-                      label="Crosshair colour"
+                      label={t("Crosshair colour")}
                       value={value("crosshair.color")}
                       onChange={(c) => set("crosshair.color", c)}
                     />
                     <select
-                      aria-label="Crosshair line"
+                      aria-label={t("Crosshair line")}
                       value={String(value("crosshair.style") ?? "dashed")}
                       onChange={(e) => set("crosshair.style", e.target.value)}
                       className={selectClass}
                     >
-                      <option value="solid">Solid</option>
-                      <option value="dashed">Dashed</option>
-                      <option value="dotted">Dotted</option>
+                      <option value="solid">{t("Solid")}</option>
+                      <option value="dashed">{t("Dashed")}</option>
+                      <option value="dotted">{t("Dotted")}</option>
                     </select>
                   </span>
                 </Field>
               </Section>
 
-              <Section title="Price scale">
-                <Field label="Scale">
+              <Section title={t("Price scale")}>
+                <Field label={t("Scale")}>
                   <select
                     value={scale}
                     onChange={(e) =>
@@ -410,36 +414,36 @@ export function ChartAppearance({
                   >
                     {SCALE_MODES.map(([id, label]) => (
                       <option key={id} value={id}>
-                        {label}
+                        {t(label)}
                       </option>
                     ))}
                   </select>
                 </Field>
                 <Toggle
-                  label="Invert scale"
+                  label={t("Invert scale")}
                   checked={value("priceScale.invert") === true}
                   onChange={(v) => set("priceScale.invert", v)}
                 />
                 <Toggle
-                  label="Last price line"
+                  label={t("Last price line")}
                   checked={value("priceScale.currentPriceLine") !== false}
                   onChange={(v) => set("priceScale.currentPriceLine", v)}
                 />
                 <Toggle
-                  label="Last price label"
+                  label={t("Last price label")}
                   checked={value("priceScale.priceLabel") !== false}
                   onChange={(v) => set("priceScale.priceLabel", v)}
                 />
                 <Toggle
-                  label="Candle countdown"
+                  label={t("Candle countdown")}
                   checked={value("priceScale.countdown") !== false}
                   onChange={(v) => set("priceScale.countdown", v)}
                 />
               </Section>
 
-              <Section title="Motion">
+              <Section title={t("Motion")}>
                 <Toggle
-                  label="Animations (zoom, pan, autoscale)"
+                  label={t("Animations (zoom, pan, autoscale)")}
                   checked={value("animations.zoom") !== false}
                   onChange={(v) =>
                     setMany([
@@ -455,23 +459,24 @@ export function ChartAppearance({
 
             <div className="flex flex-wrap gap-2">
               <Button type="button" size="sm" variant="outline" onClick={() => setScopeStyle({})}>
-                <RotateCcw /> Back to the theme default
+                <RotateCcw /> {t("Back to the theme default")}
               </Button>
               <Button type="button" size="sm" variant="ghost" onClick={onOpenVelaSettings}>
-                <SlidersHorizontal /> Every chart setting…
+                <SlidersHorizontal /> {t("Every chart setting…")}
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              Settings you never changed follow the light or dark theme. Changes made in
-              <strong> Every chart setting</strong> are saved to the same look.
+              {t(
+                "Settings you never changed follow the light or dark theme. Changes made in Every chart setting are saved to the same look.",
+              )}
             </p>
           </TabsContent>
 
           <TabsContent value="symbol" className="space-y-4 pt-3">
             {symbolKey && (
               <>
-                <Section title={symbol ?? "Symbol"}>
-                  <Field label="Display name">
+                <Section title={symbol ?? t("Symbol")}>
+                  <Field label={t("Display name")}>
                     <input
                       value={symbolPrefs.label ?? ""}
                       maxLength={60}
@@ -480,10 +485,10 @@ export function ChartAppearance({
                       className="h-8 w-full rounded-md border bg-background px-2 text-sm"
                     />
                   </Field>
-                  <Field label="Colour tag">
+                  <Field label={t("Colour tag")}>
                     <span className="flex items-center gap-2">
                       <ColorInput
-                        label="Colour tag"
+                        label={t("Colour tag")}
                         value={symbolPrefs.color}
                         onChange={(c) => setSymbol({ color: c })}
                       />
@@ -493,18 +498,18 @@ export function ChartAppearance({
                           className="text-xs underline"
                           onClick={() => setSymbol({ color: undefined })}
                         >
-                          None
+                          {t("None")}
                         </button>
                       )}
                     </span>
                   </Field>
                   <Toggle
-                    label="In the watchlist"
+                    label={t("In the watchlist")}
                     icon={<Star className="size-3.5" />}
                     checked={symbolPrefs.favorite === true}
                     onChange={(v) => setSymbol({ favorite: v || undefined })}
                   />
-                  <Field label="Opens with">
+                  <Field label={t("Opens with")}>
                     <select
                       value={symbolPrefs.resolution ?? ""}
                       onChange={(e) =>
@@ -514,7 +519,7 @@ export function ChartAppearance({
                       }
                       className={selectClass}
                     >
-                      <option value="">The default candle size</option>
+                      <option value="">{t("The default candle size")}</option>
                       {(Object.keys(RESOLUTIONS) as Resolution[]).map((r) => (
                         <option key={r} value={r}>
                           {r}
@@ -522,7 +527,7 @@ export function ChartAppearance({
                       ))}
                     </select>
                   </Field>
-                  <Field label="Price decimals">
+                  <Field label={t("Price decimals")}>
                     <select
                       value={symbolPrefs.decimals === undefined ? "" : String(symbolPrefs.decimals)}
                       onChange={(e) =>
@@ -532,16 +537,16 @@ export function ChartAppearance({
                       }
                       className={selectClass}
                     >
-                      <option value="">Automatic</option>
+                      <option value="">{t("Automatic")}</option>
                       {Array.from({ length: 9 }, (_, i) => (
                         <option key={i} value={i}>
-                          {i} {i === 0 ? "(whole numbers)" : `(${(0).toFixed(i)})`}
+                          {i} {i === 0 ? t("(whole numbers)") : `(${(0).toFixed(i)})`}
                         </option>
                       ))}
                     </select>
                   </Field>
                   <Toggle
-                    label="Own look (edit it in the Look tab)"
+                    label={t("Own look (edit it in the Look tab)")}
                     checked={symbolScope}
                     onChange={(v) => setSymbol({ style: v ? {} : undefined })}
                   />
@@ -553,7 +558,7 @@ export function ChartAppearance({
                   className="text-destructive"
                   onClick={() => setSymbol(null)}
                 >
-                  <Trash2 /> Forget {symbol}&apos;s settings
+                  <Trash2 /> {t("Forget {symbol}'s settings", { symbol: symbol ?? "" })}
                 </Button>
               </>
             )}
@@ -561,43 +566,45 @@ export function ChartAppearance({
 
           <TabsContent value="drawings" className="space-y-4 pt-3">
             <Toggle
-              label="Remember the last style I use with each tool"
+              label={t("Remember the last style I use with each tool")}
               checked={defaults.rememberToolStyles}
               onChange={(v) => setDefaults({ rememberToolStyles: v })}
             />
             <p className="text-xs text-muted-foreground">
-              New drawings start with these styles. The pen and highlighter use the ink chosen on
-              the toolbar; other quick tools use it too until you set their own colour here.
+              {t(
+                "New drawings start with these styles. The pen and highlighter use the ink chosen on the toolbar; other quick tools use it too until you set their own colour here.",
+              )}
             </p>
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead className="text-left text-muted-foreground">
                   <tr>
-                    <th className="py-1 font-medium">Tool</th>
-                    <th className="font-medium">Colour</th>
-                    <th className="font-medium">Width</th>
-                    <th className="font-medium">Line</th>
-                    <th className="font-medium">Fill</th>
-                    <th className="font-medium">Text</th>
+                    <th className="py-1 font-medium">{t("Tool")}</th>
+                    <th className="font-medium">{t("Colour")}</th>
+                    <th className="font-medium">{t("Width")}</th>
+                    <th className="font-medium">{tx("tool", "Line")}</th>
+                    <th className="font-medium">{t("Fill")}</th>
+                    <th className="font-medium">{t("Text")}</th>
                     <th />
                   </tr>
                 </thead>
                 <tbody>
                   {TOOL_DEFAULTS.map((tool) => {
                     const style = prefs.tools[tool.type] ?? {};
+                    const toolName = t(tool.label);
                     return (
                       <tr key={tool.type} className="border-t">
-                        <td className="py-1 pr-2">{tool.label}</td>
+                        <td className="py-1 pr-2">{toolName}</td>
                         <td>
                           <ColorInput
-                            label={`${tool.label} colour`}
+                            label={t("{tool} colour", { tool: toolName })}
                             value={style.lineColor}
                             onChange={(c) => setTool(tool.type, { lineColor: c })}
                           />
                         </td>
                         <td>
                           <select
-                            aria-label={`${tool.label} width`}
+                            aria-label={t("{tool} width", { tool: toolName })}
                             value={style.lineWidth ?? ""}
                             onChange={(e) =>
                               setTool(tool.type, {
@@ -606,7 +613,7 @@ export function ChartAppearance({
                             }
                             className={selectClass}
                           >
-                            <option value="">Auto</option>
+                            <option value="">{t("Auto")}</option>
                             {[1, 2, 3, 4, 5, 6].map((w) => (
                               <option key={w} value={w}>
                                 {w}
@@ -616,7 +623,7 @@ export function ChartAppearance({
                         </td>
                         <td>
                           <select
-                            aria-label={`${tool.label} line style`}
+                            aria-label={t("{tool} line style", { tool: toolName })}
                             value={style.lineStyle ?? ""}
                             onChange={(e) =>
                               setTool(tool.type, {
@@ -625,22 +632,22 @@ export function ChartAppearance({
                             }
                             className={selectClass}
                           >
-                            <option value="">Auto</option>
-                            <option value="solid">Solid</option>
-                            <option value="dashed">Dashed</option>
-                            <option value="dotted">Dotted</option>
+                            <option value="">{t("Auto")}</option>
+                            <option value="solid">{t("Solid")}</option>
+                            <option value="dashed">{t("Dashed")}</option>
+                            <option value="dotted">{t("Dotted")}</option>
                           </select>
                         </td>
                         <td>
                           {tool.fill && (
                             <span className="flex items-center gap-1">
                               <ColorInput
-                                label={`${tool.label} fill colour`}
+                                label={t("{tool} fill colour", { tool: toolName })}
                                 value={style.fillColor}
                                 onChange={(c) => setTool(tool.type, { fillColor: c })}
                               />
                               <select
-                                aria-label={`${tool.label} fill opacity`}
+                                aria-label={t("{tool} fill opacity", { tool: toolName })}
                                 value={style.fillOpacity ?? ""}
                                 onChange={(e) =>
                                   setTool(tool.type, {
@@ -650,7 +657,7 @@ export function ChartAppearance({
                                 }
                                 className={selectClass}
                               >
-                                <option value="">Auto</option>
+                                <option value="">{t("Auto")}</option>
                                 {[0, 0.1, 0.2, 0.3, 0.5, 0.8].map((o) => (
                                   <option key={o} value={o}>
                                     {Math.round(o * 100)}%
@@ -664,12 +671,12 @@ export function ChartAppearance({
                           {tool.text && (
                             <span className="flex items-center gap-1">
                               <ColorInput
-                                label={`${tool.label} text colour`}
+                                label={t("{tool} text colour", { tool: toolName })}
                                 value={style.textColor}
                                 onChange={(c) => setTool(tool.type, { textColor: c })}
                               />
                               <select
-                                aria-label={`${tool.label} text size`}
+                                aria-label={t("{tool} text size", { tool: toolName })}
                                 value={style.textSize ?? ""}
                                 onChange={(e) =>
                                   setTool(tool.type, {
@@ -678,10 +685,10 @@ export function ChartAppearance({
                                 }
                                 className={selectClass}
                               >
-                                <option value="">Auto</option>
+                                <option value="">{t("Auto")}</option>
                                 {["tiny", "small", "normal", "large", "huge"].map((size) => (
                                   <option key={size} value={size}>
-                                    {size}
+                                    {tx("text size", size)}
                                   </option>
                                 ))}
                               </select>
@@ -692,7 +699,7 @@ export function ChartAppearance({
                           {prefs.tools[tool.type] && (
                             <button
                               type="button"
-                              aria-label={`Reset ${tool.label}`}
+                              aria-label={t("Reset {tool}", { tool: toolName })}
                               className="text-muted-foreground hover:text-foreground"
                               onClick={() => setTool(tool.type, null)}
                             >
@@ -707,19 +714,19 @@ export function ChartAppearance({
               </table>
             </div>
             {Object.keys(prefs.tools).some(
-              (type) => !TOOL_DEFAULTS.some((t) => t.type === type),
+              (type) => !TOOL_DEFAULTS.some((tool) => tool.type === type),
             ) && (
               <p className="text-xs text-muted-foreground">
-                Also remembered for:{" "}
+                {t("Also remembered for:")}{" "}
                 {Object.keys(prefs.tools)
-                  .filter((type) => !TOOL_DEFAULTS.some((t) => t.type === type))
+                  .filter((type) => !TOOL_DEFAULTS.some((tool) => tool.type === type))
                   .map((type) => (
                     <button
                       key={type}
                       type="button"
                       className="mr-2 underline"
                       onClick={() => setTool(type, null)}
-                      title="Forget"
+                      title={t("Forget")}
                     >
                       {type} ✕
                     </button>
@@ -727,7 +734,7 @@ export function ChartAppearance({
               </p>
             )}
             {prefs.palette.length > 0 && (
-              <Section title="Your ink colours">
+              <Section title={t("Your ink colours")}>
                 <div className="flex flex-wrap gap-2">
                   {prefs.palette.map((color) => (
                     <span key={color} className="flex items-center gap-1 text-xs">
@@ -737,7 +744,7 @@ export function ChartAppearance({
                       />
                       <button
                         type="button"
-                        aria-label={`Remove ink ${color}`}
+                        aria-label={t("Remove ink {color}", { color })}
                         className="text-muted-foreground hover:text-destructive"
                         onClick={() =>
                           onChange({ ...prefs, palette: prefs.palette.filter((c) => c !== color) })
@@ -753,8 +760,8 @@ export function ChartAppearance({
           </TabsContent>
 
           <TabsContent value="defaults" className="space-y-4 pt-3">
-            <Section title="New charts">
-              <Field label="Candle size">
+            <Section title={t("New charts")}>
+              <Field label={t("Candle size")}>
                 <select
                   value={defaults.resolution}
                   onChange={(e) => setDefaults({ resolution: e.target.value as Resolution })}
@@ -768,22 +775,24 @@ export function ChartAppearance({
                 </select>
               </Field>
               <Toggle
-                label="Open live (streaming)"
+                label={t("Open live (streaming)")}
                 checked={defaults.live}
                 onChange={(v) => setDefaults({ live: v })}
               />
               <Toggle
-                label="Volume"
+                label={t("Volume")}
                 checked={defaults.volume}
                 onChange={(v) => setDefaults({ volume: v })}
               />
-              <Field label="Time axis">
+              <Field label={t("Time axis")}>
                 <select
                   value={defaults.timeZone}
                   onChange={(e) => setDefaults({ timeZone: e.target.value })}
                   className={selectClass}
                 >
-                  <option value={JOURNAL_TIME_ZONE}>Journal timezone ({journalTimeZone})</option>
+                  <option value={JOURNAL_TIME_ZONE}>
+                    {t("Journal timezone ({zone})", { zone: journalTimeZone })}
+                  </option>
                   {ZONES.map((zone) => (
                     <option key={zone} value={zone}>
                       {zone}
@@ -796,8 +805,8 @@ export function ChartAppearance({
                 </select>
               </Field>
             </Section>
-            <Section title="Drawing">
-              <Field label="Magnet">
+            <Section title={t("Drawing")}>
+              <Field label={t("Magnet")}>
                 <select
                   value={defaults.magnet}
                   onChange={(e) =>
@@ -807,13 +816,13 @@ export function ChartAppearance({
                   }
                   className={selectClass}
                 >
-                  <option value="off">Off</option>
-                  <option value="weak">Weak (snap near candles)</option>
-                  <option value="strong">Strong (always snap to OHLC)</option>
+                  <option value="off">{t("Off")}</option>
+                  <option value="weak">{t("Weak (snap near candles)")}</option>
+                  <option value="strong">{t("Strong (always snap to OHLC)")}</option>
                 </select>
               </Field>
               <Toggle
-                label="Keep the tool after drawing"
+                label={t("Keep the tool after drawing")}
                 checked={defaults.stayInDrawingMode}
                 onChange={(v) => setDefaults({ stayInDrawingMode: v })}
               />
@@ -889,14 +898,15 @@ function ColorInput({
   label: string;
   onChange: (color: string) => void;
 }) {
+  const t = useT();
   const unset = value === undefined;
   return (
     <span
       className="relative inline-flex h-7 w-9 cursor-pointer items-center justify-center overflow-hidden rounded border bg-background"
-      title={unset ? "Automatic: click to choose" : String(value)}
+      title={unset ? t("Automatic: click to choose") : String(value)}
     >
       {unset ? (
-        <span className="text-[10px] text-muted-foreground">Auto</span>
+        <span className="text-[10px] text-muted-foreground">{t("Auto")}</span>
       ) : (
         <span className="absolute inset-0.5 rounded-sm" style={{ backgroundColor: hex(value) }} />
       )}

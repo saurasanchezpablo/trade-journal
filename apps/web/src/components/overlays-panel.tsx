@@ -5,13 +5,39 @@ import { RefreshCw } from "lucide-react";
 import type { ChartOverlayData, OverlayOptions } from "@/lib/chart-overlays";
 import {
   IMPACTS,
-  eventSummary,
   type CalendarState,
+  type EconomicEvent,
   type EventImpact,
 } from "@/lib/economic-calendar";
+import type { Vars } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { Section } from "./section-card";
+import { useI18n } from "./i18n";
 import { Button } from "./ui/button";
+
+const FAILURES = {
+  enable: "Could not enable the economic calendar: {reason}",
+  disable: "Could not disable the economic calendar: {reason}",
+  refresh: "Could not refresh the economic calendar: {reason}",
+} as const;
+
+/** An event in one line, in the journal's language (the event title stays as published). */
+function eventSummary(
+  e: EconomicEvent,
+  t: (text: string, vars?: Vars) => string,
+  tx: (context: string, text: string, vars?: Vars) => string,
+) {
+  return [
+    `${e.currency} · ${e.title}`,
+    e.impact === "Holiday"
+      ? t("Bank holiday")
+      : t("{impact} impact", { impact: tx("impact", e.impact) }),
+    e.forecast ? t("Forecast {value}", { value: e.forecast }) : "",
+    e.previous ? t("Previous {value}", { value: e.previous }) : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
 
 const CURRENCIES = ["USD", "EUR", "GBP", "JPY", "CHF", "CAD", "AUD", "NZD", "CNY"];
 
@@ -36,6 +62,7 @@ export function OverlaysPanel({
   calendar: CalendarState | null;
   onCalendar: (action: "enable" | "disable" | "refresh") => Promise<void>;
 }) {
+  const { t, tx, intl } = useI18n();
   const [busy, setBusy] = useState(false);
   const set = (patch: Partial<OverlayOptions>) => onChange({ ...options, ...patch });
   const open = data?.trades.filter((t) => t.status === "open").length ?? 0;
@@ -58,7 +85,9 @@ export function OverlaysPanel({
       await onCalendar(action);
     } catch (cause) {
       setFailure(
-        `Could not ${action} the economic calendar: ${cause instanceof Error ? cause.message : "the request failed."}`,
+        t(FAILURES[action], {
+          reason: cause instanceof Error ? cause.message : t("the request failed."),
+        }),
       );
     } finally {
       setBusy(false);
@@ -66,36 +95,36 @@ export function OverlaysPanel({
   };
   return (
     <div className="space-y-3 text-sm">
-      <Section id="chart-overlays-journal" title="Journal records">
+      <Section id="chart-overlays-journal" title={t("Journal records")}>
         <fieldset className="space-y-1.5">
-          <legend className="sr-only">Journal records</legend>
+          <legend className="sr-only">{t("Journal records")}</legend>
           <Toggle
-            label={`My trades (${open} open, ${closed} closed)`}
+            label={t("My trades ({open} open, {closed} closed)", { open, closed })}
             checked={options.trades}
             onChange={(trades) => set({ trades })}
           />
           <Toggle
-            label="Closed trades"
-            hint="Off: only open positions"
+            label={t("Closed trades")}
+            hint={t("Off: only open positions")}
             checked={options.closedTrades}
             disabled={!options.trades}
             indent
             onChange={(closedTrades) => set({ closedTrades })}
           />
           <Toggle
-            label={`Missed trades (${data?.missed.length ?? 0})`}
-            hint="Violet diamonds"
+            label={t("Missed trades ({count})", { count: data?.missed.length ?? 0 })}
+            hint={t("Violet diamonds")}
             checked={options.missed}
             onChange={(missed) => set({ missed })}
           />
           <Toggle
-            label="Support/resistance zones"
+            label={t("Support/resistance zones")}
             checked={options.zones}
             onChange={(zones) => set({ zones })}
           />
           <Toggle
-            label="Market sessions"
-            hint="Opens and closes, up to 1h candles"
+            label={t("Market sessions")}
+            hint={t("Opens and closes, up to 1h candles")}
             checked={options.sessions}
             onChange={(sessions) => set({ sessions })}
           />
@@ -103,20 +132,20 @@ export function OverlaysPanel({
 
         <div className="space-y-1">
           <label htmlFor="overlay-symbols" className="text-xs text-muted-foreground">
-            Also show journal symbols
+            {t("Also show journal symbols")}
           </label>
           <input
             id="overlay-symbols"
             value={extraSymbols}
-            placeholder="e.g. MES, ES"
+            placeholder={t("e.g. MES, ES")}
             onChange={(e) => onExtraSymbols(e.target.value)}
             className="h-8 w-full rounded-md border bg-background px-2 text-sm"
           />
           <p className="text-[11px] text-muted-foreground">
             {data?.symbols.length
-              ? `Matching ${data.symbols.join(", ")}.`
-              : "No journal trades match this symbol yet."}{" "}
-            Click a marker to open its trade.
+              ? t("Matching {symbols}.", { symbols: data.symbols.join(", ") })
+              : t("No journal trades match this symbol yet.")}{" "}
+            {t("Click a marker to open its trade.")}
           </p>
         </div>
       </Section>
@@ -124,11 +153,11 @@ export function OverlaysPanel({
       <Section
         id="chart-overlays-calendar"
         className="border-t pt-3"
-        title="Economic calendar"
+        title={t("Economic calendar")}
         actions={
           <div className="flex shrink-0 items-center gap-1">
             <Toggle
-              label="Show"
+              label={t("Show")}
               checked={options.economic}
               disabled={!calendar?.enabled}
               onChange={(economic) => set({ economic })}
@@ -139,7 +168,7 @@ export function OverlaysPanel({
                 size="icon"
                 variant="ghost"
                 className="size-7"
-                aria-label="Refresh the calendar"
+                aria-label={t("Refresh the calendar")}
                 disabled={busy}
                 onClick={() => void act("refresh")}
               >
@@ -157,9 +186,9 @@ export function OverlaysPanel({
         {!calendar?.enabled ? (
           <div className="space-y-1.5">
             <p className="text-xs text-muted-foreground">
-              Show high-impact releases and bank holidays from the public ForexFactory weekly feed.
-              Enabling it lets this server fetch the feed at most once an hour while a chart is
-              open.
+              {t(
+                "Show high-impact releases and bank holidays from the public ForexFactory weekly feed. Enabling it lets this server fetch the feed at most once an hour while a chart is open.",
+              )}
             </p>
             <Button
               type="button"
@@ -168,12 +197,12 @@ export function OverlaysPanel({
               disabled={busy}
               onClick={() => void act("enable")}
             >
-              Enable economic calendar
+              {t("Enable economic calendar")}
             </Button>
           </div>
         ) : (
           <>
-            <div className="flex flex-wrap gap-1" aria-label="Impact">
+            <div className="flex flex-wrap gap-1" aria-label={t("Impact")}>
               {IMPACTS.map((impact) => (
                 <Chip
                   key={impact}
@@ -186,16 +215,16 @@ export function OverlaysPanel({
                     })
                   }
                 >
-                  {impact}
+                  {tx("impact", impact)}
                 </Chip>
               ))}
             </div>
-            <div className="flex flex-wrap gap-1" aria-label="Currencies">
+            <div className="flex flex-wrap gap-1" aria-label={t("Currencies")}>
               <Chip
                 on={!options.economicCurrencies.length}
                 onClick={() => set({ economicCurrencies: [] })}
               >
-                All
+                {t("All")}
               </Chip>
               {CURRENCIES.map((c) => (
                 <Chip
@@ -219,22 +248,22 @@ export function OverlaysPanel({
               </p>
             )}
             <div>
-              <p className="text-xs font-medium">Next 3 days</p>
+              <p className="text-xs font-medium">{t("Next 3 days")}</p>
               {upcoming.length === 0 ? (
-                <p className="text-xs text-muted-foreground">No matching events.</p>
+                <p className="text-xs text-muted-foreground">{t("No matching events.")}</p>
               ) : (
                 <ul className="mt-1 space-y-1">
                   {upcoming.map((e) => (
                     <li key={e.id} className="text-xs">
                       <span className="tnum text-muted-foreground">
-                        {new Date(e.time).toLocaleString([], {
+                        {new Date(e.time).toLocaleString(intl, {
                           weekday: "short",
                           hour: "2-digit",
                           minute: "2-digit",
                           timeZoneName: "short",
                         })}
                       </span>{" "}
-                      {eventSummary(e)}
+                      {eventSummary(e, t, tx)}
                     </li>
                   ))}
                 </ul>
@@ -243,9 +272,9 @@ export function OverlaysPanel({
             <div className="flex items-center justify-between text-[11px] text-muted-foreground">
               <span>
                 {calendar.fetchedAt
-                  ? `Updated ${new Date(calendar.fetchedAt).toLocaleString()}`
-                  : "Not fetched yet"}
-                {" · ForexFactory feed"}
+                  ? t("Updated {time}", { time: new Date(calendar.fetchedAt).toLocaleString() })
+                  : t("Not fetched yet")}
+                {` · ${t("ForexFactory feed")}`}
               </span>
               <button
                 type="button"
@@ -253,7 +282,7 @@ export function OverlaysPanel({
                 disabled={busy}
                 onClick={() => void act("disable")}
               >
-                Disable
+                {t("Disable")}
               </button>
             </div>
           </>

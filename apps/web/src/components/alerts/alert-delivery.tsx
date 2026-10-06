@@ -6,6 +6,7 @@ import { SectionCard } from "@/components/section-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { postJson } from "@/lib/use-api";
+import { useI18n } from "@/components/i18n";
 
 export interface PushState {
   publicKey: string;
@@ -51,6 +52,7 @@ const deviceLabel = () => {
  * optional webhook such as an ntfy topic. Every alert the server sends uses these.
  */
 export function AlertDelivery({ push, refresh }: { push: PushState | null; refresh: () => void }) {
+  const { t, tn, intl } = useI18n();
   const [endpoint, setEndpoint] = useState<string | null>(null);
   const [supported, setSupported] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -74,7 +76,7 @@ export function AlertDelivery({ push, refresh }: { push: PushState | null; refre
     try {
       await work();
     } catch (cause) {
-      setMessage(cause instanceof Error ? cause.message : "Something went wrong.");
+      setMessage(cause instanceof Error ? cause.message : t("Something went wrong."));
     } finally {
       setBusy(false);
     }
@@ -86,7 +88,7 @@ export function AlertDelivery({ push, refresh }: { push: PushState | null; refre
       const permission = await Notification.requestPermission();
       if (permission !== "granted")
         throw new Error(
-          "Notifications are blocked for this site. Allow them in the browser settings.",
+          t("Notifications are blocked for this site. Allow them in the browser settings."),
         );
       const registration = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
       await navigator.serviceWorker.ready;
@@ -118,8 +120,8 @@ export function AlertDelivery({ push, refresh }: { push: PushState | null; refre
       const result = await postJson<{ delivered: number }>("/api/alerts/test", {});
       setMessage(
         result.delivered
-          ? `Sent to ${result.delivered} destination${result.delivered === 1 ? "" : "s"}.`
-          : "Nothing received it. Turn on notifications in a browser or add a webhook first.",
+          ? tn(result.delivered, "Sent to {count} destination.", "Sent to {count} destinations.")
+          : t("Nothing received it. Turn on notifications in a browser or add a webhook first."),
       );
       refresh();
     });
@@ -136,20 +138,22 @@ export function AlertDelivery({ push, refresh }: { push: PushState | null; refre
   return (
     <SectionCard
       id="alerts-delivery"
-      title="Where alerts go"
-      summary={count ? `${count} destination${count === 1 ? "" : "s"}` : "None yet"}
+      title={t("Where alerts go")}
+      summary={count ? tn(count, "{count} destination", "{count} destinations") : t("None yet")}
       contentClassName="space-y-4"
     >
       <div className="space-y-2">
-        <p className="text-sm font-medium">Browsers and installed apps</p>
+        <p className="text-sm font-medium">{t("Browsers and installed apps")}</p>
         {!supported ? (
           <p className="text-xs text-muted-foreground">
-            This browser can&apos;t receive push notifications here. Use Chrome, Edge, Firefox or
-            Safari with the journal on https (or localhost).
+            {t(
+              "This browser can't receive push notifications here. Use Chrome, Edge, Firefox or Safari with the journal on https (or localhost).",
+            )}
           </p>
         ) : thisDevice ? (
           <p className="flex items-center gap-1.5 text-xs">
-            <Smartphone className="size-3.5" aria-hidden="true" /> This browser receives alerts.
+            <Smartphone className="size-3.5" aria-hidden="true" />{" "}
+            {t("This browser receives alerts.")}
           </p>
         ) : (
           <Button
@@ -159,7 +163,7 @@ export function AlertDelivery({ push, refresh }: { push: PushState | null; refre
             disabled={busy || !push}
             onClick={() => void enableDevice()}
           >
-            <BellRing /> Notify this browser
+            <BellRing /> {t("Notify this browser")}
           </Button>
         )}
         {push && push.devices.length > 0 ? (
@@ -170,12 +174,12 @@ export function AlertDelivery({ push, refresh }: { push: PushState | null; refre
                 className="flex items-center justify-between gap-2 px-2 py-1.5"
               >
                 <span className="min-w-0 truncate">
-                  {device.label || "Device"}
-                  {device.endpoint === endpoint ? " (this one)" : ""}
+                  {device.label || t("Device")}
+                  {device.endpoint === endpoint ? ` ${t("(this one)")}` : ""}
                   <span className="text-muted-foreground">
                     {device.lastSuccessAt
-                      ? ` · last alert ${new Date(device.lastSuccessAt).toLocaleDateString()}`
-                      : " · no alert yet"}
+                      ? ` · ${t("last alert {date}", { date: new Date(device.lastSuccessAt).toLocaleDateString(intl) })}`
+                      : ` · ${t("no alert yet")}`}
                   </span>
                 </span>
                 <Button
@@ -183,7 +187,9 @@ export function AlertDelivery({ push, refresh }: { push: PushState | null; refre
                   size="icon"
                   variant="ghost"
                   className="size-7"
-                  aria-label={`Stop notifying ${device.label || "this device"}`}
+                  aria-label={t("Stop notifying {device}", {
+                    device: device.label || t("this device"),
+                  })}
                   disabled={busy}
                   onClick={() => void removeDevice(device.endpoint)}
                 >
@@ -193,7 +199,9 @@ export function AlertDelivery({ push, refresh }: { push: PushState | null; refre
             ))}
           </ul>
         ) : (
-          push && <p className="text-xs text-muted-foreground">No browser receives alerts yet.</p>
+          push && (
+            <p className="text-xs text-muted-foreground">{t("No browser receives alerts yet.")}</p>
+          )
         )}
       </div>
 
@@ -202,11 +210,26 @@ export function AlertDelivery({ push, refresh }: { push: PushState | null; refre
           Webhook
         </label>
         <p className="text-xs text-muted-foreground">
-          A URL that receives every alert as a text POST, such as an{" "}
-          <a href="https://ntfy.sh" className="underline" target="_blank" rel="noreferrer">
-            ntfy
-          </a>{" "}
-          topic for your phone.
+          {t(
+            "A URL that receives every alert as a text POST, such as an {ntfy} topic for your phone.",
+          )
+            .split("{ntfy}")
+            .flatMap((part, i) =>
+              i === 0
+                ? [part]
+                : [
+                    <a
+                      key="ntfy"
+                      href="https://ntfy.sh"
+                      className="underline"
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      ntfy
+                    </a>,
+                    part,
+                  ],
+            )}
         </p>
         <div className="flex gap-2">
           <Input
@@ -224,7 +247,7 @@ export function AlertDelivery({ push, refresh }: { push: PushState | null; refre
               disabled={busy}
               onClick={() => void saveWebhook()}
             >
-              {webhook.trim() ? "Save" : "Remove"}
+              {webhook.trim() ? t("Save") : t("Remove")}
             </Button>
           )}
         </div>
@@ -238,10 +261,10 @@ export function AlertDelivery({ push, refresh }: { push: PushState | null; refre
           disabled={busy}
           onClick={() => void test()}
         >
-          <Send /> Send a test
+          <Send /> {t("Send a test")}
         </Button>
         <span className="text-xs text-muted-foreground">
-          A test reaches every destination, even in quiet hours.
+          {t("A test reaches every destination, even in quiet hours.")}
         </span>
       </div>
       {message && (
@@ -251,8 +274,9 @@ export function AlertDelivery({ push, refresh }: { push: PushState | null; refre
       )}
       {push && !push.running && (
         <p className="text-xs text-destructive">
-          The background watcher is not running on the server (JOURNAL_BACKGROUND_ALERTS=off), so
-          charts are not watched while no page is open.
+          {t(
+            "The background watcher is not running on the server (JOURNAL_BACKGROUND_ALERTS=off), so charts are not watched while no page is open.",
+          )}
         </p>
       )}
     </SectionCard>

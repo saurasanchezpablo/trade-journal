@@ -7,6 +7,7 @@ import { summaryMarkdown, type ExternalSummary } from "@/lib/external-summary";
 import { useApi } from "@/lib/use-api";
 import { formatTimestamp } from "@/lib/timezone";
 import { useFilters } from "./filter-bar";
+import { useI18n } from "./i18n";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { DirectionChip, ExternalSummaryView } from "./external-summary-view";
@@ -37,6 +38,7 @@ export function ExternalOpinions({
   note: string;
   onAdd: (markdown: string) => void;
 }) {
+  const { t } = useI18n();
   const { data } = useApi<{ videos: DayVideo[] }>(`/api/external/day?date=${date}`);
   // Publishing times in the journal's time zone, which also decides "the day before".
   const { timeZone } = useFilters();
@@ -47,30 +49,29 @@ export function ExternalOpinions({
   return (
     <Card>
       <CardHeader className="flex-row flex-wrap items-center justify-between gap-2">
-        <CardTitle>External opinion</CardTitle>
+        <CardTitle>{t("External opinion")}</CardTitle>
         <Link href="/external" className="text-xs underline">
-          Channels and all summaries
+          {t("Channels and all summaries")}
         </Link>
       </CardHeader>
       <CardContent className="space-y-2">
         {!data ? null : summarized.length === 0 ? (
           <p className="text-xs text-muted-foreground">
-            No external analysis for this day
             {pending
-              ? ` yet (${pending} still being summarised or waiting for captions)`
-              : ""}.{" "}
+              ? t(
+                  "No external analysis for this day yet ({count} still being summarised or waiting for captions).",
+                  { count: pending },
+                )
+              : t("No external analysis for this day.")}{" "}
             {!videos.length && (
-              <>
-                Follow YouTube channels under{" "}
-                <Link href="/external" className="underline">
-                  External analysis
-                </Link>{" "}
-                to see their summaries here.
-              </>
+              <FollowHint
+                text={t("Follow YouTube channels under {link} to see their summaries here.")}
+                link={t("External analysis")}
+              />
             )}
           </p>
         ) : (
-          <ul className="space-y-2" aria-label="External opinions">
+          <ul className="space-y-2" aria-label={t("External opinions")}>
             {summarized.map((v) => {
               const added = note.includes(v.url);
               return (
@@ -91,15 +92,16 @@ export function ExternalOpinions({
                       </a>
                     </span>
                     <span className="text-xs text-muted-foreground">
-                      {v.day === date ? "this day" : "the day before"},{" "}
-                      {formatTimestamp(v.publishedAt, timeZone).slice(11, 16)}
+                      {t(v.day === date ? "this day, {time}" : "the day before, {time}", {
+                        time: formatTimestamp(v.publishedAt, timeZone).slice(11, 16),
+                      })}
                     </span>
                   </div>
                   {v.summary!.mainScenario && (
                     <p className="text-xs text-muted-foreground">
-                      Main: {v.summary!.mainScenario.title}
+                      {t("Main: {title}", { title: v.summary!.mainScenario.title })}
                       {v.summary!.secondaryScenario
-                        ? ` · Secondary: ${v.summary!.secondaryScenario.title}`
+                        ? ` · ${t("Secondary: {title}", { title: v.summary!.secondaryScenario.title })}`
                         : ""}
                     </p>
                   )}
@@ -111,7 +113,7 @@ export function ExternalOpinions({
                       variant="ghost"
                       onClick={() => setOpen(open === v.videoId ? null : v.videoId)}
                     >
-                      {open === v.videoId ? "Hide" : "Show the summary"}
+                      {open === v.videoId ? t("Hide") : t("Show the summary")}
                     </Button>
                     <Button
                       type="button"
@@ -120,7 +122,7 @@ export function ExternalOpinions({
                       disabled={added}
                       onClick={() => onAdd(summaryMarkdown(v.summary!, v))}
                     >
-                      {added ? "In the note" : "Add to note"}
+                      {added ? t("In the note") : t("Add to note")}
                     </Button>
                   </div>
                 </li>
@@ -130,5 +132,19 @@ export function ExternalOpinions({
         )}
       </CardContent>
     </Card>
+  );
+}
+
+/** The hint to follow channels, with its link where the sentence's `{link}` is. */
+function FollowHint({ text, link }: { text: string; link: string }) {
+  const [before = "", after = ""] = text.split("{link}");
+  return (
+    <>
+      {before}
+      <Link href="/external" className="underline">
+        {link}
+      </Link>
+      {after}
+    </>
   );
 }

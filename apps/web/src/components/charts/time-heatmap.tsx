@@ -4,6 +4,7 @@ import { useMemo, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import type { EChartsOption } from "echarts";
 import { fmtMoney, fmtNumber } from "@/lib/utils";
+import { useI18n } from "../i18n";
 import { usePrivacy } from "../privacy";
 import { useVizTokens } from "./tokens";
 
@@ -29,7 +30,8 @@ export function TimeHeatmap({
   height?: number;
   currency?: string;
 }) {
-  const t = useVizTokens();
+  const { t } = useI18n();
+  const tokens = useVizTokens();
   const privateMode = usePrivacy();
   const host = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
@@ -52,7 +54,7 @@ export function TimeHeatmap({
     return () => observer.disconnect();
   }, []);
   const option = useMemo<EChartsOption | null>(() => {
-    if (!t) return null;
+    if (!tokens) return null;
     const categories = hours.map((h) => `${h.key}:00`);
     return {
       backgroundColor: "transparent",
@@ -63,13 +65,13 @@ export function TimeHeatmap({
       tooltip: {
         confine: true,
         trigger: "axis",
-        backgroundColor: t.card,
-        borderColor: t.border,
+        backgroundColor: tokens.card,
+        borderColor: tokens.border,
         borderWidth: 1,
         padding: [12, 14],
         extraCssText:
           "border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,.18),0 2px 8px rgba(0,0,0,.1);line-height:1.6;",
-        textStyle: { color: t.foreground, fontSize: 13 },
+        textStyle: { color: tokens.foreground, fontSize: 13 },
       },
       axisPointer: { link: [{ xAxisIndex: "all" }] },
       xAxis: [
@@ -77,7 +79,7 @@ export function TimeHeatmap({
           type: "category",
           data: categories,
           gridIndex: 0,
-          axisLine: { lineStyle: { color: t.baseline } },
+          axisLine: { lineStyle: { color: tokens.baseline } },
           axisLabel: { show: false },
           axisTick: { show: false },
         },
@@ -85,8 +87,8 @@ export function TimeHeatmap({
           type: "category",
           data: categories,
           gridIndex: 1,
-          axisLine: { lineStyle: { color: t.baseline } },
-          axisLabel: { color: t.inkMuted, fontSize: 11 },
+          axisLine: { lineStyle: { color: tokens.baseline } },
+          axisLabel: { color: tokens.inkMuted, fontSize: 11 },
           axisTick: { show: false },
         },
       ],
@@ -94,11 +96,11 @@ export function TimeHeatmap({
         {
           type: "value",
           gridIndex: 0,
-          name: privateMode ? "Net P&L (hidden)" : `Net P&L (${currency})`,
-          nameTextStyle: { color: t.inkMuted, fontSize: 11 },
-          splitLine: { lineStyle: { color: t.gridline } },
+          name: privateMode ? t("Net P&L (hidden)") : t("Net P&L ({currency})", { currency }),
+          nameTextStyle: { color: tokens.inkMuted, fontSize: 11 },
+          splitLine: { lineStyle: { color: tokens.gridline } },
           axisLabel: {
-            color: t.inkMuted,
+            color: tokens.inkMuted,
             fontSize: 11,
             formatter: (value: number) => (privateMode ? "••••" : fmtNumber(value, 0)),
           },
@@ -106,25 +108,26 @@ export function TimeHeatmap({
         {
           type: "value",
           gridIndex: 1,
-          name: "Trades",
-          nameTextStyle: { color: t.inkMuted, fontSize: 11 },
+          name: t("Trades"),
+          nameTextStyle: { color: tokens.inkMuted, fontSize: 11 },
           splitLine: { show: false },
-          axisLabel: { color: t.inkMuted, fontSize: 11 },
+          axisLabel: { color: tokens.inkMuted, fontSize: 11 },
         },
       ],
       series: [
         {
           type: "bar",
-          name: "Net P&L",
+          name: t("Net P&L"),
           tooltip: {
-            valueFormatter: (value) => (privateMode ? "Hidden" : fmtMoney(Number(value), currency)),
+            valueFormatter: (value) =>
+              privateMode ? t("Hidden") : fmtMoney(Number(value), currency),
           },
           xAxisIndex: 0,
           yAxisIndex: 0,
           data: hours.map((h) => ({
             value: h.netPnl,
             itemStyle: {
-              color: h.netPnl >= 0 ? t.profitFill : t.loss,
+              color: h.netPnl >= 0 ? tokens.profitFill : tokens.loss,
               borderRadius: h.netPnl >= 0 ? [4, 4, 0, 0] : [0, 0, 4, 4],
             },
           })),
@@ -132,18 +135,18 @@ export function TimeHeatmap({
         },
         {
           type: "line",
-          name: "Trades",
+          name: t("Trades"),
           tooltip: { valueFormatter: (value) => fmtNumber(Number(value), 0) },
           xAxisIndex: 1,
           yAxisIndex: 1,
           data: hours.map((h) => h.trades),
-          lineStyle: { color: t.inkMuted, width: 2 },
-          itemStyle: { color: t.inkMuted },
+          lineStyle: { color: tokens.inkMuted, width: 2 },
+          itemStyle: { color: tokens.inkMuted },
           symbolSize: 6,
         },
       ],
     };
-  }, [hours, t, privateMode, currency]);
+  }, [hours, tokens, privateMode, currency, t]);
 
   return (
     <div ref={host} style={{ height }}>

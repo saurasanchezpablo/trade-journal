@@ -4,9 +4,11 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { ChartWorkspace, workspaceSaved } from "@/components/chart-workspace";
+import { useT } from "@/components/i18n";
 import { Button } from "@/components/ui/button";
 import type { ChartScript } from "@/lib/chart-indicators";
 import { seedCells, startingMarket, workspaceSources } from "@/lib/chart-workspace";
+import { tr } from "@/lib/i18n";
 import type { MarketConnection } from "@/lib/market-data";
 import { recentSymbols } from "@/lib/recent-symbols";
 import { useApi } from "@/lib/use-api";
@@ -23,6 +25,7 @@ type Saved = { state: string | null } | { error: string };
 
 /** Loads what the workspace starts from, then shows it over the whole window. */
 function WorkspaceLoader() {
+  const t = useT();
   const router = useRouter();
   const params = useSearchParams();
   const { data: connections, error: connectionError } = useApi<{
@@ -42,12 +45,17 @@ function WorkspaceLoader() {
       .then(() => fetch("/api/chart-workspace", { cache: "no-store" }))
       .then(async (response) => {
         const body = (await response.json()) as { state?: string | null; error?: string };
-        if (!response.ok) throw new Error(body.error ?? `Request failed (${response.status}).`);
+        if (!response.ok)
+          throw new Error(
+            body.error
+              ? tr(body.error)
+              : tr("Request failed ({status})", { status: response.status }),
+          );
         if (!cancelled) setSaved({ state: body.state ?? null });
       })
       .catch((cause: unknown) => {
         if (!cancelled)
-          setSaved({ error: cause instanceof Error ? cause.message : "Network error" });
+          setSaved({ error: cause instanceof Error ? cause.message : tr("Network error") });
       });
     return () => {
       cancelled = true;
@@ -75,7 +83,9 @@ function WorkspaceLoader() {
 
   const problem =
     connectionError ??
-    (saved && "error" in saved ? `The saved workspace could not be read: ${saved.error}` : null);
+    (saved && "error" in saved
+      ? t("The saved workspace could not be read: {reason}", { reason: saved.error })
+      : null);
   const ready = sources && settings && (scriptData || scriptError) && saved && "state" in saved;
   return (
     <div className="fixed inset-0 z-[60] bg-background">
@@ -87,16 +97,17 @@ function WorkspaceLoader() {
         </Notice>
       ) : !ready ? (
         <Notice>
-          <p className="text-sm text-muted-foreground">Opening the workspace…</p>
+          <p className="text-sm text-muted-foreground">{t("Opening the workspace…")}</p>
         </Notice>
       ) : !sources.length ? (
         <Notice>
           <p className="text-sm">
-            The workspace shows candles from your market data sources. Turn one on in Settings
-            (Binance, Yahoo Finance and the other public sources need no key).
+            {t(
+              "The workspace shows candles from your market data sources. Turn one on in Settings (Binance, Yahoo Finance and the other public sources need no key).",
+            )}
           </p>
           <Button asChild size="sm">
-            <Link href="/settings">Set up market data</Link>
+            <Link href="/settings">{t("Set up market data")}</Link>
           </Button>
         </Notice>
       ) : (
@@ -130,6 +141,7 @@ function WorkspaceLoader() {
 }
 
 function Notice({ children }: { children: React.ReactNode }) {
+  const t = useT();
   return (
     <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
       {children}
@@ -137,7 +149,7 @@ function Notice({ children }: { children: React.ReactNode }) {
         href="/charts"
         className="text-sm text-muted-foreground underline-offset-2 hover:underline"
       >
-        Back to Charts
+        {t("Back to Charts")}
       </Link>
     </div>
   );

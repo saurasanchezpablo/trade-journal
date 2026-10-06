@@ -3,6 +3,7 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createOpenAI } from "@ai-sdk/openai";
 import { APICallError, RetryError, generateText, streamText, type ModelMessage } from "ai";
 import { getAiKey, getAiModel, getAiProvider } from "./settings";
+import { getLocale } from "./i18n";
 import { AI_PROVIDER_NAMES } from "@/lib/ai-settings";
 
 /**
@@ -19,6 +20,16 @@ statement in those numbers; never invent trades, prices, or market context you w
 Be direct and specific like a good trading coach: name the behavior, cite the numbers,
 say what to keep and what to fix. No platitudes, no disclaimers about trading being risky —
 the trader knows. Keep it tight.`;
+
+/**
+ * The system prompt in the journal's language: with Spanish chosen (Settings → Language) the
+ * AI writes its answers in Spanish, while the structure it was asked for stays as given.
+ */
+export function aiSystem(): string {
+  return getLocale() === "es"
+    ? `${AI_SYSTEM}\n\nWrite every answer in Spanish (Spain, informal "tú"). Keep numbers, symbols, prices, quoted notes and names as they are, and keep any JSON field names and fixed values (such as long, short, win, loss) exactly as the requested format gives them.`
+    : AI_SYSTEM;
+}
 
 /** The configured provider's model and request options; throws when no key is set. */
 export const aiModel = () => {
@@ -112,7 +123,7 @@ export const runAi = async (
   try {
     result = await generateText({
       ...model,
-      system: AI_SYSTEM,
+      system: aiSystem(),
       ...withImages(prompt, images),
       maxOutputTokens,
     });
@@ -146,7 +157,7 @@ export async function* streamAi(
   try {
     const result = streamText({
       ...model,
-      system: AI_SYSTEM,
+      system: aiSystem(),
       ...withImages(prompt, images),
       maxOutputTokens,
       abortSignal: signal,

@@ -12,26 +12,38 @@ import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { HelpHint, HoverHint } from "./ui/tooltip";
 import { Pnl } from "./pnl";
 import { usePrivacy } from "./privacy";
+import { useI18n, useT } from "./i18n";
 // Keep the calendar and summaries usable before the plotting bundle loads.
 const CalendarDailyChart = dynamic(
   () => import("./charts/calendar-daily-chart").then((module) => module.CalendarDailyChart),
   {
-    loading: () => (
-      <div
-        role="status"
-        aria-label="Loading daily performance chart"
-        className="h-60 rounded-lg bg-muted/20"
-      />
-    ),
+    loading: () => <ChartLoading />,
   },
 );
 
-const dateFormatter = new Intl.DateTimeFormat("en-US", {
-  month: "short",
-  day: "numeric",
-  timeZone: "UTC",
-});
-const dateLabel = (date: string) => dateFormatter.format(new Date(`${date}T12:00:00Z`));
+function ChartLoading() {
+  const t = useT();
+  return (
+    <div
+      role="status"
+      aria-label={t("Loading daily performance chart")}
+      className="h-60 rounded-lg bg-muted/20"
+    />
+  );
+}
+
+/** Short day labels ("Sep 4", "4 sept") in the journal's language. */
+const dateFormatters = new Map<string, Intl.DateTimeFormat>();
+const dateLabel = (date: string, intl: string) => {
+  let formatter = dateFormatters.get(intl);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat(intl, { month: "short", day: "numeric", timeZone: "UTC" });
+    dateFormatters.set(intl, formatter);
+  }
+  return formatter.format(new Date(`${date}T12:00:00Z`));
+};
+/** The weekday keys of core's calendar, Sunday first, translated in the "group" context. */
+const SHORT_WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 function Metric({
   title,
@@ -59,7 +71,11 @@ function Metric({
 }
 
 export function CalendarPerformance({ data, query }: { data: CalendarResponse; query: string }) {
+  const { t, tx, tn, intl } = useI18n();
   const { insights: i, scope, timeZone, currencies } = data;
+  const shortDate = (date: string) => dateLabel(date, intl);
+  const weekdayName = (label: string) => t(label);
+  const shortWeekday = (index: number) => tx("group", SHORT_WEEKDAYS[index] ?? "");
   const currency = currencies[0] ?? "USD";
   const mixed = currencies.length > 1;
   const privateMode = usePrivacy();
@@ -81,7 +97,7 @@ export function CalendarPerformance({ data, query }: { data: CalendarResponse; q
         className="inline-flex max-w-full items-center gap-2 rounded text-sm font-medium outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
       >
         {money(day.netPnl)}
-        <span className="text-xs font-normal text-muted-foreground">{dateLabel(day.date)}</span>
+        <span className="text-xs font-normal text-muted-foreground">{shortDate(day.date)}</span>
         <ArrowUpRight aria-hidden="true" className="size-3.5 shrink-0" />
       </Link>
     ) : (
@@ -96,10 +112,12 @@ export function CalendarPerformance({ data, query }: { data: CalendarResponse; q
       <div className="flex flex-wrap items-end justify-between gap-2 pt-3">
         <div>
           <h2 id="calendar-insights-heading" className="text-base font-semibold tracking-tight">
-            Performance insights
+            {t("Performance insights")}
           </h2>
           <p className="mt-1 text-xs text-muted-foreground">
-            Visible month × active filters · Closed trades, after fees · {timeZone}
+            {t("Visible month × active filters · Closed trades, after fees · {timeZone}", {
+              timeZone,
+            })}
           </p>
         </div>
         {i.trades > 0 && (
@@ -107,7 +125,7 @@ export function CalendarPerformance({ data, query }: { data: CalendarResponse; q
             href={href()}
             className="inline-flex items-center gap-1 rounded text-xs text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
           >
-            View matching trades <ArrowUpRight aria-hidden="true" className="size-3.5" />
+            {t("View matching trades")} <ArrowUpRight aria-hidden="true" className="size-3.5" />
           </Link>
         )}
       </div>
@@ -115,10 +133,11 @@ export function CalendarPerformance({ data, query }: { data: CalendarResponse; q
         <Card>
           <CardContent className="flex flex-col items-center gap-2 py-10 text-center">
             <CalendarDays aria-hidden="true" className="mb-1 size-6 text-muted-foreground" />
-            <h3 className="text-sm font-medium">No closed trades in this view</h3>
+            <h3 className="text-sm font-medium">{t("No closed trades in this view")}</h3>
             <p className="max-w-md text-sm text-muted-foreground">
-              Choose another month or adjust your account and filters. Open positions and days
-              without trades aren’t included in performance insights.
+              {t(
+                "Choose another month or adjust your account and filters. Open positions and days without trades aren’t included in performance insights.",
+              )}
             </p>
           </CardContent>
         </Card>
@@ -129,31 +148,43 @@ export function CalendarPerformance({ data, query }: { data: CalendarResponse; q
               role="status"
               className="rounded-lg border bg-muted/40 px-4 py-3 text-sm text-muted-foreground"
             >
-              These trades use {currencies.join(", ")}. Select accounts with one currency to compare
-              monetary performance; no exchange-rate conversion is applied.
+              {t(
+                "These trades use {currencies}. Select accounts with one currency to compare monetary performance; no exchange-rate conversion is applied.",
+                { currencies: currencies.join(", ") },
+              )}
             </p>
           )}
           <div className="grid gap-3 min-[420px]:grid-cols-2 xl:grid-cols-4">
             <Metric
-              title="Net P&L"
+              title={t("Net P&L")}
               value={money(i.netPnl)}
-              detail={`${i.tradingDays} trading day${i.tradingDays === 1 ? "" : "s"}${mixed ? "" : ` · ${currency}`}`}
-              hint="Sum of net P&L for closed trades in this month and filter selection. Includes fees. No currency conversion."
+              detail={`${tn(i.tradingDays, "{count} trading day", "{count} trading days")}${mixed ? "" : ` · ${currency}`}`}
+              hint={t(
+                "Sum of net P&L for closed trades in this month and filter selection. Includes fees. No currency conversion.",
+              )}
             />
             <Metric
-              title="Average daily P&L"
+              title={t("Average daily P&L")}
               value={money(i.avgDailyPnl)}
-              detail="Per day with closed trades"
-              hint="Net P&L divided by trading days. Days without closed trades are excluded; break-even trading days are included."
+              detail={t("Per day with closed trades")}
+              hint={t(
+                "Net P&L divided by trading days. Days without closed trades are excluded; break-even trading days are included.",
+              )}
             />
             <Metric
-              title="Trade win rate"
+              title={t("Trade win rate")}
               value={fmtPercent(i.winRate)}
-              detail={`${i.wins} wins · ${i.losses} losses · ${i.breakevens} break-even`}
-              hint="Winning closed trades divided by all closed trades, including break-even trades. Uses your journal's configured break-even rule."
+              detail={t("{wins} wins · {losses} losses · {breakevens} break-even", {
+                wins: i.wins,
+                losses: i.losses,
+                breakevens: i.breakevens,
+              })}
+              hint={t(
+                "Winning closed trades divided by all closed trades, including break-even trades. Uses your journal's configured break-even rule.",
+              )}
             />
             <Metric
-              title="Total closed trades"
+              title={t("Total closed trades")}
               value={
                 <Link
                   className="rounded outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
@@ -162,8 +193,10 @@ export function CalendarPerformance({ data, query }: { data: CalendarResponse; q
                   {i.trades}
                 </Link>
               }
-              detail="Round-trip trades, not executions"
-              hint="Counts completed trades whose closing day falls in the visible month and selected date range, with all other filters applied."
+              detail={t("Round-trip trades, not executions")}
+              hint={t(
+                "Counts completed trades whose closing day falls in the visible month and selected date range, with all other filters applied.",
+              )}
             />
           </div>
           {!mixed && (
@@ -171,58 +204,66 @@ export function CalendarPerformance({ data, query }: { data: CalendarResponse; q
               <div className="grid gap-3 md:grid-cols-3">
                 <Card>
                   <CardHeader>
-                    <CardTitle>Best & worst day</CardTitle>
+                    <CardTitle>{t("Best & worst day")}</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3">
                     <div className="flex flex-wrap items-center justify-between gap-1">
-                      <span className="text-xs text-muted-foreground">Best day</span>
+                      <span className="text-xs text-muted-foreground">{t("Best day")}</span>
                       {dayLink(i.bestDay)}
                     </div>
                     <div className="flex flex-wrap items-center justify-between gap-1">
-                      <span className="text-xs text-muted-foreground">Worst day</span>
+                      <span className="text-xs text-muted-foreground">{t("Worst day")}</span>
                       {dayLink(i.worstDay)}
                     </div>
                     <p className="text-xs text-muted-foreground">
                       {i.tradingDays === 1
-                        ? "One trading day; both extrema are the same."
-                        : "Highest and lowest daily net P&L."}
+                        ? t("One trading day; both extrema are the same.")
+                        : t("Highest and lowest daily net P&L.")}
                     </p>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardHeader>
-                    <CardTitle>Average green & red day</CardTitle>
+                    <CardTitle>{t("Average green & red day")}</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3">
                     <div className="flex items-center justify-between gap-2 text-sm">
                       <span className="text-xs text-muted-foreground">
-                        {i.greenDays} profitable days
+                        {tn(i.greenDays, "{count} profitable day", "{count} profitable days")}
                       </span>
                       {money(i.avgGreenDay)}
                     </div>
                     <div className="flex items-center justify-between gap-2 text-sm">
-                      <span className="text-xs text-muted-foreground">{i.redDays} losing days</span>
+                      <span className="text-xs text-muted-foreground">
+                        {tn(i.redDays, "{count} losing day", "{count} losing days")}
+                      </span>
                       {money(i.avgRedDay)}
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Each average uses only its own group.
+                      {t("Each average uses only its own group.")}
                     </p>
                   </CardContent>
                 </Card>
                 <Metric
-                  title="Day consistency"
+                  title={t("Day consistency")}
                   value={fmtPercent(i.profitableDayRate)}
-                  detail={`${i.greenDays} positive · ${i.redDays} negative · ${i.flatDays} flat days`}
-                  hint="Share of trading days with strictly positive net P&L. This is a profitable-day rate, not a risk-adjusted score or a prediction. Flat days stay in the denominator."
+                  detail={t("{green} positive · {red} negative · {flat} flat days", {
+                    green: i.greenDays,
+                    red: i.redDays,
+                    flat: i.flatDays,
+                  })}
+                  hint={t(
+                    "Share of trading days with strictly positive net P&L. This is a profitable-day rate, not a risk-adjusted score or a prediction. Flat days stay in the denominator.",
+                  )}
                 />
               </div>
               <div className="grid items-start gap-3 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
                 <Card>
                   <CardHeader>
-                    <h3 className="text-sm font-medium">Daily performance</h3>
+                    <h3 className="text-sm font-medium">{t("Daily performance")}</h3>
                     <p className="text-xs text-muted-foreground">
-                      Net P&L by closing day · {currency}
-                      {i.tradingDays >= 8 ? " · Dashed line: 5-trading-day average" : ""}
+                      {t("Net P&L by closing day")} · {currency}
+                      {i.tradingDays >= 8 ? ` · ${t("Dashed line: 5-trading-day average")}` : ""}
                     </p>
                   </CardHeader>
                   <CardContent>
@@ -234,51 +275,53 @@ export function CalendarPerformance({ data, query }: { data: CalendarResponse; q
                       />
                     ) : (
                       <div className="flex min-h-40 flex-col items-center justify-center gap-2 rounded-lg bg-muted/30 p-5 text-center">
-                        <span className="text-sm font-medium">A trend needs more than one day</span>
-                        <span className="text-xs text-muted-foreground">
-                          {dateLabel(i.days[0]!.date)} · {money(i.netPnl)} · {i.trades} closed
-                          trades
+                        <span className="text-sm font-medium">
+                          {t("A trend needs more than one day")}
                         </span>
                         <span className="text-xs text-muted-foreground">
-                          Explore an earlier month with more trading history.
+                          {shortDate(i.days[0]!.date)} · {money(i.netPnl)} ·{" "}
+                          {tn(i.trades, "{count} closed trade", "{count} closed trades")}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {t("Explore an earlier month with more trading history.")}
                         </span>
                       </div>
                     )}
                     <details className="mt-3 border-t pt-3">
                       <summary className="cursor-pointer rounded text-xs text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
-                        Daily values & trade links ({i.tradingDays})
+                        {t("Daily values & trade links ({count})", { count: i.tradingDays })}
                       </summary>
                       <div className="mt-2 max-h-60 overflow-auto">
                         <table className="w-full text-left text-xs">
                           <caption className="sr-only">
-                            Daily results for the current month and filters
+                            {t("Daily results for the current month and filters")}
                           </caption>
                           <thead className="sticky top-0 bg-card text-muted-foreground">
                             <tr>
                               <th scope="col" className="py-2 font-medium">
-                                Closing day
+                                {t("Closing day")}
                               </th>
                               <th scope="col" className="text-right font-medium">
-                                Trades
+                                {t("Trades")}
                               </th>
                               <th scope="col" className="text-right font-medium">
-                                Net P&L
+                                {t("Net P&L")}
                               </th>
                             </tr>
                           </thead>
                           <tbody>
-                            {i.days.map((day) => (
-                              <tr key={day.date} className="border-t">
+                            {i.days.map((row) => (
+                              <tr key={row.date} className="border-t">
                                 <th scope="row" className="py-2 font-normal">
                                   <Link
-                                    href={href(day.date)}
+                                    href={href(row.date)}
                                     className="rounded underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                   >
-                                    {dateLabel(day.date)}
+                                    {shortDate(row.date)}
                                   </Link>
                                 </th>
-                                <td className="text-right tabular-nums">{day.trades}</td>
-                                <td className="text-right">{money(day.netPnl)}</td>
+                                <td className="text-right tabular-nums">{row.trades}</td>
+                                <td className="text-right">{money(row.netPnl)}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -289,24 +332,26 @@ export function CalendarPerformance({ data, query }: { data: CalendarResponse; q
                 </Card>
                 <Card>
                   <CardHeader>
-                    <h3 className="text-sm font-medium">Performance by weekday</h3>
+                    <h3 className="text-sm font-medium">{t("Performance by weekday")}</h3>
                     <p className="text-xs text-muted-foreground">
-                      Closing-day net P&L · {currency} · Select a row
+                      {t("Closing-day net P&L")} · {currency} · {t("Select a row")}
                     </p>
                   </CardHeader>
                   <CardContent>
                     <div className="mb-3 rounded-lg bg-muted/40 px-3 py-2">
                       <div className="text-[11px] text-muted-foreground">
-                        Most profitable weekday
+                        {t("Most profitable weekday")}
                       </div>
                       <div className="mt-0.5 flex flex-wrap justify-between gap-1 text-sm font-medium">
                         {i.mostProfitableWeekday ? (
                           <>
-                            <span>{i.mostProfitableWeekday.label}</span>
+                            <span>{weekdayName(i.mostProfitableWeekday.label)}</span>
                             {money(i.mostProfitableWeekday.netPnl)}
                           </>
                         ) : (
-                          <span className="text-muted-foreground">No profitable weekday yet</span>
+                          <span className="text-muted-foreground">
+                            {t("No profitable weekday yet")}
+                          </span>
                         )}
                       </div>
                     </div>
@@ -314,21 +359,32 @@ export function CalendarPerformance({ data, query }: { data: CalendarResponse; q
                       {i.weekdays.map((day) => (
                         <HoverHint
                           key={day.index}
-                          heading={day.label}
-                          content={`${day.days.length} trading days · ${day.trades} closed trades · ${privateMode ? "P&L hidden" : fmtMoney(day.netPnl, currency)}`}
+                          heading={weekdayName(day.label)}
+                          content={`${tn(day.days.length, "{count} trading day", "{count} trading days")} · ${tn(day.trades, "{count} closed trade", "{count} closed trades")} · ${privateMode ? t("P&L hidden") : fmtMoney(day.netPnl, currency)}`}
                         >
                           <button
                             type="button"
                             disabled={!day.trades}
                             onClick={() => setWeekday(weekday === day.index ? null : day.index)}
                             aria-pressed={weekday === day.index}
-                            aria-label={`${day.label}: ${day.trades} trades${privateMode ? "" : `, ${fmtMoney(day.netPnl, currency)}`}. Inspect closing days.`}
+                            aria-label={
+                              privateMode
+                                ? t("{weekday}: {trades} trades. Inspect closing days.", {
+                                    weekday: weekdayName(day.label),
+                                    trades: day.trades,
+                                  })
+                                : t("{weekday}: {trades} trades, {pnl}. Inspect closing days.", {
+                                    weekday: weekdayName(day.label),
+                                    trades: day.trades,
+                                    pnl: fmtMoney(day.netPnl, currency),
+                                  })
+                            }
                             className={cn(
                               "grid w-full grid-cols-[2rem_minmax(0,1fr)_5.75rem] items-center gap-2 rounded-md px-2 py-2 text-left text-xs outline-none hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40 disabled:hover:bg-transparent",
                               weekday === day.index && "bg-accent",
                             )}
                           >
-                            <span>{day.label.slice(0, 3)}</span>
+                            <span>{shortWeekday(day.index)}</span>
                             <span aria-hidden="true" className="relative h-4">
                               <span className="absolute inset-y-0 left-1/2 w-px bg-border" />
                               <span
@@ -362,18 +418,23 @@ export function CalendarPerformance({ data, query }: { data: CalendarResponse; q
                     {selected && (
                       <div className="mt-3 border-t pt-3" aria-live="polite">
                         <p className="mb-2 text-xs font-medium">
-                          {selected.label} · {selected.trades} trades across {selected.days.length}{" "}
-                          days
+                          {t("{weekday} · {trades} trades across {days} days", {
+                            weekday: weekdayName(selected.label),
+                            trades: selected.trades,
+                            days: selected.days.length,
+                          })}
                         </p>
                         <div className="flex flex-wrap gap-2">
-                          {selected.days.map((day) => (
+                          {selected.days.map((row) => (
                             <Link
-                              key={day.date}
-                              href={href(day.date)}
+                              key={row.date}
+                              href={href(row.date)}
                               className="rounded-md border px-2 py-1.5 text-xs outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
                             >
-                              {dateLabel(day.date)}{" "}
-                              <span className="text-muted-foreground">· {day.trades} trades</span>
+                              {shortDate(row.date)}{" "}
+                              <span className="text-muted-foreground">
+                                · {tn(row.trades, "{count} trade", "{count} trades")}
+                              </span>
                             </Link>
                           ))}
                         </div>
@@ -384,8 +445,11 @@ export function CalendarPerformance({ data, query }: { data: CalendarResponse; q
               </div>
               {i.tradingDays < 5 && (
                 <p className="px-1 text-xs text-muted-foreground">
-                  Small sample: {i.tradingDays} trading day{i.tradingDays === 1 ? "" : "s"}. Weekday
-                  results and consistency describe this selection only.
+                  {tn(
+                    i.tradingDays,
+                    "Small sample: {count} trading day. Weekday results and consistency describe this selection only.",
+                    "Small sample: {count} trading days. Weekday results and consistency describe this selection only.",
+                  )}
                 </p>
               )}
             </>

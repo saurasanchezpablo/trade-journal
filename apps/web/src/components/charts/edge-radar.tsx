@@ -12,6 +12,7 @@ import {
   Tooltip,
 } from "recharts";
 import type { EdgeScoreComponents } from "@luxalgo/journal-core";
+import { useI18n } from "../i18n";
 import { tooltipStyle, useVizTokens } from "./tokens";
 import { ChartFrame } from "./chart-frame";
 
@@ -32,11 +33,13 @@ export function EdgeRadar({
   components: EdgeScoreComponents;
   height?: number | `${number}%`;
 }) {
-  const t = useVizTokens();
+  const { t, tx } = useI18n();
+  const tokens = useVizTokens();
   const [radius, setRadius] = useState(48);
-  if (!t) return <div style={{ height }} />;
+  if (!tokens) return <div style={{ height }} />;
   const data = (Object.keys(LABELS) as (keyof EdgeScoreComponents)[]).map((key) => ({
-    metric: LABELS[key],
+    // Short axis names: the radar has little room around it.
+    metric: tx("radar", LABELS[key]),
     value: Math.round(components[key]),
   }));
   return (
@@ -49,19 +52,19 @@ export function EdgeRadar({
         }
       >
         <RadarChart className="journal-edge-radar" data={data} outerRadius={radius}>
-          <PolarGrid stroke={t.gridline} />
+          <PolarGrid stroke={tokens.gridline} />
           <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
-          <PolarAngleAxis dataKey="metric" tick={{ fill: t.inkMuted, fontSize: 11 }} />
+          <PolarAngleAxis dataKey="metric" tick={{ fill: tokens.inkMuted, fontSize: 11 }} />
           <Tooltip
             cursor={false}
             allowEscapeViewBox={{ x: false, y: false }}
-            contentStyle={tooltipStyle(t)}
-            formatter={(value) => [`${value}/100`, "Score"]}
+            contentStyle={tooltipStyle(tokens)}
+            formatter={(value) => [`${value}/100`, t("Score")]}
           />
           <Radar
             dataKey="value"
-            stroke={t.brand}
-            fill={t.brand}
+            stroke={tokens.brand}
+            fill={tokens.brand}
             fillOpacity={0.28}
             strokeWidth={2}
             isAnimationActive={false}

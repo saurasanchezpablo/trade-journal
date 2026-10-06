@@ -1,5 +1,6 @@
 "use client";
 
+import { useI18n } from "../i18n";
 import { useVizTokens } from "./tokens";
 
 /**
@@ -15,29 +16,33 @@ export function Gauge({
   label: string;
   size?: number;
 }) {
-  const t = useVizTokens();
+  const { t } = useI18n();
+  const tokens = useVizTokens();
   const radius = size / 2 - 6;
   const circumference = Math.PI * radius;
   const ratio = value === null ? 0 : Math.min(Math.max(value, 0), 1);
-  if (!t) return <div style={{ width: size, height: size / 2 + 18 }} />;
+  if (!tokens) return <div style={{ width: size, height: size / 2 + 18 }} />;
   return (
     <div
       className="journal-gauge flex min-w-0 flex-col items-center"
       role="img"
-      aria-label={`${label}: ${value === null ? "no data" : `${(ratio * 100).toFixed(1)}%`}`}
+      aria-label={t("{label}: {value}", {
+        label: t(label),
+        value: value === null ? t("no data") : `${(ratio * 100).toFixed(1)}%`,
+      })}
     >
       <svg width={size} height={size / 2 + 8} viewBox={`0 0 ${size} ${size / 2 + 8}`}>
         <path
           d={`M 6 ${size / 2 + 2} A ${radius} ${radius} 0 0 1 ${size - 6} ${size / 2 + 2}`}
           fill="none"
-          stroke={t.gridline}
+          stroke={tokens.gridline}
           strokeWidth={8}
           strokeLinecap="round"
         />
         <path
           d={`M 6 ${size / 2 + 2} A ${radius} ${radius} 0 0 1 ${size - 6} ${size / 2 + 2}`}
           fill="none"
-          stroke={t.brand}
+          stroke={tokens.brand}
           className="journal-gauge-value"
           strokeWidth={8}
           strokeLinecap="round"

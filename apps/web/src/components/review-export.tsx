@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { exportPdf, exportPng, type ReviewDocument } from "@/lib/export-review";
 import { usePrivacy } from "./privacy";
+import { useI18n } from "./i18n";
 interface Preview {
   url: string;
   filename: string;
@@ -17,6 +18,7 @@ export function ReviewExport({
   document: ReviewDocument;
   containsFinancialData?: boolean;
 }) {
+  const { t } = useI18n();
   const privateMode = usePrivacy();
   const concealed = privateMode && containsFinancialData;
   const [busy, setBusy] = useState(false),
@@ -47,7 +49,7 @@ export function ReviewExport({
       setPreviewDocument(document);
       setOpen(true);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Export failed.");
+      setError(e instanceof Error ? e.message : t("Export failed."));
     } finally {
       setBusy(false);
     }
@@ -63,7 +65,7 @@ export function ReviewExport({
           onClick={() => void run(false)}
         >
           <Download />
-          Export PDF
+          {t("Export PDF")}
         </Button>
         <Button
           type="button"
@@ -73,12 +75,12 @@ export function ReviewExport({
           onClick={() => void run(true)}
         >
           <ImageIcon />
-          Export PNG
+          {t("Export PNG")}
         </Button>
       </div>
       {concealed && (
         <p className="text-xs text-muted-foreground">
-          Turn off privacy mode to export financial figures.
+          {t("Turn off privacy mode to export financial figures.")}
         </p>
       )}
       {error && (
@@ -89,20 +91,20 @@ export function ReviewExport({
       <Dialog open={open && !concealed} onOpenChange={setOpen}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
           <DialogHeader>
-            <DialogTitle>Review export</DialogTitle>
+            <DialogTitle>{t("Review export")}</DialogTitle>
           </DialogHeader>
           {files.map((f, i) => (
             <div key={f.url} className="space-y-3">
               <Button asChild size="sm">
                 <a href={f.url} download={f.filename}>
-                  Download {f.type === "application/pdf" ? "PDF" : "PNG"}
+                  {t("Download {format}", { format: f.type === "application/pdf" ? "PDF" : "PNG" })}
                   {files.length > 1 ? ` · ${i + 1}/${files.length}` : ""}
                 </a>
               </Button>
               {f.type === "application/pdf" ? (
                 <div className="rounded border bg-white p-6 text-slate-800">
                   <p className="mb-4 text-xs text-slate-500">
-                    Review text · download the PDF for the paginated document.
+                    {t("Review text · download the PDF for the paginated document.")}
                   </p>
                   <h3 className="mb-2 text-xl font-semibold">{previewDocument?.title}</h3>
                   <p className="mb-6 text-xs text-slate-500">{previewDocument?.subtitle}</p>
@@ -111,7 +113,11 @@ export function ReviewExport({
                   </div>
                 </div>
               ) : (
-                <img src={f.url} alt="Exported journal review" className="w-full rounded border" />
+                <img
+                  src={f.url}
+                  alt={t("Exported journal review")}
+                  className="w-full rounded border"
+                />
               )}
             </div>
           ))}

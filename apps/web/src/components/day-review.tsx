@@ -17,6 +17,7 @@ import { MonetaryValue } from "./privacy";
 import { contextTags } from "@/lib/day-context";
 import type { DayPriceAction } from "@/server/day-price-action";
 import type { DayTrade } from "@/server/trade-links";
+import { useI18n } from "./i18n";
 
 const LEVEL_STATUS: Record<DayPriceAction["levels"][number]["status"], string> = {
   untouched: "not reached",
@@ -31,6 +32,7 @@ const LEVEL_STATUS: Record<DayPriceAction["levels"][number]["status"], string> =
  * day's trades on its symbol, linked to the plan or not.
  */
 export function DayReview({ analysisId, date }: { analysisId: string; date: string }) {
+  const { t, tx } = useI18n();
   const [open, setOpen] = useState(false);
   const base = `/api/analyses/${encodeURIComponent(analysisId)}/snapshots/${date}`;
   const { data: priceData, error: priceError } = useApi<{
@@ -66,7 +68,7 @@ export function DayReview({ analysisId, date }: { analysisId: string; date: stri
       await work();
       after();
     } catch (cause) {
-      setProblem(cause instanceof Error ? cause.message : "Could not save.");
+      setProblem(cause instanceof Error ? cause.message : t("Could not save."));
     }
   };
   const grade = (scenarioId: string, outcome: ScenarioOutcome | null) =>
@@ -81,9 +83,23 @@ export function DayReview({ analysisId, date }: { analysisId: string; date: stri
     // currentTarget: React passes on the toggle of the nested "levels not reached" list too.
     <details onToggle={(e) => setOpen(e.currentTarget.open)}>
       <summary className="cursor-pointer select-none text-muted-foreground hover:text-foreground">
-        Day review
+        {t("Day review")}
         {action
-          ? ` · ${action.levels.length ? `${reached} of ${action.levels.length} levels reached` : "no levels drawn"}${action.partial ? " so far" : ""}`
+          ? ` · ${
+              action.levels.length
+                ? action.partial
+                  ? t("{reached} of {total} levels reached so far", {
+                      reached,
+                      total: action.levels.length,
+                    })
+                  : t("{reached} of {total} levels reached", {
+                      reached,
+                      total: action.levels.length,
+                    })
+                : action.partial
+                  ? t("no levels drawn so far")
+                  : t("no levels drawn")
+            }`
           : ""}
       </summary>
       <div className="mt-2 space-y-3">
@@ -94,12 +110,12 @@ export function DayReview({ analysisId, date }: { analysisId: string; date: stri
         )}
         {reviewError && (
           <p role="alert" className="text-destructive">
-            The plan and its grades could not be loaded: {reviewError}
+            {t("The plan and its grades could not be loaded: {error}", { error: reviewError })}
           </p>
         )}
         {tradeError && (
           <p role="alert" className="text-destructive">
-            The day&apos;s trades could not be loaded: {tradeError}
+            {t("The day's trades could not be loaded: {error}", { error: tradeError })}
           </p>
         )}
         <PriceActionSection
@@ -108,28 +124,40 @@ export function DayReview({ analysisId, date }: { analysisId: string; date: stri
           data={priceData}
         />
         {plan && plan.scenarios.length > 0 && (
-          <section className="space-y-1.5" aria-label="Plan">
-            <p className="font-medium">Plan{plan.bias ? ` · ${plan.bias} bias` : ""}</p>
+          <section className="space-y-1.5" aria-label={t("Plan")}>
+            <p className="font-medium">
+              {plan.bias ? t("Plan · {bias} bias", { bias: tx("bias", plan.bias) }) : t("Plan")}
+            </p>
             {plan.scenarios.map((s) => {
               const suggestion = action?.scenarios[s.id];
               const review = reviewData?.reviews.find((r) => r.scenarioId === s.id);
               return (
                 <div key={s.id} className="space-y-1 rounded-md border p-2">
                   <p>
-                    <span className="font-medium">{s.name || "Unnamed scenario"}</span>{" "}
+                    <span className="font-medium">{s.name || t("Unnamed scenario")}</span>{" "}
                     <span className="tnum text-muted-foreground">
-                      {s.direction} at {s.trigger === null ? "no trigger" : fmtPrice(s.trigger)}
-                      {s.target !== null ? ` · target ${fmtPrice(s.target)}` : ""}
-                      {s.invalidation !== null ? ` · invalid at ${fmtPrice(s.invalidation)}` : ""}
+                      {t("{direction} at {trigger}", {
+                        direction: tx("direction", s.direction),
+                        trigger: s.trigger === null ? t("no trigger") : fmtPrice(s.trigger),
+                      })}
+                      {s.target !== null
+                        ? ` · ${t("target {price}", { price: fmtPrice(s.target) })}`
+                        : ""}
+                      {s.invalidation !== null
+                        ? ` · ${t("invalid at {price}", { price: fmtPrice(s.invalidation) })}`
+                        : ""}
                     </span>
                   </p>
                   {suggestion && (
                     <p className="text-muted-foreground">
-                      From the candles: {OUTCOME_LABELS[suggestion.outcome]}. {suggestion.reason}
+                      {t("From the candles: {outcome}.", {
+                        outcome: t(OUTCOME_LABELS[suggestion.outcome]),
+                      })}{" "}
+                      {t(suggestion.reason)}
                     </p>
                   )}
                   <label className="flex items-center gap-2">
-                    <span className="text-muted-foreground">Your grade</span>
+                    <span className="text-muted-foreground">{t("Your grade")}</span>
                     <select
                       value={review?.outcome ?? ""}
                       onChange={(e) =>
@@ -139,12 +167,14 @@ export function DayReview({ analysisId, date }: { analysisId: string; date: stri
                     >
                       <option value="">
                         {suggestion
-                          ? `Not graded (suggested: ${OUTCOME_LABELS[suggestion.outcome]})`
-                          : "Not graded"}
+                          ? t("Not graded (suggested: {outcome})", {
+                              outcome: t(OUTCOME_LABELS[suggestion.outcome]),
+                            })
+                          : t("Not graded")}
                       </option>
                       {OUTCOMES.map((o) => (
                         <option key={o} value={o}>
-                          {OUTCOME_LABELS[o]}
+                          {t(OUTCOME_LABELS[o])}
                         </option>
                       ))}
                     </select>
@@ -154,7 +184,7 @@ export function DayReview({ analysisId, date }: { analysisId: string; date: stri
                         className="underline"
                         onClick={() => void grade(s.id, suggestion.outcome)}
                       >
-                        Accept
+                        {t("Accept")}
                       </button>
                     )}
                   </label>
@@ -164,8 +194,10 @@ export function DayReview({ analysisId, date }: { analysisId: string; date: stri
           </section>
         )}
         {reviewData?.changes && (
-          <section className="space-y-1" aria-label="Changes since the previous version">
-            <p className="font-medium">Changed since {reviewData.changes.since}</p>
+          <section className="space-y-1" aria-label={t("Changes since the previous version")}>
+            <p className="font-medium">
+              {t("Changed since {date}", { date: reviewData.changes.since })}
+            </p>
             {reviewData.changes.list.length ? (
               <ul className="list-disc space-y-0.5 pl-4">
                 {reviewData.changes.list.map((change, i) => (
@@ -173,7 +205,7 @@ export function DayReview({ analysisId, date }: { analysisId: string; date: stri
                 ))}
               </ul>
             ) : (
-              <p className="text-muted-foreground">Nothing: the analysis stood as it was.</p>
+              <p className="text-muted-foreground">{t("Nothing: the analysis stood as it was.")}</p>
             )}
           </section>
         )}
@@ -200,7 +232,8 @@ function PriceActionSection({
   error: string | null;
   data: { priceAction: DayPriceAction | null; problem: string | null } | null;
 }) {
-  if (loading) return <p className="text-muted-foreground">Loading the day&apos;s candles…</p>;
+  const { t, tn } = useI18n();
+  if (loading) return <p className="text-muted-foreground">{t("Loading the day's candles…")}</p>;
   if (error)
     return (
       <p role="alert" className="text-destructive">
@@ -208,15 +241,17 @@ function PriceActionSection({
       </p>
     );
   if (!data) return null;
-  if (data.problem) return <p className="text-muted-foreground">{data.problem}</p>;
+  if (data.problem) return <p className="text-muted-foreground">{t(data.problem)}</p>;
   const action = data.priceAction;
-  if (!action) return <p className="text-muted-foreground">No candles for this day.</p>;
+  if (!action) return <p className="text-muted-foreground">{t("No candles for this day.")}</p>;
   const unreached = action.levels.filter((l) => l.status === "untouched").length;
   return (
-    <section className="space-y-1" aria-label="What price did">
-      <p className="font-medium">What price did</p>
+    <section className="space-y-1" aria-label={t("What price did")}>
+      <p className="font-medium">{t("What price did")}</p>
       <p className="text-muted-foreground">
-        {contextTags(action.context).join(" · ")}
+        {contextTags(action.context)
+          .map((tag) => t(tag))
+          .join(" · ")}
         {action.context.news.length ? ` (${action.context.news.join(", ")})` : ""}
       </p>
       <p className="tnum">
@@ -225,21 +260,25 @@ function PriceActionSection({
         {action.summary.change >= 0 ? "+" : "−"}
         {Math.abs(action.summary.changePct * 100).toFixed(2)}%)
         {action.averageRange
-          ? ` · range ${(action.summary.range / action.averageRange).toFixed(2)}× average`
+          ? ` · ${t("range {ratio}× average", {
+              ratio: (action.summary.range / action.averageRange).toFixed(2),
+            })}`
           : ""}
       </p>
       <LevelList levels={action.levels.filter((l) => l.status !== "untouched")} />
       {unreached > 0 && (
         <details>
           <summary className="cursor-pointer select-none text-muted-foreground hover:text-foreground">
-            {unreached} level{unreached === 1 ? "" : "s"} not reached
+            {tn(unreached, "{count} level not reached", "{count} levels not reached")}
           </summary>
           <LevelList levels={action.levels.filter((l) => l.status === "untouched")} />
         </details>
       )}
       <p className="text-[11px] text-muted-foreground">
-        From {action.resolution} candles, in the journal&apos;s time zone. Held: price reached it
-        and closed back on the same side; broken: it closed through.
+        {t(
+          "From {resolution} candles, in the journal's time zone. Held: price reached it and closed back on the same side; broken: it closed through.",
+          { resolution: action.resolution },
+        )}
       </p>
     </section>
   );
@@ -259,16 +298,23 @@ function TradesSection({
   timeZone: string;
   onLink: (trade: DayTrade, linked: boolean, scenarioId: string | null) => void;
 }) {
+  const { t: tt, tx } = useI18n();
   if (!trades.length)
-    return <p className="text-muted-foreground">No trades on this symbol opened this day.</p>;
+    return (
+      <p className="text-muted-foreground">{tt("No trades on this symbol opened this day.")}</p>
+    );
   const own = new Set(trades.filter((t) => t.link?.analysisId === analysisId).map((t) => t.key));
   const stats = planTradeStats(trades, own);
   return (
-    <section className="space-y-1" aria-label="Trades opened this day">
-      <p className="font-medium">Trades opened this day</p>
+    <section className="space-y-1" aria-label={tt("Trades opened this day")}>
+      <p className="font-medium">{tt("Trades opened this day")}</p>
       <p className="text-muted-foreground">
-        From this plan: {stats.onPlan.trades} (<Pnl value={stats.onPlan.netPnl} />) · Not from it:{" "}
-        {stats.offPlan.trades} (<Pnl value={stats.offPlan.netPnl} />)
+        {tt("From this plan: {count}", { count: stats.onPlan.trades })} (
+        <Pnl value={stats.onPlan.netPnl} />) ·{" "}
+        {tt("Not from it: {count}", {
+          count: stats.offPlan.trades,
+        })}{" "}
+        (<Pnl value={stats.offPlan.netPnl} />)
       </p>
       <ul className="space-y-1">
         {trades.map((t) => {
@@ -278,13 +324,17 @@ function TradesSection({
           return (
             <li key={t.key} className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <span className="tnum">
-                {t.direction.toUpperCase()} {t.symbol} @{" "}
+                {tx("direction", t.direction).toUpperCase()} {t.symbol} @{" "}
                 <MonetaryValue>{fmtPrice(t.avgEntry)}</MonetaryValue> · <Pnl value={t.netPnl} />{" "}
                 <span className="text-muted-foreground">{time}</span>
               </span>
               <select
                 // Named by its time, not its price: privacy mode hides trade prices.
-                aria-label={`Plan link for the ${t.direction} ${t.symbol} trade opened at ${time}`}
+                aria-label={tt("Plan link for the {direction} {symbol} trade opened at {time}", {
+                  direction: tx("direction", t.direction),
+                  symbol: t.symbol,
+                  time,
+                })}
                 value={mine ? (t.link?.scenarioId ?? "plan") : ""}
                 onChange={(e) =>
                   e.target.value === ""
@@ -294,13 +344,14 @@ function TradesSection({
                 className="h-7 max-w-52 rounded-md border bg-background px-1"
               >
                 <option value="">
-                  {elsewhere ? "From another analysis" : "Not from this plan"}
+                  {elsewhere ? tt("From another analysis") : tt("Not from this plan")}
                 </option>
-                <option value="plan">From this plan</option>
+                <option value="plan">{tt("From this plan")}</option>
                 {plan?.scenarios.map((s) => (
                   <option key={s.id} value={s.id}>
-                    Scenario: {s.name || "unnamed"}
-                    {t.suggestedScenario === s.id ? " (suggested)" : ""}
+                    {t.suggestedScenario === s.id
+                      ? tt("Scenario: {name} (suggested)", { name: s.name || tt("unnamed") })
+                      : tt("Scenario: {name}", { name: s.name || tt("unnamed") })}
                   </option>
                 ))}
               </select>
@@ -310,7 +361,7 @@ function TradesSection({
                   className="underline"
                   onClick={() => onLink(t, true, t.suggestedScenario)}
                 >
-                  Link to the suggested scenario
+                  {tt("Link to the suggested scenario")}
                 </button>
               )}
             </li>
@@ -322,6 +373,7 @@ function TradesSection({
 }
 
 function LevelList({ levels }: { levels: DayPriceAction["levels"] }) {
+  const { t } = useI18n();
   if (!levels.length) return null;
   return (
     <ul className="space-y-0.5">
@@ -332,11 +384,11 @@ function LevelList({ levels }: { levels: DayPriceAction["levels"] }) {
             <span className="tnum text-muted-foreground">
               {level.low === level.high
                 ? fmtPrice(level.low)
-                : `${fmtPrice(level.low)} to ${fmtPrice(level.high)}`}
+                : t("{low} to {high}", { low: fmtPrice(level.low), high: fmtPrice(level.high) })}
             </span>
           </span>
           <span className="shrink-0 rounded border px-1.5 text-[11px] uppercase tracking-wide">
-            {LEVEL_STATUS[level.status]}
+            {t(LEVEL_STATUS[level.status])}
           </span>
         </li>
       ))}

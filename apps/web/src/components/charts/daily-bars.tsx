@@ -12,6 +12,7 @@ import {
   YAxis,
 } from "recharts";
 import { fmtMoney } from "@/lib/utils";
+import { useI18n } from "../i18n";
 import { usePrivacy } from "../privacy";
 import { tooltipStyle, useVizTokens } from "./tokens";
 import { ChartFrame } from "./chart-frame";
@@ -34,9 +35,10 @@ export function DailyBars({
   height?: number | `${number}%`;
   currency?: string;
 }) {
-  const t = useVizTokens();
+  const { t } = useI18n();
+  const tokens = useVizTokens();
   const privateMode = usePrivacy();
-  if (!t) return <div style={{ height }} />;
+  if (!tokens) return <div style={{ height }} />;
   return (
     <ChartFrame height={height}>
       <ResponsiveContainer width="100%" height="100%">
@@ -46,16 +48,16 @@ export function DailyBars({
           margin={{ top: 8, right: 8, bottom: 0, left: 8 }}
           barCategoryGap="20%"
         >
-          <CartesianGrid stroke={t.gridline} strokeWidth={1} vertical={false} />
+          <CartesianGrid stroke={tokens.gridline} strokeWidth={1} vertical={false} />
           <XAxis
             dataKey="date"
-            tick={{ fill: t.inkMuted, fontSize: 11 }}
+            tick={{ fill: tokens.inkMuted, fontSize: 11 }}
             tickLine={false}
-            axisLine={{ stroke: t.baseline }}
+            axisLine={{ stroke: tokens.baseline }}
             minTickGap={48}
           />
           <YAxis
-            tick={{ fill: t.inkMuted, fontSize: 11 }}
+            tick={{ fill: tokens.inkMuted, fontSize: 11 }}
             tickLine={false}
             axisLine={false}
             width={70}
@@ -63,20 +65,20 @@ export function DailyBars({
               privateMode ? "••••" : fmtMoney(value, currency).replace(".00", "")
             }
           />
-          <ReferenceLine y={0} stroke={t.baseline} />
+          <ReferenceLine y={0} stroke={tokens.baseline} />
           <Tooltip
-            contentStyle={tooltipStyle(t)}
+            contentStyle={tooltipStyle(tokens)}
             formatter={(value) => [
-              privateMode ? "Hidden" : fmtMoney(Number(value), currency),
-              "Net P&L",
+              privateMode ? t("Hidden") : fmtMoney(Number(value), currency),
+              t("Net P&L"),
             ]}
-            cursor={{ fill: t.gridline, opacity: 0.4 }}
+            cursor={{ fill: tokens.gridline, opacity: 0.4 }}
           />
           <Bar dataKey="netPnl" isAnimationActive={false} maxBarSize={28}>
             {data.map((entry) => (
               <Cell
                 key={entry.date}
-                fill={entry.netPnl >= 0 ? t.profitFill : t.loss}
+                fill={entry.netPnl >= 0 ? tokens.profitFill : tokens.loss}
                 radius={(entry.netPnl >= 0 ? [4, 4, 0, 0] : [0, 0, 4, 4]) as unknown as number}
               />
             ))}

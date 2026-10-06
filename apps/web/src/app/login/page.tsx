@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { LuxAlgoMark } from "@/components/luxalgo-mark";
 import { postJson, useApi } from "@/lib/use-api";
 import { safeReturnTo } from "@/lib/auth-redirect";
+import { useT } from "@/components/i18n";
 
 interface AuthMethods {
   required: boolean;
@@ -16,7 +17,7 @@ interface AuthMethods {
   oidc: { label: string; problem: string | null } | null;
 }
 
-/** What went wrong with single sign-on, from the code the callback sends back. */
+/** What went wrong with single sign-on, from the code the callback sends back (shown with `t`). */
 const SSO_ERRORS: Record<string, string> = {
   config: "Single sign-on is not configured correctly. The server log says what to fix.",
   unavailable: "The sign-in provider could not be reached. Try again in a moment.",
@@ -36,6 +37,7 @@ export default function LoginPage() {
 }
 
 function Login() {
+  const t = useT();
   const router = useRouter();
   const params = useSearchParams();
   const next = safeReturnTo(params.get("next"));
@@ -59,7 +61,7 @@ function Login() {
       setError(
         cause instanceof Error && !(cause instanceof TypeError)
           ? cause.message
-          : "Could not reach the journal. Try again.",
+          : t("Could not reach the journal. Try again."),
       );
       setSigningIn(false);
     }
@@ -79,31 +81,32 @@ function Login() {
           </div>
           {failure && (
             <p role="alert" className="text-center text-xs text-loss">
-              {SSO_ERRORS[failure] ?? SSO_ERRORS.unexpected}
+              {t(SSO_ERRORS[failure] ?? SSO_ERRORS.unexpected!)}
             </p>
           )}
           {params.get("signed_out") && !failure && (
             <p role="status" className="text-center text-xs text-muted-foreground">
-              Signed out.
+              {t("Signed out.")}
             </p>
           )}
           {sso &&
             (sso.problem ? (
               !failure && (
                 <p role="alert" className="text-center text-xs text-loss">
-                  {sso.problem}
+                  {t(sso.problem)}
                 </p>
               )
             ) : (
               <Button asChild className="w-full">
                 <a href={`/api/auth/oidc/login?${new URLSearchParams({ next })}`}>
-                  <KeyRound aria-hidden="true" /> Sign in with {sso.label}
+                  <KeyRound aria-hidden="true" />{" "}
+                  {t("Sign in with {provider}", { provider: t(sso.label) })}
                 </a>
               </Button>
             ))}
           {sso && showPassword && (
             <p className="text-center text-[11px] uppercase tracking-wide text-muted-foreground">
-              or
+              {t("or")}
             </p>
           )}
           {showPassword && (
@@ -112,8 +115,8 @@ function Login() {
                 type="password"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
-                placeholder="Password"
-                aria-label="Password"
+                placeholder={t("Password")}
+                aria-label={t("Password")}
                 autoFocus={!sso}
               />
               {error && (
@@ -127,7 +130,7 @@ function Login() {
                 variant={sso ? "outline" : "default"}
                 disabled={signingIn}
               >
-                {signingIn ? "Unlocking…" : "Unlock"}
+                {signingIn ? t("Unlocking…") : t("Unlock")}
               </Button>
             </form>
           )}

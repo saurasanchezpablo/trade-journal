@@ -3,12 +3,14 @@ import type { LineCrossing } from "./price-alerts";
 import type { SrZone, ZoneEvent } from "./sr-zones";
 import type { AnalysisPlan } from "./analysis-plan";
 import { explainAlert } from "./alert-explain";
+import { tr } from "./i18n";
 
 /**
  * Alert wording shared by the open chart and the server's background watcher, so a push
  * notification reads the same as the in-page alert. The tag lets a device replace one
  * notification with the next for the same line instead of stacking duplicates. `note` says
- * what the level is to the analysis's plan (see `alert-explain.ts`).
+ * what the level is to the analysis's plan (see `alert-explain.ts`). Written in the journal's
+ * language (`tr`; the server sets it before building one).
  */
 export interface AlertMessage {
   title: string;
@@ -29,8 +31,13 @@ export function lineAlert(
   plan?: AnalysisPlan | null,
 ): AlertMessage {
   return {
-    title: "Chart alert",
-    body: `${symbol} crossed ${hit.direction === "up" ? "above" : "below"} ${label} at ${fmtNumber(hit.price)}`,
+    title: tr("Chart alert"),
+    body: tr(
+      hit.direction === "up"
+        ? "{symbol} crossed above {label} at {price}"
+        : "{symbol} crossed below {label} at {price}",
+      { symbol, label, price: fmtNumber(hit.price) },
+    ),
     tag: `alert-${analysisId ?? symbol}-${hit.drawingId}`,
     note: explainAlert(plan, {
       low: hit.price,
@@ -48,13 +55,18 @@ export function zoneAlert(
   zone: Pick<SrZone, "id" | "label" | "low" | "high">,
   plan?: AnalysisPlan | null,
 ): AlertMessage {
-  const range = `${zone.label ? `${zone.label} ` : ""}${fmtNumber(zone.low)} to ${fmtNumber(zone.high)}`;
+  const span = tr("{low} to {high}", { low: fmtNumber(zone.low), high: fmtNumber(zone.high) });
+  const range = zone.label ? `${zone.label} ${span}` : span;
   return {
-    title: "Zone alert",
-    body:
+    title: tr("Zone alert"),
+    body: tr(
       event.kind === "enter"
-        ? `${symbol} entered the zone ${range}`
-        : `${symbol} broke ${event.direction === "up" ? "above" : "below"} the zone ${range}`,
+        ? "{symbol} entered the zone {range}"
+        : event.direction === "up"
+          ? "{symbol} broke above the zone {range}"
+          : "{symbol} broke below the zone {range}",
+      { symbol, range },
+    ),
     tag: `alert-${analysisId ?? symbol}-zone-${zone.id}-${event.kind}`,
     note: explainAlert(plan, {
       low: Math.min(zone.low, zone.high),

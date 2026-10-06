@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TimeZonePicker } from "@/components/timezone-picker";
 import { Label } from "@/components/ui/label";
+import { useI18n } from "@/components/i18n";
 import { postJson, useApi } from "@/lib/use-api";
 import { formatMultipliers, parseMultipliers, sameMultipliers } from "@/lib/multipliers";
 
@@ -29,12 +30,14 @@ export default function SettingsPage() {
 }
 
 function Settings() {
+  const { t, tn } = useI18n();
   const { data, refresh } = useApi<SettingsPayload>("/api/settings");
   const [timeZone, setTimeZone] = useState("");
   const [importTimeZone, setImportTimeZone] = useState("");
   const [multipliers, setMultipliers] = useState("");
   const [saved, setSaved] = useState(false);
   const [failure, setFailure] = useState("");
+  const [invalidMultipliers, setInvalidMultipliers] = useState(false);
 
   useEffect(() => {
     if (data) {
@@ -49,10 +52,17 @@ function Settings() {
     if (parsed.invalid.length) {
       // Never drop a line silently: saving would remove that multiplier and rebuild P&L.
       setFailure(
-        `Fix ${parsed.invalid.length === 1 ? "this multiplier line" : "these multiplier lines"} before saving (use SYMBOL=number, for example ES=50): ${parsed.invalid.join(", ")}`,
+        tn(
+          parsed.invalid.length,
+          "Fix this multiplier line before saving (use SYMBOL=number, for example ES=50): {lines}",
+          "Fix these multiplier lines before saving (use SYMBOL=number, for example ES=50): {lines}",
+          { lines: parsed.invalid.join(", ") },
+        ),
       );
+      setInvalidMultipliers(true);
       return;
     }
+    setInvalidMultipliers(false);
     // Only a changed map is sent: saving multipliers recalculates every trade.
     const changed = !data || !sameMultipliers(parsed.multipliers, data.multipliers);
     try {
@@ -67,7 +77,7 @@ function Settings() {
       );
       setFailure("");
     } catch (e) {
-      setFailure(e instanceof Error ? e.message : "Save failed");
+      setFailure(e instanceof Error ? e.message : t("Save failed"));
       return;
     }
     setSaved(true);
@@ -84,7 +94,7 @@ function Settings() {
         <MarketDataSettings />
         <Card>
           <CardHeader>
-            <CardTitle>Journal</CardTitle>
+            <CardTitle>{t("Journal")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <div>
@@ -92,39 +102,42 @@ function Settings() {
                 htmlFor="display-timezone"
                 className="mb-1 block text-xs text-muted-foreground"
               >
-                Display timezone (IANA)
+                {t("Display timezone (IANA)")}
               </Label>
               <TimeZonePicker
                 id="display-timezone"
-                label="Display timezone"
+                label={t("Display timezone")}
                 value={timeZone}
                 onValueChange={setTimeZone}
                 disabled={!data}
               />
               <p className="mt-1 text-xs text-muted-foreground">
-                Trade times, calendars, journal days, and analytics use this timezone.
+                {t("Trade times, calendars, journal days, and analytics use this timezone.")}
               </p>
               <button
                 className="mt-1 text-xs text-muted-foreground underline"
                 onClick={() => setTimeZone(Intl.DateTimeFormat().resolvedOptions().timeZone)}
               >
-                Use this device's timezone ({Intl.DateTimeFormat().resolvedOptions().timeZone})
+                {t("Use this device's timezone ({zone})", {
+                  zone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                })}
               </button>
             </div>
             <div>
               <Label htmlFor="import-timezone" className="mb-1 block text-xs text-muted-foreground">
-                Default import timezone (IANA)
+                {t("Default import timezone (IANA)")}
               </Label>
               <TimeZonePicker
                 id="import-timezone"
-                label="Default import timezone"
+                label={t("Default import timezone")}
                 value={importTimeZone}
                 onValueChange={setImportTimeZone}
                 disabled={!data}
               />
               <p className="mt-1 text-xs text-muted-foreground">
-                Use your broker statement's timezone for timestamps without an offset. You can
-                override it for each file. Changing this setting affects future imports only.
+                {t(
+                  "Use your broker statement's timezone for timestamps without an offset. You can override it for each file. Changing this setting affects future imports only.",
+                )}
               </p>
             </div>
             <div>
@@ -132,11 +145,11 @@ function Settings() {
                 htmlFor="contract-multipliers"
                 className="mb-1 block text-xs text-muted-foreground"
               >
-                Contract multipliers (futures/options), one per line as SYMBOL=multiplier
+                {t("Contract multipliers (futures/options), one per line as SYMBOL=multiplier")}
               </Label>
               <textarea
                 id="contract-multipliers"
-                aria-invalid={failure.includes("multiplier line") || undefined}
+                aria-invalid={invalidMultipliers || undefined}
                 value={multipliers}
                 onChange={(event) => setMultipliers(event.target.value)}
                 placeholder={"ES=50\nNQ=20\nMES=5"}
@@ -144,8 +157,9 @@ function Settings() {
               />
             </div>
             <p className="text-xs text-muted-foreground">
-              Saving multipliers recalculates existing trade P&L from fills and preserves
-              annotations.
+              {t(
+                "Saving multipliers recalculates existing trade P&L from fills and preserves annotations.",
+              )}
             </p>
             {failure && (
               <p role="alert" className="text-xs text-destructive">
@@ -153,7 +167,7 @@ function Settings() {
               </p>
             )}
             <Button onClick={save} disabled={!data}>
-              {saved ? "Saved ✓" : "Save"}
+              {saved ? t("Saved ✓") : t("Save")}
             </Button>
           </CardContent>
         </Card>
@@ -162,19 +176,19 @@ function Settings() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Your data</CardTitle>
+            <CardTitle>{t("Your data")}</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-2">
             <Button variant="outline" asChild>
               <a href="/api/export" download="trade-journal-export.json">
                 <Download />
-                Full backup (JSON)
+                {t("Full backup (JSON)")}
               </a>
             </Button>
             <Button variant="outline" asChild>
               <a href="/api/export?format=csv" download>
                 <Download />
-                Trades (CSV)
+                {t("Trades (CSV)")}
               </a>
             </Button>
           </CardContent>

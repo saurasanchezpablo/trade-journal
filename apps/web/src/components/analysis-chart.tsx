@@ -86,6 +86,7 @@ import {
   type OverlayHooks,
   type OverlayState,
 } from "./chart-overlays";
+import { useI18n } from "./i18n";
 import { Button } from "./ui/button";
 import { HoverHint } from "./ui/tooltip";
 import { PortalContainer } from "./ui/portal-container";
@@ -306,6 +307,7 @@ export function AnalysisChart({
   onDrawingTemplates?: (next: DrawingTemplatesChange) => void;
   chartRef?: Ref<AnalysisChartHandle>;
 }) {
+  const { t } = useI18n();
   const frame = useRef<HTMLDivElement>(null);
   const host = useRef<HTMLDivElement>(null);
   const chart = useRef<Vela | null>(null);
@@ -777,7 +779,9 @@ export function AnalysisChart({
       cleanup();
       if (!disposed)
         setError(
-          `The chart could not be rendered${error instanceof Error && error.message ? `: ${error.message}` : "."}`,
+          error instanceof Error && error.message
+            ? t("The chart could not be rendered: {reason}", { reason: error.message })
+            : t("The chart could not be rendered."),
         );
     });
     return () => {
@@ -1064,11 +1068,11 @@ export function AnalysisChart({
         {!toolsHidden && (
           <div
             role="toolbar"
-            aria-label="Drawing tools"
+            aria-label={t("Drawing tools")}
             className="flex flex-wrap items-center gap-1 rounded-lg border bg-card p-1"
           >
             <ToolButton
-              label="Pan and select"
+              label={t("Pan and select")}
               active={!tool && !erasing}
               onClick={() => arm(null)}
               icon={Hand}
@@ -1076,7 +1080,7 @@ export function AnalysisChart({
             {TOOLS.map((entry) => (
               <ToolButton
                 key={entry.type}
-                label={entry.label}
+                label={t(entry.label)}
                 active={tool === entry.type && !erasing}
                 onClick={() => {
                   if (isBrush(entry.type)) updatePreference({ penTool: entry.type });
@@ -1086,21 +1090,21 @@ export function AnalysisChart({
               />
             ))}
             <ToolButton
-              label="Eraser (drag across drawings)"
+              label={t("Eraser (drag across drawings)")}
               active={erasing}
               onClick={() => drawingsApi()?.setMode(erasing ? null : "eraser")}
               icon={Eraser}
             />
             <span className="mx-1 h-6 w-px bg-border" aria-hidden="true" />
-            <div role="radiogroup" aria-label="Ink color" className="flex items-center gap-1">
+            <div role="radiogroup" aria-label={t("Ink color")} className="flex items-center gap-1">
               {STYLUS_COLORS.map((color) => (
                 <button
                   key={color.value}
                   type="button"
                   role="radio"
                   aria-checked={preference.color === color.value}
-                  aria-label={color.label}
-                  title={color.label}
+                  aria-label={t(color.label)}
+                  title={t(color.label)}
                   onClick={() => updatePreference({ color: color.value })}
                   className={cn(
                     "size-7 rounded-full border-2 transition-transform",
@@ -1117,8 +1121,8 @@ export function AnalysisChart({
                   type="button"
                   role="radio"
                   aria-checked={preference.color === value}
-                  aria-label={`Ink ${value}`}
-                  title={`${value} (right-click to remove)`}
+                  aria-label={t("Ink {color}", { color: value })}
+                  title={t("{color} (right-click to remove)", { color: value })}
                   onClick={() => updatePreference({ color: value })}
                   onContextMenu={(event) => {
                     event.preventDefault();
@@ -1133,12 +1137,12 @@ export function AnalysisChart({
                   style={{ backgroundColor: value }}
                 />
               ))}
-              <HoverHint content="Add an ink colour">
+              <HoverHint content={t("Add an ink colour")}>
                 <label className="relative flex size-7 cursor-pointer items-center justify-center rounded-full border border-dashed text-muted-foreground hover:text-foreground">
                   <Plus className="size-3.5" aria-hidden="true" />
                   <input
                     type="color"
-                    aria-label="Add an ink colour"
+                    aria-label={t("Add an ink colour")}
                     className="absolute inset-0 cursor-pointer opacity-0"
                     onChange={(event) => {
                       const value = event.target.value;
@@ -1156,15 +1160,19 @@ export function AnalysisChart({
                 </label>
               </HoverHint>
             </div>
-            <div role="radiogroup" aria-label="Stroke width" className="flex items-center gap-0.5">
+            <div
+              role="radiogroup"
+              aria-label={t("Stroke width")}
+              className="flex items-center gap-0.5"
+            >
               {STYLUS_WIDTHS.map((width) => (
                 <button
                   key={width.value}
                   type="button"
                   role="radio"
                   aria-checked={preference.width === width.value}
-                  aria-label={`${width.label} stroke`}
-                  title={`${width.label} stroke`}
+                  aria-label={t(`${width.label} stroke`)}
+                  title={t(`${width.label} stroke`)}
                   onClick={() => updatePreference({ width: width.value })}
                   className={cn(
                     "flex size-8 items-center justify-center rounded-md",
@@ -1180,7 +1188,7 @@ export function AnalysisChart({
             </div>
             <span className="mx-1 h-6 w-px bg-border" aria-hidden="true" />
             <ToolButton
-              label="Undo"
+              label={t("Undo")}
               disabled={!undoState.undo}
               onClick={() => {
                 drawingsApi()?.undo();
@@ -1189,7 +1197,7 @@ export function AnalysisChart({
               icon={Undo2}
             />
             <ToolButton
-              label="Redo"
+              label={t("Redo")}
               disabled={!undoState.redo}
               onClick={() => {
                 drawingsApi()?.redo();
@@ -1198,12 +1206,12 @@ export function AnalysisChart({
               icon={Redo2}
             />
             <ToolButton
-              label="Clear all drawings"
+              label={t("Clear all drawings")}
               onClick={() => {
                 const api = drawingsApi();
                 const ids = api?.all().map((d) => d.id) ?? [];
                 if (!api || !ids.length) return;
-                if (!confirm("Remove every drawing from this chart, in all layers?")) return;
+                if (!confirm(t("Remove every drawing from this chart, in all layers?"))) return;
                 api.removeMany(ids);
               }}
               icon={Trash2}
@@ -1247,14 +1255,14 @@ export function AnalysisChart({
                 checked={preference.penDraws}
                 onChange={(event) => updatePreference({ penDraws: event.target.checked })}
               />
-              Stylus draws, fingers pan
+              {t("Stylus draws, fingers pan")}
             </label>
             {sidePanel && (
               <HoverHint
                 content={
                   sideOpen
-                    ? `Hide the ${sidePanel.title.toLowerCase()} panel`
-                    : `Show the ${sidePanel.title.toLowerCase()} panel`
+                    ? t("Hide the {panel} panel", { panel: sidePanel.title.toLowerCase() })
+                    : t("Show the {panel} panel", { panel: sidePanel.title.toLowerCase() })
                 }
               >
                 <Button
@@ -1274,12 +1282,12 @@ export function AnalysisChart({
               </HoverHint>
             )}
             <ToolButton
-              label="Hide drawing tools"
+              label={t("Hide drawing tools")}
               onClick={() => setToolsHidden(true)}
               icon={PanelTopClose}
             />
             <ToolButton
-              label={fullscreen ? "Exit full screen" : "Full screen"}
+              label={fullscreen ? t("Exit full screen") : t("Full screen")}
               onClick={toggleFullscreen}
               icon={fullscreen ? Minimize2 : Maximize2}
             />
@@ -1313,16 +1321,16 @@ export function AnalysisChart({
             {toolsHidden && (
               <div
                 role="toolbar"
-                aria-label="Chart controls"
+                aria-label={t("Chart controls")}
                 className="absolute left-1/2 top-2 z-10 flex -translate-x-1/2 items-center gap-0.5 rounded-lg border bg-card/90 p-0.5 opacity-60 shadow-sm backdrop-blur transition-opacity hover:opacity-100 focus-within:opacity-100"
               >
                 <ToolButton
-                  label="Show drawing tools"
+                  label={t("Show drawing tools")}
                   onClick={() => setToolsHidden(false)}
                   icon={PanelTopOpen}
                 />
                 <ToolButton
-                  label={fullscreen ? "Exit full screen" : "Full screen"}
+                  label={fullscreen ? t("Exit full screen") : t("Full screen")}
                   onClick={toggleFullscreen}
                   icon={fullscreen ? Minimize2 : Maximize2}
                 />
@@ -1338,10 +1346,12 @@ export function AnalysisChart({
                 <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   {sidePanel.title}
                 </span>
-                <HoverHint content="Hide this panel">
+                <HoverHint content={t("Hide this panel")}>
                   <button
                     type="button"
-                    aria-label={`Hide the ${sidePanel.title.toLowerCase()} panel`}
+                    aria-label={t("Hide the {panel} panel", {
+                      panel: sidePanel.title.toLowerCase(),
+                    })}
                     onClick={toggleSide}
                     className="flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
                   >
@@ -1356,9 +1366,13 @@ export function AnalysisChart({
         {!fullscreen && (
           <p className="text-xs text-muted-foreground">
             {penSeen
-              ? "Stylus detected. The pen tip draws, a pen tap selects a drawing, the eraser end erases, and fingers pan and zoom. Turn off “Stylus draws” to drag drawings with the pen."
-              : "Draw with a stylus, mouse or finger after choosing a tool. With a stylus, the pen tip draws without choosing a tool first."}{" "}
-            Scroll back for older candles. New drawings go to the active layer.
+              ? t(
+                  "Stylus detected. The pen tip draws, a pen tap selects a drawing, the eraser end erases, and fingers pan and zoom. Turn off “Stylus draws” to drag drawings with the pen.",
+                )
+              : t(
+                  "Draw with a stylus, mouse or finger after choosing a tool. With a stylus, the pen tip draws without choosing a tool first.",
+                )}{" "}
+            {t("Scroll back for older candles. New drawings go to the active layer.")}
           </p>
         )}
       </div>

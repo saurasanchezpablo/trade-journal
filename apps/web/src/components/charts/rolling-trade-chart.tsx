@@ -12,6 +12,7 @@ import {
 } from "recharts";
 import type { PerformanceTrends } from "@/lib/performance-trends";
 import { fmtMoney, fmtPercent } from "@/lib/utils";
+import { useI18n } from "../i18n";
 import { usePrivacy } from "../privacy";
 import { ChartFrame } from "./chart-frame";
 import { tooltipStyle, useVizTokens } from "./tokens";
@@ -29,6 +30,7 @@ export function RollingTradeChart({
   currency: string;
   timeZone: string;
 }) {
+  const { t, intl } = useI18n();
   const tokens = useVizTokens();
   const privacy = usePrivacy();
   const rate = metric === "winRate";
@@ -41,7 +43,11 @@ export function RollingTradeChart({
         <LineChart
           data={data}
           margin={{ top: 12, right: 14, bottom: 4, left: 0 }}
-          aria-label={`${rate ? "Win rate" : "Average net P&L"} over 20-trade windows. Exact values and links follow below.`}
+          aria-label={
+            rate
+              ? t("Win rate over 20-trade windows. Exact values and links follow below.")
+              : t("Average net P&L over 20-trade windows. Exact values and links follow below.")
+          }
         >
           <CartesianGrid stroke={tokens.gridline} vertical={false} />
           <XAxis
@@ -76,9 +82,16 @@ export function RollingTradeChart({
             contentStyle={tooltipStyle(tokens)}
             labelFormatter={(label) => {
               const point = data.find((point) => point.sequence === Number(label));
-              return `Trade #${label}${point ? ` · ${new Intl.DateTimeFormat("en", { timeZone, month: "short", day: "numeric", year: "numeric" }).format(new Date(point.closedAt))}` : ""}`;
+              if (!point) return t("Trade #{number}", { number: String(label) });
+              const date = new Intl.DateTimeFormat(intl, {
+                timeZone,
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+              }).format(new Date(point.closedAt));
+              return t("Trade #{number} · {date}", { number: String(label), date });
             }}
-            formatter={(value) => [format(Number(value)), "Last 20 trades"]}
+            formatter={(value) => [format(Number(value)), t("Last 20 trades")]}
           />
           <Line
             dataKey={metric}

@@ -24,6 +24,7 @@ import {
   snapshotViewPath,
   type ChartAnalysisSummary,
 } from "@/lib/chart-analysis";
+import { useI18n } from "./i18n";
 /** The host of an image that would load from another site, or null for one of ours. */
 function externalHost(src: string | undefined): string | null {
   if (!src || typeof window === "undefined") return null;
@@ -80,6 +81,7 @@ export function Markdown({
  * editing. Spans keep it valid inside the paragraph Markdown wraps images in.
  */
 function MarkdownImage({ src, alt, ask }: { src?: string; alt: string; ask: boolean }) {
+  const { t } = useI18n();
   const [failed, setFailed] = useState(false);
   const [shown, setShown] = useState(false);
   const embed = analysisEmbedFromSrc(src);
@@ -91,24 +93,26 @@ function MarkdownImage({ src, alt, ask }: { src?: string; alt: string; ask: bool
         className="text-xs text-muted-foreground underline"
         onClick={() => setShown(true)}
       >
-        Show image from {host}
-        {alt ? ` (${alt})` : ""}
+        {alt
+          ? t("Show image from {host} ({alt})", { host, alt })
+          : t("Show image from {host}", { host })}
       </button>
     );
   if (!embed) return <img src={src} alt={alt} loading="lazy" className="max-w-full rounded-md" />;
   const { id, day } = embed;
-  const caption = alt.replace(/ chart analysis$/, "") || "Chart analysis";
+  const caption = alt.replace(/ chart analysis$/, "") || t("Chart analysis");
   // A day snapshot opens that day's version; a live embed opens the analysis to edit.
   const href = day ? snapshotViewPath(id, day) : analysisEditPath(id);
   return (
     <span className="journal-analysis-embed my-2 block overflow-hidden rounded-lg border bg-card">
       {failed ? (
         <span className="block p-4 text-sm text-muted-foreground">
-          This chart snapshot is unavailable. The analysis may have been deleted or saved without an
-          image.
+          {t(
+            "This chart snapshot is unavailable. The analysis may have been deleted or saved without an image.",
+          )}
         </span>
       ) : (
-        <Link href={href} className="block" aria-label={`Open ${caption} in Charts`}>
+        <Link href={href} className="block" aria-label={t("Open {caption} in Charts", { caption })}>
           <img
             src={src}
             alt={alt}
@@ -126,17 +130,19 @@ function MarkdownImage({ src, alt, ask }: { src?: string; alt: string; ask: bool
         <span className="flex shrink-0 gap-3">
           {day && (
             <Link href={analysisEditPath(id)} className="underline">
-              Live chart
+              {t("Live chart")}
             </Link>
           )}
           <Link href={href} className="underline">
-            {day ? `As of ${day}` : "Open in Charts"}
+            {day ? t("As of {day}", { day }) : t("Open in Charts")}
           </Link>
         </span>
       </span>
     </span>
   );
 }
+// Built-in templates: the English is the lookup key; the name and the inserted text read in
+// the journal's language (the inserted text is saved in the note as it reads).
 const BUILT_INS = [
   {
     id: "pre",
@@ -162,7 +168,7 @@ export interface RichEditorHandle {
 export function RichEditor({
   value,
   onChange,
-  placeholder = "Write your review…",
+  placeholder,
   defaultMode,
   mode,
   onModeChange,
@@ -181,6 +187,7 @@ export function RichEditor({
   /** Journal day a new chart analysis started from this editor should belong to. */
   analysisDay?: string;
 }) {
+  const { t } = useI18n();
   const ref = useRef<HTMLTextAreaElement>(null),
     [localPreview, setLocalPreview] = useState(() =>
       defaultMode ? defaultMode === "preview" : Boolean(value.trim()),
@@ -250,7 +257,7 @@ export function RichEditor({
         );
         markdown = snapshotMarkdown(analysis, analysisDay);
       } catch (cause) {
-        setChartError(cause instanceof Error ? cause.message : "Could not add the chart.");
+        setChartError(cause instanceof Error ? cause.message : t("Could not add the chart."));
         return;
       }
     }
@@ -281,7 +288,7 @@ export function RichEditor({
       <div className="flex flex-wrap items-center gap-1">
         {showModeToggle && (
           <Button type="button" variant="outline" size="sm" onClick={() => setPreview(!preview)}>
-            {preview ? "Edit" : "Preview"}
+            {preview ? t("Edit") : t("Preview")}
           </Button>
         )}
         {!preview && (
@@ -292,7 +299,7 @@ export function RichEditor({
               size="sm"
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => formatInline("**")}
-              aria-label="Bold"
+              aria-label={t("Bold")}
             >
               B
             </Button>
@@ -302,7 +309,7 @@ export function RichEditor({
               size="sm"
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => formatInline("*")}
-              aria-label="Italic"
+              aria-label={t("Italic")}
             >
               <i>I</i>
             </Button>
@@ -311,7 +318,7 @@ export function RichEditor({
               variant="ghost"
               size="sm"
               onClick={() => insert("\n## ")}
-              aria-label="Heading"
+              aria-label={t("Heading")}
             >
               H2
             </Button>
@@ -320,21 +327,21 @@ export function RichEditor({
               variant="ghost"
               size="sm"
               onClick={() => insert("\n- ")}
-              aria-label="Bullet list"
+              aria-label={t("Bullet list")}
             >
-              List
+              {t("List")}
             </Button>
             <Button
               type="button"
               variant="ghost"
               size="sm"
               onClick={() => insert("\n- [ ] ")}
-              aria-label="Checklist"
+              aria-label={t("Checklist")}
             >
-              Checklist
+              {t("Checklist")}
             </Button>
             <Button type="button" size="sm" variant="ghost" onClick={() => setLinkOpen(!linkOpen)}>
-              Link trade
+              {t("Link trade")}
             </Button>
             <DropdownMenu open={chartsOpen} onOpenChange={setChartsOpen}>
               <DropdownMenuTrigger asChild>
@@ -342,23 +349,23 @@ export function RichEditor({
                   type="button"
                   size="sm"
                   variant="ghost"
-                  aria-label="Insert chart analysis"
+                  aria-label={t("Insert chart analysis")}
                   className="gap-1.5"
                 >
                   <CandlestickChart className="size-3.5" />
-                  Chart
+                  {t("Chart")}
                   <ChevronDown className="size-3.5 text-muted-foreground" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent
                 align="start"
-                aria-label="Chart analyses"
+                aria-label={t("Chart analyses")}
                 className="max-h-80 w-72 overflow-y-auto"
               >
                 <DropdownMenuItem asChild>
                   <Link href={analysisDay ? `/charts?day=${analysisDay}` : "/charts"}>
                     <Plus aria-hidden="true" className="size-3.5 shrink-0" />
-                    New chart analysis…
+                    {t("New chart analysis…")}
                   </Link>
                 </DropdownMenuItem>
                 {chartError && (
@@ -373,7 +380,7 @@ export function RichEditor({
                 )}
                 {!analyses && !analysesError && (
                   <p role="status" className="px-2 py-1.5 text-xs text-muted-foreground">
-                    Loading analyses…
+                    {t("Loading analyses…")}
                   </p>
                 )}
                 {analyses?.analyses.map((analysis) => (
@@ -390,7 +397,7 @@ export function RichEditor({
                 ))}
                 {analyses?.analyses.length === 0 && (
                   <p className="px-2 py-1.5 text-xs text-muted-foreground">
-                    No saved analyses yet.
+                    {t("No saved analyses yet.")}
                   </p>
                 )}
               </DropdownMenuContent>
@@ -401,15 +408,18 @@ export function RichEditor({
                   type="button"
                   variant="outline"
                   size="sm"
-                  aria-label="Insert note template"
+                  aria-label={t("Insert note template")}
                   className="gap-2 rounded-lg"
                 >
-                  Insert template…
+                  {t("Insert template…")}
                   <ChevronDown className="size-3.5 text-muted-foreground" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" aria-label="Note templates">
-                {[...BUILT_INS, ...(data?.templates ?? [])].map((template) => (
+              <DropdownMenuContent align="start" aria-label={t("Note templates")}>
+                {[
+                  ...BUILT_INS.map((b) => ({ ...b, name: t(b.name), content: t(b.content) })),
+                  ...(data?.templates ?? []),
+                ].map((template) => (
                   <DropdownMenuItem
                     key={template.id}
                     onSelect={() => onChange(value + (value ? "\n\n" : "") + template.content)}
@@ -429,7 +439,7 @@ export function RichEditor({
               variant="ghost"
               disabled={!value}
               onClick={async () => {
-                const name = prompt("Name this note template");
+                const name = prompt(t("Name this note template"));
                 if (!name) return;
                 try {
                   await postJson("/api/workspace/templates", { name, content: value });
@@ -439,7 +449,7 @@ export function RichEditor({
                 }
               }}
             >
-              Save template
+              {t("Save template")}
             </Button>
           </>
         )}
@@ -447,8 +457,8 @@ export function RichEditor({
       {linkOpen && !preview && (
         <div className="space-y-2 rounded-md border p-2">
           <input
-            aria-label="Find trade by symbol, date or account"
-            placeholder="Search symbol, date or account"
+            aria-label={t("Find trade by symbol, date or account")}
+            placeholder={t("Search symbol, date or account")}
             className={fieldClass}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -456,7 +466,7 @@ export function RichEditor({
           <div className="max-h-40 overflow-y-auto">
             {tradesLoading && (
               <p role="status" className="text-xs text-muted-foreground">
-                Loading trades…
+                {t("Loading trades…")}
               </p>
             )}
             {tradeError && (
@@ -466,26 +476,28 @@ export function RichEditor({
             )}
             {!tradesLoading &&
               !tradeError &&
-              trades?.trades.map((t) => (
+              trades?.trades.map((trade) => (
                 <button
-                  key={t.key}
+                  key={trade.key}
                   type="button"
                   className="block w-full rounded p-1 text-left text-xs hover:bg-accent"
                   onClick={() => {
-                    onChange(value + `\n${tradeMarkdownLink(t)}\n`);
+                    onChange(value + `\n${tradeMarkdownLink(trade)}\n`);
                     setLinkOpen(false);
                     setPreview(true);
                   }}
                 >
-                  {tradeLinkLabel(t)}
+                  {tradeLinkLabel(trade)}
                 </button>
               ))}
             {!tradesLoading && !tradeError && trades?.trades.length === 0 && (
-              <p className="text-xs text-muted-foreground">No matching trades.</p>
+              <p className="text-xs text-muted-foreground">{t("No matching trades.")}</p>
             )}
             {!tradesLoading && !tradeError && trades?.hasMore && (
               <p className="text-xs text-muted-foreground">
-                Showing the latest 50 matches. Search by date or account to find older trades.
+                {t(
+                  "Showing the latest 50 matches. Search by date or account to find older trades.",
+                )}
               </p>
             )}
           </div>
@@ -493,16 +505,16 @@ export function RichEditor({
       )}
       {preview ? (
         <div className="min-h-40 rounded-md border p-3">
-          <Markdown>{value || "Nothing written yet."}</Markdown>
+          <Markdown>{value || t("Nothing written yet.")}</Markdown>
         </div>
       ) : (
         <textarea
           ref={ref}
-          aria-label="Review notes"
+          aria-label={t("Review notes")}
           className={`${fieldClass} min-h-48 resize-y font-mono text-[13px]`}
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
+          placeholder={placeholder ?? t("Write your review…")}
         />
       )}
       {error && (

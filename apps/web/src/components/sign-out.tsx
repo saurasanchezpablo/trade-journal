@@ -4,6 +4,7 @@ import { useState } from "react";
 import { LogOut } from "lucide-react";
 import { postJson, useApi } from "@/lib/use-api";
 import { Button } from "./ui/button";
+import { useT } from "./i18n";
 
 interface AuthState {
   required: boolean;
@@ -15,11 +16,12 @@ interface AuthState {
  * on the server, then (with provider logout on) at the provider too.
  */
 export function SignOutButton({ iconOnly = false }: { iconOnly?: boolean }) {
+  const t = useT();
   const { data } = useApi<AuthState>("/api/auth");
   const [busy, setBusy] = useState(false);
   if (!data?.required || !data.session) return null;
   const who = data.session.name || data.session.email;
-  const label = who ? `Sign out (${who})` : "Sign out";
+  const label = who ? t("Sign out ({who})", { who }) : t("Sign out");
   const signOut = async () => {
     setBusy(true);
     try {
@@ -45,7 +47,7 @@ export function SignOutButton({ iconOnly = false }: { iconOnly?: boolean }) {
       title={iconOnly ? label : who || undefined}
     >
       <LogOut aria-hidden="true" />
-      {!iconOnly && <span className="truncate">Sign out</span>}
+      {!iconOnly && <span className="truncate">{t("Sign out")}</span>}
     </Button>
   );
 }

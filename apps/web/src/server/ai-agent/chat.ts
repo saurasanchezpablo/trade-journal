@@ -1,5 +1,5 @@
 import { stepCountIs, streamText, type ModelMessage } from "ai";
-import { AI_SYSTEM, aiFailure, aiModel } from "../ai";
+import { aiSystem, aiFailure, aiModel } from "../ai";
 import { journalTools, toolLabel, type AiScope } from "./tools";
 import {
   addMessage,
@@ -96,7 +96,7 @@ export async function* chatTurn(input: {
   try {
     const result = streamText({
       ...model,
-      instructions: [AI_SYSTEM, CHAT_INSTRUCTIONS, scope.context, anchorContext(conversation)]
+      instructions: [aiSystem(), CHAT_INSTRUCTIONS, scope.context, anchorContext(conversation)]
         .filter(Boolean)
         .join("\n\n"),
       messages: [...history, { role: "user", content: question }],

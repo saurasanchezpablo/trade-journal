@@ -10,6 +10,7 @@ import { FallbackPineEngine } from "@/lib/pine-fallback-engine";
 import { viewBars, viewForming, type ChartLevel, type ChartMark } from "@/lib/backtest-replay";
 import type { MarketBar, Resolution } from "@/lib/market-data";
 import { randomId } from "@/lib/random-id";
+import { useT } from "../i18n";
 import { keepDrawingsOverSeries } from "../vela-depth-fix";
 import { clipOffscreenDashes } from "../vela-dash-fix";
 import { limitChartView } from "../vela-view-limits";
@@ -62,6 +63,7 @@ export function BacktestChart({
   onDrawings: (document: unknown) => void;
   onReady: (api: BacktestChartApi | null) => void;
 }) {
+  const t = useT();
   const host = useRef<HTMLDivElement>(null);
   const [error, setError] = useState("");
   const props = useRef({ revealed, levels, marks, onDrawings, onReady, view, drawings });
@@ -327,7 +329,7 @@ export function BacktestChart({
     <>
       {error && (
         <p role="alert" className="text-sm text-destructive">
-          {error}
+          {t(error)}
         </p>
       )}
       <div ref={host} className="h-[520px] overflow-hidden rounded-lg border" />

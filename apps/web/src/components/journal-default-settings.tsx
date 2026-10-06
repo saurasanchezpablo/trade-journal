@@ -14,7 +14,9 @@ import { Field, fieldClass } from "@/components/filter-fields";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { randomId } from "@/lib/random-id";
+import { useT } from "./i18n";
 export function JournalDefaultSettings() {
+  const t = useT();
   const { data, error } = useApi<JournalDefaults>("/api/workspace/defaults"),
     { data: accounts } = useApi<{ accounts: { id: string; name: string }[] }>("/api/accounts");
   const [draft, setDraft] = useState(EMPTY_DEFAULTS),
@@ -30,7 +32,7 @@ export function JournalDefaultSettings() {
           value={r.accountId}
           onValueChange={(next) => update({ ...r, accountId: next })}
         >
-          <option value="">All accounts</option>
+          <option value="">{t("All accounts")}</option>
           {accounts?.accounts.map((a) => (
             <option key={a.id} value={a.id}>
               {a.name}
@@ -42,7 +44,7 @@ export function JournalDefaultSettings() {
         <input
           className={fieldClass}
           value={r.symbol}
-          placeholder="e.g. ES"
+          placeholder={t("e.g. ES")}
           onChange={(e) => update({ ...r, symbol: e.target.value.toUpperCase() })}
         />
       </Field>
@@ -51,7 +53,7 @@ export function JournalDefaultSettings() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Breakeven, fees and risk defaults</CardTitle>
+        <CardTitle>{t("Breakeven, fees and risk defaults")}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-5">
         {error && (
@@ -80,21 +82,22 @@ export function JournalDefaultSettings() {
                 setDraft({ ...draft, breakevenMode: next as "money" | "percent" })
               }
             >
-              <option value="money">Account currency</option>
-              <option value="percent">% of entry notional</option>
+              <option value="money">{t("Account currency")}</option>
+              <option value="percent">{t("% of entry notional")}</option>
             </OptionSelect>
           </Field>
         </div>
         <p className="text-xs text-muted-foreground">
-          Closed trades within this net P&L range count as breakeven. Actual P&L is unchanged.
-          Percentage mode uses entry price × total entry quantity × contract multiplier; configure
-          multipliers for derivatives first.
+          {t(
+            "Closed trades within this net P&L range count as breakeven. Actual P&L is unchanged. Percentage mode uses entry price × total entry quantity × contract multiplier; configure multipliers for derivatives first.",
+          )}
         </p>
         <div className="space-y-3">
-          <h3 className="text-sm font-medium">Default fees</h3>
+          <h3 className="text-sm font-medium">{t("Default fees")}</h3>
           <p className="text-xs text-muted-foreground">
-            Applied to new fills with a zero fee, including explicit zeroes. Nonzero imported fees
-            and existing fills are kept. The first matching rule wins.
+            {t(
+              "Applied to new fills with a zero fee, including explicit zeroes. Nonzero imported fees and existing fills are kept. The first matching rule wins.",
+            )}
           </p>
           {draft.feeRules.map((r, i) => {
             const update = (next: FeeRule | RiskRule) =>
@@ -124,8 +127,8 @@ export function JournalDefaultSettings() {
                       value={r.mode}
                       onValueChange={(next) => update({ ...r, mode: next as FeeRule["mode"] })}
                     >
-                      <option value="execution">Execution</option>
-                      <option value="unit">Unit / contract</option>
+                      <option value="execution">{t("Execution")}</option>
+                      <option value="unit">{t("Unit / contract")}</option>
                     </OptionSelect>
                   </Field>
                 </div>
@@ -136,7 +139,7 @@ export function JournalDefaultSettings() {
                     setDraft({ ...draft, feeRules: draft.feeRules.filter((x) => x.id !== r.id) })
                   }
                 >
-                  Remove fee rule
+                  {t("Remove fee rule")}
                 </Button>
               </div>
             );
@@ -160,14 +163,15 @@ export function JournalDefaultSettings() {
               })
             }
           >
-            Add fee rule
+            {t("Add fee rule")}
           </Button>
         </div>
         <div className="space-y-3">
-          <h3 className="text-sm font-medium">Stop and target defaults</h3>
+          <h3 className="text-sm font-medium">{t("Stop and target defaults")}</h3>
           <p className="text-xs text-muted-foreground">
-            Distances from weighted entry, adjusted for long or short direction. Applied only when a
-            new trade is first created. The first matching rule wins.
+            {t(
+              "Distances from weighted entry, adjusted for long or short direction. Applied only when a new trade is first created. The first matching rule wins.",
+            )}
           </p>
           {draft.riskRules.map((r, i) => {
             const update = (next: FeeRule | RiskRule) =>
@@ -209,8 +213,8 @@ export function JournalDefaultSettings() {
                       value={r.mode}
                       onValueChange={(next) => update({ ...r, mode: next as RiskRule["mode"] })}
                     >
-                      <option value="price">Price points</option>
-                      <option value="percent">% of entry price</option>
+                      <option value="price">{t("Price points")}</option>
+                      <option value="percent">{t("% of entry price")}</option>
                     </OptionSelect>
                   </Field>
                 </div>
@@ -221,7 +225,7 @@ export function JournalDefaultSettings() {
                     setDraft({ ...draft, riskRules: draft.riskRules.filter((x) => x.id !== r.id) })
                   }
                 >
-                  Remove risk rule
+                  {t("Remove risk rule")}
                 </Button>
               </div>
             );
@@ -246,7 +250,7 @@ export function JournalDefaultSettings() {
               })
             }
           >
-            Add risk rule
+            {t("Add risk rule")}
           </Button>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -254,15 +258,15 @@ export function JournalDefaultSettings() {
             disabled={!data}
             onClick={async () => {
               try {
-                setStatus("Saving…");
+                setStatus(t("Saving…"));
                 await postJson("/api/workspace/defaults", draft);
-                setStatus("Defaults saved");
+                setStatus(t("Defaults saved"));
               } catch (e) {
-                setStatus(e instanceof Error ? e.message : "Save failed.");
+                setStatus(e instanceof Error ? e.message : t("Save failed."));
               }
             }}
           >
-            Save defaults
+            {t("Save defaults")}
           </Button>
           <span role="status" className="text-xs">
             {status}

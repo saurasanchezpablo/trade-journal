@@ -15,6 +15,8 @@ import { recurringLessonsText } from "../lessons";
 import { getTimeZone } from "../settings";
 import { MUTE_REASONS, routeAlert } from "@/lib/alert-preferences";
 import { getAlertPreferences } from "../background-alerts/preferences";
+import { intlLocale } from "@/lib/i18n";
+import { getLocale, serverT, serverTn } from "../i18n";
 import { queryTrades } from "../trades-query";
 import { summaryOf, type DigestKind } from "./schedule";
 import { claimDigest, finishDigest, getDigestSettings, type Digest } from "./store";
@@ -32,7 +34,10 @@ export interface DigestDeps {
 const defaults: DigestDeps = { deliver: deliverAlert };
 
 const weekdayName = (day: string) =>
-  new Date(`${day}T12:00:00Z`).toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" });
+  new Date(`${day}T12:00:00Z`).toLocaleDateString(intlLocale(getLocale()), {
+    weekday: "short",
+    timeZone: "UTC",
+  });
 
 interface Plan {
   title: string;
@@ -54,11 +59,16 @@ function planFor(kind: DigestKind, period: string): Plan | { skip: string } {
       (t) => t.status !== "open",
     );
     const note = db.select().from(journalDays).where(eq(journalDays.date, period)).get()?.note;
-    if (!closed.length && !note?.trim()) return { skip: "No closed trades or day note that day." };
-    const title = `Session recap · ${weekdayName(period)} ${period}`;
+    if (!closed.length && !note?.trim())
+      return { skip: serverT("No closed trades or day note that day.") };
+    // Titles and notification words in the journal's language; the AI answers in it too.
+    const title = serverT("Session recap · {weekday} {day}", {
+      weekday: weekdayName(period),
+      day: period,
+    });
     return {
       title,
-      display: `Session recap for ${period} (scheduled)`,
+      display: serverT("Session recap for {day} (scheduled)", { day: period }),
       question: `Write my session recap for ${period} in first person ("I"), 120-200 words, markdown,
 ending with a short "**Keep**" and "**Fix**" list. Read the day with get_day first. Compare
 with my recent days only where it shows what was different today. This recap was scheduled:
@@ -68,17 +78,20 @@ be concrete about today's trades and plans.`,
       anchor: period,
       url: (id) => `/journal/${period}?chat=${encodeURIComponent(id)}`,
       count: closed.length
-        ? `${closed.length} trade${closed.length === 1 ? "" : "s"} reviewed`
-        : "Your day note reviewed",
+        ? serverTn(closed.length, "{count} trade reviewed", "{count} trades reviewed")
+        : serverT("Your day note reviewed"),
     };
   }
   const days = weekEnding(period);
   const { text, tradeCount } = weekContext(period, timeZone);
   if (!tradeCount && !text.includes("Keep:") && !text.includes("Fix:"))
-    return { skip: "No closed trades or day lessons that week." };
+    return { skip: serverT("No closed trades or day lessons that week.") };
   return {
-    title: `Weekly review · ${days[0]} to ${period}`,
-    display: `Weekly review for ${days[0]} to ${period} (scheduled)`,
+    title: serverT("Weekly review · {from} to {to}", { from: days[0]!, to: period }),
+    display: serverT("Weekly review for {from} to {to} (scheduled)", {
+      from: days[0]!,
+      to: period,
+    }),
     question: `Write my weekly trading review for ${days[0]} to ${period} in first person ("I"),
 200-320 words, markdown with these sections: "**What worked**", "**What cost me**" (name
 repeated mistakes and Fix items that came back), "**Plans**" (how often my graded scenarios
@@ -94,7 +107,7 @@ Where a lesson keeps coming back, say so with how many weeks in a row. Use the t
     kind: "journal",
     anchor: null,
     url: (id) => `/reports?chat=${encodeURIComponent(id)}`,
-    count: `${tradeCount} trade${tradeCount === 1 ? "" : "s"} reviewed`,
+    count: serverTn(tradeCount, "{count} trade reviewed", "{count} trades reviewed"),
   };
 }
 
@@ -163,7 +176,7 @@ async function write(kind: DigestKind, period: string, deps: DigestDeps): Promis
       status: "failed",
       conversationId: conversation.id,
       title: plan.title,
-      detail: failure ?? "AI returned no text.",
+      detail: failure ?? serverT("AI returned no text."),
     };
 
   const settings = getDigestSettings();
@@ -172,7 +185,7 @@ async function write(kind: DigestKind, period: string, deps: DigestDeps): Promis
       title: plan.title,
       body: settings.summaryInNotification
         ? summaryOf(text)
-        : `${plan.count}. Tap to read it and ask follow-ups.`,
+        : serverT("{count}. Tap to read it and ask follow-ups.", { count: plan.count }),
       tag: `digest-${kind}-${period}`,
       url: plan.url(conversation.id),
     },
@@ -186,10 +199,16 @@ async function write(kind: DigestKind, period: string, deps: DigestDeps): Promis
     conversationId: conversation.id,
     title: plan.title,
     detail: delivered
-      ? `Sent to ${delivered} device${delivered === 1 ? "" : "s"} or webhook${delivered === 1 ? "" : "s"}.`
+      ? serverTn(
+          delivered,
+          "Sent to {count} device or webhook.",
+          "Sent to {count} devices or webhooks.",
+        )
       : held
-        ? `Written; its notification was held back (${MUTE_REASONS[held]}, see the Alerts page).`
-        : "Written, but no browser or webhook is set up to receive it.",
+        ? serverT("Written; its notification was held back ({reason}, see the Alerts page).", {
+            reason: serverT(MUTE_REASONS[held]),
+          })
+        : serverT("Written, but no browser or webhook is set up to receive it."),
     delivered,
   };
 }

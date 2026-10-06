@@ -15,6 +15,7 @@ import { INDICATOR_LIBRARY, type LibraryIndicator } from "@/lib/indicator-librar
 import type { ChartScript, IndicatorRef } from "@/lib/chart-indicators";
 import { cn } from "@/lib/utils";
 import type { ChartIndicator } from "./chart-indicators-bridge";
+import { useI18n } from "./i18n";
 import { Button } from "./ui/button";
 import {
   DropdownMenu,
@@ -59,6 +60,7 @@ export function IndicatorsPanel({
   onSettings: (id: string) => void;
   onRemove: (id: string) => void;
 }) {
+  const { t } = useI18n();
   const [showScripts, setShowScripts] = useState(false);
   return (
     <div className="space-y-2">
@@ -66,7 +68,7 @@ export function IndicatorsPanel({
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button type="button" size="sm" variant="outline" disabled={disabled}>
-              <Plus /> Add indicator <ChevronDown className="text-muted-foreground" />
+              <Plus /> {t("Add indicator")} <ChevronDown className="text-muted-foreground" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent
@@ -76,7 +78,7 @@ export function IndicatorsPanel({
             {CATEGORIES.map((category) => (
               <div key={category}>
                 <p className="px-2 pb-1 pt-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  {category}
+                  {t(category)}
                 </p>
                 {INDICATOR_LIBRARY.filter((i) => i.category === category).map((item) => (
                   <DropdownMenuItem
@@ -84,9 +86,9 @@ export function IndicatorsPanel({
                     onSelect={() => onAdd({ kind: "library", key: item.key }, item.source)}
                   >
                     <span className="min-w-0">
-                      <span className="block truncate">{item.name}</span>
+                      <span className="block truncate">{t(item.name)}</span>
                       <span className="block truncate text-[11px] text-muted-foreground">
-                        {item.description}
+                        {t(item.description)}
                       </span>
                     </span>
                   </DropdownMenuItem>
@@ -94,10 +96,10 @@ export function IndicatorsPanel({
               </div>
             ))}
             <p className="px-2 pb-1 pt-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-              My indicators
+              {t("My indicators")}
             </p>
             {scripts.length === 0 && (
-              <p className="px-2 py-1 text-xs text-muted-foreground">None saved yet.</p>
+              <p className="px-2 py-1 text-xs text-muted-foreground">{t("None saved yet.")}</p>
             )}
             {scripts.map((script) => (
               <DropdownMenuItem
@@ -109,18 +111,18 @@ export function IndicatorsPanel({
               </DropdownMenuItem>
             ))}
             <DropdownMenuItem onSelect={onNew}>
-              <Plus className="size-3.5" /> New Pine indicator…
+              <Plus className="size-3.5" /> {t("New Pine indicator…")}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
         <Button type="button" size="sm" variant="ghost" disabled={disabled} onClick={onNew}>
-          <Code2 /> New
+          <Code2 /> {t("New")}
         </Button>
       </div>
 
       {indicators.length === 0 ? (
         <p className="text-xs text-muted-foreground">
-          No indicators yet. Add a built-in one or write your own in Pine Script.
+          {t("No indicators yet. Add a built-in one or write your own in Pine Script.")}
         </p>
       ) : (
         <ul className="space-y-0.5">
@@ -136,24 +138,31 @@ export function IndicatorsPanel({
                   {indicator.title}
                 </span>
                 <Tool
-                  label={indicator.visible ? `Hide ${indicator.title}` : `Show ${indicator.title}`}
+                  label={
+                    indicator.visible
+                      ? t("Hide {name}", { name: indicator.title })
+                      : t("Show {name}", { name: indicator.title })
+                  }
                   onClick={() => onToggle(indicator.id, !indicator.visible)}
                 >
                   {indicator.visible ? <Eye /> : <EyeOff />}
                 </Tool>
                 <Tool
-                  label={`${indicator.title} settings`}
+                  label={t("{name} settings", { name: indicator.title })}
                   onClick={() => onSettings(indicator.id)}
                 >
                   <Settings2 />
                 </Tool>
                 <Tool
-                  label={`Edit ${indicator.title} code`}
+                  label={t("Edit {name} code", { name: indicator.title })}
                   onClick={() => onEditIndicator(indicator)}
                 >
                   <Code2 />
                 </Tool>
-                <Tool label={`Remove ${indicator.title}`} onClick={() => onRemove(indicator.id)}>
+                <Tool
+                  label={t("Remove {name}", { name: indicator.title })}
+                  onClick={() => onRemove(indicator.id)}
+                >
                   <Trash2 />
                 </Tool>
               </div>
@@ -179,7 +188,7 @@ export function IndicatorsPanel({
             ) : (
               <ChevronRight className="size-3.5" />
             )}
-            My indicators ({scripts.length})
+            {t("My indicators ({count})", { count: scripts.length })}
           </button>
           {showScripts && (
             <ul className="mt-1 space-y-0.5">
@@ -190,13 +199,16 @@ export function IndicatorsPanel({
                 >
                   <span className="min-w-0 flex-1 truncate py-1">{script.name}</span>
                   <Tool
-                    label={`Add ${script.name} to the chart`}
+                    label={t("Add {name} to the chart", { name: script.name })}
                     disabled={disabled}
                     onClick={() => onAdd({ kind: "script", id: script.id }, script.source)}
                   >
                     <Plus />
                   </Tool>
-                  <Tool label={`Edit ${script.name}`} onClick={() => onEditScript(script)}>
+                  <Tool
+                    label={t("Edit {name}", { name: script.name })}
+                    onClick={() => onEditScript(script)}
+                  >
                     <Code2 />
                   </Tool>
                 </li>
@@ -206,8 +218,9 @@ export function IndicatorsPanel({
         </div>
       )}
       <p className="text-[11px] text-muted-foreground">
-        Indicators run on PineTS (AGPL-3.0). Settings on the chart legend or the gear edit their
-        inputs; they save with this analysis.
+        {t(
+          "Indicators run on PineTS (AGPL-3.0). Settings on the chart legend or the gear edit their inputs; they save with this analysis.",
+        )}
       </p>
     </div>
   );

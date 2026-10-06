@@ -8,6 +8,7 @@ import { NotificationLog } from "@/components/alerts/notification-log";
 import { OpenChartAlerts } from "@/components/alerts/open-chart-alerts";
 import { WatchedCharts } from "@/components/alerts/watched-charts";
 import { useApi } from "@/lib/use-api";
+import { useT } from "@/components/i18n";
 
 /**
  * Alerts: where they go (browsers, webhook), which you receive (per kind, quiet hours, a
@@ -15,9 +16,10 @@ import { useApi } from "@/lib/use-api";
  * everything sent. Chart levels and zones, YouTube analyses and AI digests all go through it.
  */
 export default function AlertsPage() {
+  const t = useT();
   return (
     <Suspense>
-      <FilterBar title="Alerts" />
+      <FilterBar title={t("Alerts")} />
       <AlertsContent />
     </Suspense>
   );

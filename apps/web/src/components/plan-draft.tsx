@@ -4,10 +4,12 @@ import { useEffect, useRef, useState } from "react";
 import { Plus, Sparkles } from "lucide-react";
 import { MAX_SCENARIOS, type AnalysisPlan, type Bias } from "@/lib/analysis-plan";
 import { fmtPrice } from "@/lib/analysis-text";
+import { tr } from "@/lib/i18n";
 import type { DraftScenario } from "@/lib/plan-draft";
 import { postJson } from "@/lib/use-api";
 import { Button } from "./ui/button";
 import { AiNotice } from "./ai-notice";
+import { useI18n } from "./i18n";
 
 interface Draft {
   day: string;
@@ -17,7 +19,8 @@ interface Draft {
 }
 
 const newId = () => `sc-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
-const price = (v: number | null) => (v === null ? "none" : fmtPrice(v));
+const price = (v: number | null) => (v === null ? tr("none") : fmtPrice(v));
+const BIAS_LABEL: Record<Bias, string> = { long: "Long", short: "Short", neutral: "Neutral" };
 
 /**
  * A drafted pre-market plan from the chart's levels and the previous session: add the
@@ -34,6 +37,7 @@ export function PlanDraft({
   onAccept: (next: AnalysisPlan) => void;
   disabled?: boolean;
 }) {
+  const { t } = useI18n();
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -55,7 +59,8 @@ export function PlanDraft({
       const next = await postJson<Draft>("/api/ai/plan-draft", { analysisId: asked });
       if (current.current === asked) setDraft(next);
     } catch (cause) {
-      if (current.current === asked) setError(cause instanceof Error ? cause.message : "No draft");
+      if (current.current === asked)
+        setError(cause instanceof Error ? cause.message : t("No draft"));
     } finally {
       if (current.current === asked) setBusy(false);
     }
@@ -79,11 +84,11 @@ export function PlanDraft({
         size="sm"
         variant="outline"
         disabled={disabled || busy || !analysisId}
-        title={analysisId ? undefined : "Save the analysis first"}
+        title={analysisId ? undefined : t("Save the analysis first")}
         onClick={() => void ask()}
       >
         <Sparkles />
-        {busy ? "Drafting…" : "Draft the day's plan"}
+        {busy ? t("Drafting…") : t("Draft the day's plan")}
       </Button>
       {error && (
         <AiNotice error={error} onRetry={() => void ask()} onDismiss={() => setError(null)} />
@@ -91,13 +96,16 @@ export function PlanDraft({
       {draft && (
         <div
           className="space-y-1.5 rounded-md border border-dashed p-2 text-xs"
-          aria-label="Plan draft"
+          aria-label={t("Plan draft")}
         >
-          <p className="text-muted-foreground">Draft for {draft.day}. Add what you agree with.</p>
+          <p className="text-muted-foreground">
+            {t("Draft for {day}. Add what you agree with.", { day: draft.day })}
+          </p>
           {draft.bias && (
             <div className="flex flex-wrap items-center gap-2">
               <span>
-                Bias <span className="font-medium">{draft.bias}</span>: {draft.biasReason}
+                {t("Bias")} <span className="font-medium">{t(BIAS_LABEL[draft.bias])}</span>:{" "}
+                {draft.biasReason}
               </span>
               {plan.bias !== draft.bias && (
                 <button
@@ -105,17 +113,17 @@ export function PlanDraft({
                   className="underline"
                   onClick={() => onAccept({ ...plan, bias: draft.bias })}
                 >
-                  Use it
+                  {t("Use it")}
                 </button>
               )}
             </div>
           )}
-          {draft.scenarios.length === 0 && <p>No further scenarios.</p>}
+          {draft.scenarios.length === 0 && <p>{t("No further scenarios.")}</p>}
           {draft.scenarios.map((s, i) => (
             <div key={i} className="space-y-0.5 rounded border p-1.5">
               <div className="flex items-center gap-2">
                 <span className="min-w-0 flex-1 font-medium">
-                  {s.name || "Scenario"} ({s.direction})
+                  {s.name || t("Scenario")} ({t(BIAS_LABEL[s.direction])})
                 </span>
                 <Button
                   type="button"
@@ -123,16 +131,21 @@ export function PlanDraft({
                   variant="ghost"
                   className="h-6 px-2"
                   disabled={full}
-                  title={full ? `A plan holds ${MAX_SCENARIOS} scenarios` : undefined}
+                  title={
+                    full ? t("A plan holds {count} scenarios", { count: MAX_SCENARIOS }) : undefined
+                  }
                   onClick={() => add(s)}
                 >
                   <Plus />
-                  Add
+                  {t("Add")}
                 </Button>
               </div>
               <p className="tnum">
-                Trigger {price(s.trigger)} · target {price(s.target)} · invalid at{" "}
-                {price(s.invalidation)}
+                {t("Trigger {trigger} · target {target} · invalid at {invalidation}", {
+                  trigger: price(s.trigger),
+                  target: price(s.target),
+                  invalidation: price(s.invalidation),
+                })}
               </p>
               {(s.note || s.levelNote) && (
                 <p className="text-muted-foreground">
@@ -140,7 +153,9 @@ export function PlanDraft({
                 </p>
               )}
               {s.problems.length > 0 && (
-                <p className="text-muted-foreground">Left out: {s.problems.join("; ")}.</p>
+                <p className="text-muted-foreground">
+                  {t("Left out: {problems}.", { problems: s.problems.join("; ") })}
+                </p>
               )}
             </div>
           ))}

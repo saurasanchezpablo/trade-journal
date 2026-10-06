@@ -26,6 +26,95 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { OptionSelect } from "./ui/option-select";
 import { randomId } from "@/lib/random-id";
+import type { Vars } from "@/lib/i18n";
+import { useI18n } from "./i18n";
+
+type Translate = (text: string, vars?: Vars) => string;
+
+/** Server texts with values in them (reasons, data warnings), as dictionary keys and values. */
+const MARKET_PATTERNS: [RegExp, string, string[]][] = [
+  [
+    /^(\d+) candles straddle a fill or trade boundary and were excluded; excursions may be understated\.$/,
+    "{count} candles straddle a fill or trade boundary and were excluded; excursions may be understated.",
+    ["count"],
+  ],
+  [
+    /^(\S+) candles are built from (\S+) candles, aligned to UTC weeks from Monday\.$/,
+    "{resolution} candles are built from {base} candles, aligned to UTC weeks from Monday.",
+    ["resolution", "base"],
+  ],
+  [
+    /^(\S+) candles are built from (\S+) candles, aligned to UTC\.$/,
+    "{resolution} candles are built from {base} candles, aligned to UTC.",
+    ["resolution", "base"],
+  ],
+  [
+    /^The candles are quoted in (.+), counted as the account's USD; stablecoins can drift slightly from the dollar\.$/,
+    "The candles are quoted in {quote}, counted as the account's USD; stablecoins can drift slightly from the dollar.",
+    ["quote"],
+  ],
+  [
+    /^The candle quote currency \((.*)\) differs from this account \((.*)\)\. Monetary estimates are unavailable; no FX conversion is applied\.$/,
+    "The candle quote currency ({quote}) differs from this account ({currency}). Monetary estimates are unavailable; no FX conversion is applied.",
+    ["quote", "currency"],
+  ],
+  [
+    /^Enable (.+) in Settings → Market data to see this trade's candles here\.$/,
+    "Enable {sources} in Settings → Market data to see this trade's candles here.",
+    ["sources"],
+  ],
+  [
+    /^No enabled source lists (.+) with candles this far back\. Choose a data provider and its symbol below\.$/,
+    "No enabled source lists {symbol} with candles this far back. Choose a data provider and its symbol below.",
+    ["symbol"],
+  ],
+  [
+    /^No enabled exchange lists (.+)\. Choose a data provider and its symbol below\.$/,
+    "No enabled exchange lists {symbol}. Choose a data provider and its symbol below.",
+    ["symbol"],
+  ],
+  [
+    /^Prices are in (.+), not the main currency unit\.$/,
+    "Prices are in {unit}, not the main currency unit.",
+    ["unit"],
+  ],
+  [
+    /^Alpaca (\S+) stock feed, unadjusted prices\. IEX covers one exchange; feed coverage depends on your subscription\.$/,
+    "Alpaca {feed} stock feed, unadjusted prices. IEX covers one exchange; feed coverage depends on your subscription.",
+    ["feed"],
+  ],
+  [
+    /^Local file: (.*)\. Price basis: (.*)\. Volume may be omitted; only supplied candles are used\.$/,
+    "Local file: {name}. Price basis: {basis}. Volume may be omitted; only supplied candles are used.",
+    ["name", "basis"],
+  ],
+  [
+    /^Kraken spot prices, the latest 720 candles of each size only\. (.+) is quoted in (.+); it is not converted into account currency\.$/,
+    "Kraken spot prices, the latest 720 candles of each size only. {pair} is quoted in {quote}; it is not converted into account currency.",
+    ["pair", "quote"],
+  ],
+  [
+    /^OKX perpetual prices can differ from spot\. One contract is (.+?); set the contract multiplier in Settings to match the units in your fills\. Volume is in the coin\.$/,
+    "OKX perpetual prices can differ from spot. One contract is {size}; set the contract multiplier in Settings to match the units in your fills. Volume is in the coin.",
+    ["size"],
+  ],
+];
+
+/** A reason or data warning from the server, in the journal's language. */
+function marketText(text: string, t: Translate): string {
+  for (const [pattern, key, names] of MARKET_PATTERNS) {
+    const match = pattern.exec(text);
+    if (!match) continue;
+    const vars: Vars = {};
+    names.forEach((name, index) => (vars[name] = match[index + 1] ?? ""));
+    if (vars.sources)
+      vars.sources = String(vars.sources)
+        .split(" or ")
+        .reduce((first, second) => t("{first} or {second}", { first, second }));
+    return t(key, vars);
+  }
+  return t(text);
+}
 
 export function TradeMarketData({
   trade,
@@ -34,6 +123,7 @@ export function TradeMarketData({
   trade: ChartTrade & { currency: string };
   executions: ChartExecution[];
 }) {
+  const { t } = useI18n();
   const privacy = usePrivacy();
   const { data: saved, refresh: refreshSaved } = useApi<{
     saved: { estimate: ExcursionEstimate } | null;
@@ -97,14 +187,14 @@ export function TradeMarketData({
         signal: request.signal,
       });
       const body = await response.json();
-      if (!response.ok) throw new Error(body.error ?? "History request failed.");
+      if (!response.ok) throw new Error(t(body.error ?? "History request failed."));
       if (!request.signal.aborted) {
         setResult(body);
         refreshSaved();
       }
     } catch (cause) {
       if (!request.signal.aborted)
-        setError(cause instanceof Error ? cause.message : "History request failed.");
+        setError(cause instanceof Error ? cause.message : t("History request failed."));
     } finally {
       if (!request.signal.aborted) setBusy(false);
     }
@@ -146,13 +236,18 @@ export function TradeMarketData({
           setDataset(chosen.dataset);
           setResolution(chosen.resolution);
           setAuto({
-            note: `${body.source.symbol} ${body.source.resolution} candles from ${body.source.providerName}, ${
+            note: t(
               body.source.via === "replay"
-                ? "as loaded for this trade before"
+                ? "{symbol} {resolution} candles from {provider}, as loaded for this trade before. Change the source below if it is not the right one."
                 : body.source.via === "chart"
-                  ? "the source of your chart of this symbol"
-                  : "chosen for this symbol"
-            }. Change the source below if it is not the right one.`,
+                  ? "{symbol} {resolution} candles from {provider}, the source of your chart of this symbol. Change the source below if it is not the right one."
+                  : "{symbol} {resolution} candles from {provider}, chosen for this symbol. Change the source below if it is not the right one.",
+              {
+                symbol: body.source.symbol,
+                resolution: body.source.resolution,
+                provider: body.source.providerName,
+              },
+            ),
           });
           void load(chosen, { available: false });
         },
@@ -169,12 +264,13 @@ export function TradeMarketData({
     <div className="space-y-3">
       <Card>
         <CardHeader>
-          <CardTitle>Market data & replay</CardTitle>
+          <CardTitle>{t("Market data & replay")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            The market around this trade, its replay, and how far price went against you (MAE) and
-            in your favour (MFE) while it was open.
+            {t(
+              "The market around this trade, its replay, and how far price went against you (MAE) and in your favour (MFE) while it was open.",
+            )}
           </p>
           {connectionError && (
             <p role="alert" className="text-sm text-destructive">
@@ -188,28 +284,29 @@ export function TradeMarketData({
           )}
           {auto && "reason" in auto && available.length > 0 && (
             <p role="status" className="text-xs text-muted-foreground">
-              {auto.reason}
+              {marketText(auto.reason, t)}
             </p>
           )}
           {!available.length && (
             <p className="text-sm text-muted-foreground">
               <a className="underline" href="/settings#market-data">
-                Connect a market data provider in Settings
+                {t("Connect a market data provider in Settings")}
               </a>{" "}
-              to see this trade&apos;s candles, replay it and estimate MAE/MFE. Binance, Bybit and
-              Coinbase need no key.
+              {t(
+                "to see this trade's candles, replay it and estimate MAE/MFE. Binance, Bybit and Coinbase need no key.",
+              )}
             </p>
           )}
           {!trade.closedAt && (
             <p className="text-xs text-muted-foreground">
-              Open trade: candles up to now. Estimates are available once it closes.
+              {t("Open trade: candles up to now. Estimates are available once it closes.")}
             </p>
           )}
           {available.length > 0 && (
             <>
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-1">
-                  <Label htmlFor="market-provider">Data provider</Label>
+                  <Label htmlFor="market-provider">{t("Data provider")}</Label>
                   <OptionSelect
                     id="market-provider"
                     value={provider}
@@ -221,7 +318,7 @@ export function TradeMarketData({
                     }}
                   >
                     <option value="" disabled>
-                      Choose a data source
+                      {t("Choose a data source")}
                     </option>
                     {available.map((item) => (
                       <option key={item.id} value={item.id}>
@@ -231,7 +328,7 @@ export function TradeMarketData({
                   </OptionSelect>
                 </div>
                 <div className="space-y-1">
-                  <Label htmlFor="market-symbol">Provider symbol</Label>
+                  <Label htmlFor="market-symbol">{t("Provider symbol")}</Label>
                   <Input
                     id="market-symbol"
                     value={symbol}
@@ -243,7 +340,7 @@ export function TradeMarketData({
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label htmlFor="market-resolution">Candle resolution</Label>
+                  <Label htmlFor="market-resolution">{t("Candle resolution")}</Label>
                   <OptionSelect
                     id="market-resolution"
                     value={resolution}
@@ -263,7 +360,7 @@ export function TradeMarketData({
                   info?.mode === "csv" ||
                   info?.id === "london-strategic-edge") && (
                   <div className="space-y-1">
-                    <Label htmlFor="market-dataset">Data feed / dataset</Label>
+                    <Label htmlFor="market-dataset">{t("Data feed / dataset")}</Label>
                     {info?.datasets || info?.mode === "csv" ? (
                       <OptionSelect
                         id="market-dataset"
@@ -276,7 +373,7 @@ export function TradeMarketData({
                       >
                         {(
                           info.datasets ?? [
-                            { value: "", label: "Automatic matching file" },
+                            { value: "", label: t("Automatic matching file") },
                             ...(csv?.datasets ?? []).map((item) => ({
                               value: item.id,
                               label: `${item.name} · ${item.symbol} · ${item.resolution}`,
@@ -284,7 +381,7 @@ export function TradeMarketData({
                           ]
                         ).map((item) => (
                           <option key={item.value} value={item.value}>
-                            {item.label}
+                            {t(item.label)}
                           </option>
                         ))}
                       </OptionSelect>
@@ -292,7 +389,7 @@ export function TradeMarketData({
                       <Input
                         id="market-dataset"
                         value={dataset}
-                        placeholder="Leave blank for automatic selection"
+                        placeholder={t("Leave blank for automatic selection")}
                         onChange={(event) => {
                           invalidate();
                           setDataset(event.target.value);
@@ -304,7 +401,8 @@ export function TradeMarketData({
                 )}
               </div>
               <p className="text-xs text-muted-foreground">
-                {info?.description} {info?.symbolHint} Option contract history is not supported yet.
+                {info?.description && t(info.description)} {info?.symbolHint && t(info.symbolHint)}{" "}
+                {t("Option contract history is not supported yet.")}
               </p>
               <label className="flex items-start gap-2 text-xs text-muted-foreground">
                 <input
@@ -317,13 +415,16 @@ export function TradeMarketData({
                   }}
                 />
                 <span>
-                  Save the MAE/MFE estimate for Reports. I confirm that this instrument, price
-                  adjustments and quote currency match my fills and account ({trade.currency}).
+                  {t(
+                    "Save the MAE/MFE estimate for Reports. I confirm that this instrument, price adjustments and quote currency match my fills and account ({currency}).",
+                    { currency: trade.currency },
+                  )}
                 </span>
               </label>
               <p className="text-xs text-muted-foreground">
-                MAE and MFE are worked out whenever candles load. Checked: they are also saved for
-                Reports. Missing or mismatched data stays unavailable.
+                {t(
+                  "MAE and MFE are worked out whenever candles load. Checked: they are also saved for Reports. Missing or mismatched data stays unavailable.",
+                )}
               </p>
               <div className="flex flex-wrap gap-2">
                 <Button
@@ -336,19 +437,19 @@ export function TradeMarketData({
                   onClick={() => void load()}
                 >
                   {busy
-                    ? "Loading history…"
+                    ? t("Loading history…")
                     : confirmed
-                      ? "Load candles & save estimates"
-                      : "Load candles & replay"}
+                      ? t("Load candles & save estimates")
+                      : t("Load candles & replay")}
                 </Button>
                 {busy && (
                   <Button variant="outline" onClick={invalidate}>
-                    Cancel
+                    {t("Cancel")}
                   </Button>
                 )}
                 {result && result.bars.length > 0 && (
                   <Button variant="outline" onClick={() => setShowCandles((v) => !v)}>
-                    {showCandles ? "Show fills only" : "Show candles"}
+                    {showCandles ? t("Show fills only") : t("Show candles")}
                   </Button>
                 )}
               </div>
@@ -363,8 +464,9 @@ export function TradeMarketData({
       </Card>
       {!result && saved?.saved && (
         <p className="text-xs text-muted-foreground">
-          Previously saved MAE/MFE estimates are shown below. Loading candles without the checkbox
-          keeps those saved estimates; it does not calculate new ones.
+          {t(
+            "Previously saved MAE/MFE estimates are shown below. Loading candles without the checkbox keeps those saved estimates; it does not calculate new ones.",
+          )}
         </p>
       )}
       {result && result.bars.length > 0 && showCandles ? (
@@ -379,15 +481,15 @@ export function TradeMarketData({
         <>
           <div
             className="grid gap-3 rounded-lg border bg-card p-3 sm:grid-cols-3"
-            aria-label="Market data feature status"
+            aria-label={t("Market data feature status")}
           >
             <div>
-              <p className="text-xs text-muted-foreground">Estimated MAE</p>
+              <p className="text-xs text-muted-foreground">{t("Estimated MAE")}</p>
               <p className="text-sm">
                 {busy ? (
-                  "Loading candles…"
+                  t("Loading candles…")
                 ) : error ? (
-                  "Data request failed"
+                  t("Data request failed")
                 ) : result?.bars.length ? (
                   <Excursion
                     savedBefore={Boolean(saved?.saved)}
@@ -403,17 +505,17 @@ export function TradeMarketData({
                     fmtMoney(saved.saved.estimate.mae!, trade.currency)
                   )
                 ) : (
-                  "Load market data to calculate"
+                  t("Load market data to calculate")
                 )}
               </p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Estimated MFE</p>
+              <p className="text-xs text-muted-foreground">{t("Estimated MFE")}</p>
               <p className="text-sm">
                 {busy ? (
-                  "Loading candles…"
+                  t("Loading candles…")
                 ) : error ? (
-                  "Data request failed"
+                  t("Data request failed")
                 ) : result?.bars.length ? (
                   <Excursion
                     savedBefore={Boolean(saved?.saved)}
@@ -429,25 +531,26 @@ export function TradeMarketData({
                     fmtMoney(saved.saved.estimate.mfe!, trade.currency)
                   )
                 ) : (
-                  "Load market data to calculate"
+                  t("Load market data to calculate")
                 )}
               </p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Trade replay</p>
+              <p className="text-xs text-muted-foreground">{t("Trade replay")}</p>
               <p className="text-sm">
                 {busy
-                  ? "Loading candles…"
+                  ? t("Loading candles…")
                   : result?.bars.length
-                    ? "Loaded: show candles to replay"
-                    : "Available after candles load"}
+                    ? t("Loaded: show candles to replay")
+                    : t("Available after candles load")}
               </p>
             </div>
           </div>
           {result && result.bars.length === 0 && (
             <p role="status" className="text-sm text-muted-foreground">
-              No candles were returned for this instrument and trade period. Check the symbol,
-              dataset and plan coverage.
+              {t(
+                "No candles were returned for this instrument and trade period. Check the symbol, dataset and plan coverage.",
+              )}
             </p>
           )}
           <TradeChart trade={trade} executions={executions} />
@@ -475,14 +578,15 @@ function Excursion({
   /** An estimate for this trade was saved for Reports on an earlier load. */
   savedBefore?: boolean;
 }) {
+  const { t } = useI18n();
   if (privacy) return <>••••</>;
   const money = side === "adverse" ? estimate.mae : estimate.mfe;
   const move = estimate.priceMove;
   const moveText = move
-    ? `${fmtNumber(side === "adverse" ? move.adverse : move.favorable)} in price (${fmtPercent(
-        side === "adverse" ? move.adversePct : move.favorablePct,
-        2,
-      )})`
+    ? t("{move} in price ({percent})", {
+        move: fmtNumber(side === "adverse" ? move.adverse : move.favorable),
+        percent: fmtPercent(side === "adverse" ? move.adversePct : move.favorablePct, 2),
+      })
     : null;
   if (money !== null)
     return (
@@ -492,7 +596,7 @@ function Excursion({
           <span className="block text-xs font-normal text-muted-foreground">{moveText}</span>
         )}
         <span className="block text-xs font-normal text-muted-foreground">
-          {estimate.saved || savedBefore ? "Saved for Reports" : "Not saved for Reports"}
+          {estimate.saved || savedBefore ? t("Saved for Reports") : t("Not saved for Reports")}
         </span>
       </span>
     );
@@ -501,11 +605,11 @@ function Excursion({
       <span>
         {moveText}
         <span className="block text-xs font-normal text-muted-foreground">
-          No money amount: see the limits below
+          {t("No money amount: see the limits below")}
         </span>
       </span>
     );
-  return <>Unavailable</>;
+  return <>{t("Unavailable")}</>;
 }
 
 function HistoricalReplay({
@@ -521,6 +625,7 @@ function HistoricalReplay({
   executions: ChartExecution[];
   privacy: boolean;
 }) {
+  const { t, tn, intl } = useI18n();
   const [count, setCount] = useState(history.bars.length);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState("4");
@@ -539,24 +644,27 @@ function HistoricalReplay({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Historical candles</CardTitle>
+        <CardTitle>{t("Historical candles")}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
         <p className="text-xs text-muted-foreground">
           {history.provider} · {history.symbol} · {history.resolution} ·{" "}
-          {history.bars.length.toLocaleString()} candles · Retrieved{" "}
-          {new Date(history.fetchedAt).toLocaleString()}
+          {tn(history.bars.length, "{count} candle", "{count} candles", {
+            count: history.bars.length.toLocaleString(),
+          })}{" "}
+          · {t("Retrieved {time}", { time: new Date(history.fetchedAt).toLocaleString(intl) })}
         </p>
         {privacy ? (
           <p className="text-sm text-muted-foreground">
-            Historical prices and excursion amounts are hidden in privacy mode.
+            {t("Historical prices and excursion amounts are hidden in privacy mode.")}
           </p>
         ) : (
           <>
             {history.estimate.priceBasisMismatch && (
               <p role="status" className="rounded-md border p-3 text-sm text-muted-foreground">
-                The market candles and recorded fill prices do not match. Replay shows market
-                prices; fill labels and MAE/MFE estimates are withheld. See the data limits below.
+                {t(
+                  "The market candles and recorded fill prices do not match. Replay shows market prices; fill labels and MAE/MFE estimates are withheld. See the data limits below.",
+                )}
               </p>
             )}
             <ReplayChart
@@ -576,7 +684,7 @@ function HistoricalReplay({
                   setCount(1);
                 }}
               >
-                Restart
+                {t("Restart")}
               </Button>
               <Button
                 onClick={() => {
@@ -584,7 +692,7 @@ function HistoricalReplay({
                   setPlaying(!playing);
                 }}
               >
-                {playing ? "Pause" : "Play"}
+                {playing ? t("Pause") : t("Play")}
               </Button>
               <Button
                 variant="outline"
@@ -594,7 +702,7 @@ function HistoricalReplay({
                   setCount((current) => Math.min(current + 1, history.bars.length));
                 }}
               >
-                Next candle
+                {t("Next candle")}
               </Button>
               <Button
                 variant="outline"
@@ -603,10 +711,10 @@ function HistoricalReplay({
                   setCount(history.bars.length);
                 }}
               >
-                Show all
+                {t("Show all")}
               </Button>
               <OptionSelect
-                aria-label="Replay speed"
+                aria-label={t("Replay speed")}
                 className="w-24"
                 value={speed}
                 onValueChange={setSpeed}
@@ -619,7 +727,7 @@ function HistoricalReplay({
               </OptionSelect>
             </div>
             <input
-              aria-label="Replay position"
+              aria-label={t("Replay position")}
               type="range"
               min={1}
               max={history.bars.length}
@@ -631,20 +739,23 @@ function HistoricalReplay({
               }}
             />
             <p className="text-xs text-muted-foreground">
-              {count} / {history.bars.length} candles · Through{" "}
-              {new Date(frame.through).toISOString()} (UTC). While playing, each candle is drawn
-              forming from open to close (through its low then high, or high then low for a down
-              candle); the real order inside a candle is not known, so this is not a tick-by-tick
-              simulation.
+              {t(
+                "{count} / {total} candles · Through {time} (UTC). While playing, each candle is drawn forming from open to close (through its low then high, or high then low for a down candle); the real order inside a candle is not known, so this is not a tick-by-tick simulation.",
+                {
+                  count,
+                  total: history.bars.length,
+                  time: new Date(frame.through).toISOString(),
+                },
+              )}
             </p>
           </>
         )}
         <div className="grid grid-cols-2 gap-3 rounded-lg border p-3">
           <div>
-            <p className="text-xs text-muted-foreground">Estimated MAE · adverse</p>
+            <p className="text-xs text-muted-foreground">{t("Estimated MAE · adverse")}</p>
             <p className="font-medium">
               {!complete && !privacy ? (
-                "Hidden during replay"
+                t("Hidden during replay")
               ) : (
                 <Excursion
                   savedBefore={savedBefore}
@@ -657,10 +768,10 @@ function HistoricalReplay({
             </p>
           </div>
           <div>
-            <p className="text-xs text-muted-foreground">Estimated MFE · favorable</p>
+            <p className="text-xs text-muted-foreground">{t("Estimated MFE · favorable")}</p>
             <p className="font-medium">
               {!complete && !privacy ? (
-                "Hidden during replay"
+                t("Hidden during replay")
               ) : (
                 <Excursion
                   savedBefore={savedBefore}
@@ -674,10 +785,10 @@ function HistoricalReplay({
           </div>
         </div>
         <details className="text-xs text-muted-foreground" open>
-          <summary className="cursor-pointer">Data coverage & estimate limits</summary>
+          <summary className="cursor-pointer">{t("Data coverage & estimate limits")}</summary>
           <ul className="mt-2 list-disc space-y-1 pl-4">
             {[...history.warnings, ...history.estimate.warnings].map((warning) => (
-              <li key={warning}>{warning}</li>
+              <li key={warning}>{marketText(warning, t)}</li>
             ))}
           </ul>
         </details>
@@ -716,6 +827,9 @@ function ReplayChart({
   /** The chart's picture goes with an AI critique of this trade while it is shown. */
   tradeKey: string;
 }) {
+  const { t } = useI18n();
+  const translate = useRef(t);
+  translate.current = t;
   const host = useRef<HTMLDivElement>(null);
   const [error, setError] = useState("");
   const wanted = useRef({ count, playing, speed });
@@ -758,7 +872,7 @@ function ReplayChart({
       const type = `replay-fills-${randomId()}`;
       registerNativeIndicator({
         type,
-        title: "Recorded fills",
+        title: translate.current("Recorded fills"),
         paneHint: "price",
         overlay: true,
         inputsSchema: () => [],
@@ -777,7 +891,7 @@ function ReplayChart({
                     x: Date.parse(fill.executedAt),
                     y: fill.price,
                     yloc: "price" as const,
-                    text: `${fill.side.toUpperCase()} ${fill.quantity}`,
+                    text: `${translate.current(fill.side === "buy" ? "Buy" : "Sell").toUpperCase()} ${fill.quantity}`,
                     style: "label_left" as const,
                     color: fill.side === "buy" ? "#087f23" : "#bd2626",
                     textColor: "#ffffff",
@@ -956,7 +1070,7 @@ function ReplayChart({
     <>
       {error && (
         <p role="alert" className="text-sm text-destructive">
-          {error}
+          {t(error)}
         </p>
       )}
       <div ref={host} className="h-[420px] overflow-hidden rounded-lg border" />

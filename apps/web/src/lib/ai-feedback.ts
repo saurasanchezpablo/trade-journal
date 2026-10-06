@@ -1,3 +1,6 @@
+import { tr } from "./i18n";
+import { ES } from "./i18n/es-index";
+
 export interface AiFeedback {
   title: string;
   description: string;
@@ -6,8 +9,30 @@ export interface AiFeedback {
   retry?: boolean;
 }
 
+/**
+ * A server message as it was written: messages arrive already translated (see `postJson`),
+ * and the patterns below read the English.
+ */
+let english: Map<string, string> | null = null;
+const inEnglish = (message: string) => {
+  english ??= new Map(Object.entries(ES).map(([en, es]) => [es, en]));
+  return english.get(message) ?? message;
+};
+
 /** Friendly, bounded copy: never echo provider payloads or credentials into the UI. */
 export function aiFeedback(message: string): AiFeedback {
+  const feedback = feedbackFor(inEnglish(message));
+  return {
+    ...feedback,
+    title: tr(feedback.title),
+    description: tr(feedback.description),
+    ...(feedback.action
+      ? { action: { ...feedback.action, label: tr(feedback.action.label) } }
+      : {}),
+  };
+}
+
+function feedbackFor(message: string): AiFeedback {
   if (/^No (?:closed )?trades match/.test(message))
     return {
       title: "No matching trades",

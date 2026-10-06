@@ -1,5 +1,6 @@
 import { LINK_TOLERANCE, type AnalysisPlan, type PlanScenario } from "./analysis-plan";
 import { fmtNumber } from "./utils";
+import { tr, trx } from "./i18n";
 
 /**
  * The short note under an alert: what the level is to your plan and what the plan said to
@@ -23,29 +24,34 @@ const near = (price: number, level: AlertLevel) => {
   return price >= level.low - tolerance && price <= level.high + tolerance;
 };
 
-const nameOf = (s: PlanScenario) => (s.name.trim() ? `"${s.name.trim()}"` : "a scenario");
+const nameOf = (s: PlanScenario) => (s.name.trim() ? `"${s.name.trim()}"` : tr("a scenario"));
 
+/** The notes are in the journal's language (`tr`); scenario names stay as you wrote them. */
 function scenarioNote(s: PlanScenario, role: Role, level: AlertLevel): string {
   const long = s.direction === "long";
   const withIt = (level.direction === "up") === long;
-  const name = `${nameOf(s)} (${s.direction})`;
+  const name = `${nameOf(s)} (${trx("direction", s.direction)})`;
   if (role === "trigger") {
-    if (!withIt) return `Plan: the trigger of ${name}, crossed the other way.`;
+    if (!withIt) return tr("Plan: the trigger of {name}, crossed the other way.", { name });
     const then = [
-      s.target === null ? "" : `target ${fmtNumber(s.target)}`,
+      s.target === null ? "" : tr("target {price}", { price: fmtNumber(s.target) }),
       s.invalidation === null
         ? ""
-        : `wrong ${long ? "below" : "above"} ${fmtNumber(s.invalidation)}`,
+        : tr(long ? "wrong below {price}" : "wrong above {price}", {
+            price: fmtNumber(s.invalidation),
+          }),
     ].filter(Boolean);
-    return `Plan: sets off ${name}${then.length ? `, ${then.join(", ")}` : ""}.`;
+    return then.length
+      ? tr("Plan: sets off {name}, {details}.", { name, details: then.join(", ") })
+      : tr("Plan: sets off {name}.", { name });
   }
   if (role === "target")
     return withIt
-      ? `Plan: target of ${name} reached.`
-      : `Plan: back through the target of ${name}.`;
+      ? tr("Plan: target of {name} reached.", { name })
+      : tr("Plan: back through the target of {name}.", { name });
   return withIt
-    ? `Plan: back past the invalidation of ${name}.`
-    : `Plan: ${name} is invalidated here.`;
+    ? tr("Plan: back past the invalidation of {name}.", { name })
+    : tr("Plan: {name} is invalidated here.", { name });
 }
 
 /** What the plan says about this level, or null when there is nothing to say. */
@@ -66,18 +72,28 @@ export function explainAlert(
   }
   if (!notes.length) {
     if (level.kind === "enter")
-      notes.push(`Testing it as ${level.direction === "down" ? "support" : "resistance"}.`);
+      notes.push(
+        tr(level.direction === "down" ? "Testing it as support." : "Testing it as resistance."),
+      );
     else if (level.kind === "break")
       notes.push(
-        level.direction === "up"
-          ? "Resistance broken; it may hold as support now."
-          : "Support broken; it may act as resistance now.",
+        tr(
+          level.direction === "up"
+            ? "Resistance broken; it may hold as support now."
+            : "Support broken; it may act as resistance now.",
+        ),
       );
     const bias = plan?.bias;
     if (bias === "long" || bias === "short") {
       const withBias = (level.direction === "up") === (bias === "long");
+      if (level.kind === "line") notes.push(tr("No scenario at this level."));
       notes.push(
-        `${level.kind === "line" ? "No scenario at this level. " : ""}Bias ${bias}: this move is ${withBias ? "with" : "against"} it.`,
+        tr(
+          withBias ? "Bias {bias}: this move is with it." : "Bias {bias}: this move is against it.",
+          {
+            bias: trx("direction", bias),
+          },
+        ),
       );
     }
   }

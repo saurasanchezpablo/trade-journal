@@ -1,5 +1,5 @@
 import { NoObjectGeneratedError, Output, generateText, jsonSchema, type JSONSchema7 } from "ai";
-import { AI_SYSTEM, aiFailure, aiModel, withImages, type AiImage } from "./ai";
+import { aiSystem, aiFailure, aiModel, withImages, type AiImage } from "./ai";
 
 /**
  * An AI answer as data the journal can act on (suggested labels, plan scenarios, rule checks,
@@ -23,7 +23,7 @@ export async function runAiObject<T>(options: {
   try {
     const result = await generateText({
       ...model,
-      system: AI_SYSTEM,
+      system: aiSystem(),
       ...(options.videoUrl
         ? {
             messages: [

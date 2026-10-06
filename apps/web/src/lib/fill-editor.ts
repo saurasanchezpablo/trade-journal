@@ -1,3 +1,4 @@
+import { tr } from "./i18n";
 import { parseDecimalInput } from "./number-input";
 
 /**
@@ -116,24 +117,24 @@ export function fillRequest(
 ): FillRequest {
   const typed = symbol.trim();
   const name = typed === storedSymbol ? storedSymbol : typed.toUpperCase();
-  if (!name) return { error: "Enter the symbol." };
+  if (!name) return { error: tr("Enter the symbol.") };
   if (!rows.length)
-    return { error: "A trade needs at least one fill. To remove it, delete the trade." };
+    return { error: tr("A trade needs at least one fill. To remove it, delete the trade.") };
   const fills: Extract<FillRequest, { fills: unknown }>["fills"] = [];
   for (const [i, row] of rows.entries()) {
-    const label = `Fill ${i + 1}`;
+    const fill = i + 1;
     const quantity = parseDecimalInput(row.quantity);
     const price = parseDecimalInput(row.price);
     const fee = parseDecimalInput(row.fee);
     if (quantity == null || !(quantity > 0))
-      return { error: `${label}: enter a quantity above 0.` };
-    if (price == null) return { error: `${label}: enter the price.` };
-    if (fee === undefined) return { error: `${label}: the fee must be a number.` };
+      return { error: tr("Fill {fill}: enter a quantity above 0.", { fill }) };
+    if (price == null) return { error: tr("Fill {fill}: enter the price.", { fill }) };
+    if (fee === undefined) return { error: tr("Fill {fill}: the fee must be a number.", { fill }) };
     const executedAt =
       row.original && row.time === row.original.time
         ? row.original.executedAt
         : fillTimeFromInput(row.time, timeZone);
-    if (!executedAt) return { error: `${label}: enter the date and time.` };
+    if (!executedAt) return { error: tr("Fill {fill}: enter the date and time.", { fill }) };
     fills.push({
       ...(row.id ? { id: row.id } : {}),
       symbol: name,

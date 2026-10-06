@@ -2,6 +2,7 @@
 
 import { Suspense, use } from "react";
 import { FilterBar } from "@/components/filter-bar";
+import { useT } from "@/components/i18n";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SessionWorkspace } from "@/components/backtest/session-workspace";
 import type { BacktestSession } from "@/lib/backtest-session";
@@ -9,9 +10,10 @@ import { useApi } from "@/lib/use-api";
 
 export default function BacktestSessionPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const t = useT();
   return (
     <Suspense>
-      <FilterBar title="Backtesting" />
+      <FilterBar title={t("Backtesting")} />
       <Session key={id} id={id} />
     </Suspense>
   );

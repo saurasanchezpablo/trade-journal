@@ -10,28 +10,32 @@ import { Label } from "./ui/label";
 import { OptionSelect } from "./ui/option-select";
 import { providerInfo } from "@/lib/market-providers";
 import { MarketCsvSettings } from "./market-csv-settings";
+import { useI18n, useT } from "./i18n";
 
 export function MarketDataSettings() {
+  const t = useT();
   const { data, error, refresh } = useApi<{ connections: MarketConnection[] }>(
     "/api/market-data/connections",
   );
   return (
     <Card id="market-data" className="scroll-mt-24">
       <CardHeader>
-        <CardTitle>Market data</CardTitle>
+        <CardTitle>{t("Market data")}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground">
-          Connect historical prices for estimated MAE/MFE and candle replay on closed trades. Vela
-          renders the charts. No data source is enabled or selected by default. Choose a connection
-          or upload your own candles. Market data connections are separate from broker sync and AI.
+          {t(
+            "Connect historical prices for estimated MAE/MFE and candle replay on closed trades. Vela renders the charts. No data source is enabled or selected by default. Choose a connection or upload your own candles. Market data connections are separate from broker sync and AI.",
+          )}
         </p>
         {error && (
           <p role="alert" className="text-sm text-destructive">
             {error}
           </p>
         )}
-        {!data && !error && <p className="text-sm text-muted-foreground">Loading connections…</p>}
+        {!data && !error && (
+          <p className="text-sm text-muted-foreground">{t("Loading connections…")}</p>
+        )}
         {data?.connections
           .filter((connection) => connection.id !== "market-csv")
           .map((connection) => (
@@ -50,7 +54,16 @@ function Connection({
   connection: MarketConnection;
   refresh: () => void;
 }) {
+  const { locale, t } = useI18n();
   const info = providerInfo(connection.id)!;
+  // A field's name inside a sentence: lowercase in English as before; in Spanish only a
+  // capitalized first word is lowered, so acronyms such as API and ID keep their case.
+  const inSentence = (label: string) =>
+    locale === "en"
+      ? label.toLowerCase()
+      : /^\p{Lu}\p{Ll}/u.test(label)
+        ? label.charAt(0).toLowerCase() + label.slice(1)
+        : label;
   const defaults = () =>
     Object.fromEntries(info.fields.map((field) => [field.key, field.defaultValue ?? ""]));
   const [fields, setFields] = useState<Record<string, string>>(defaults);
@@ -73,17 +86,19 @@ function Connection({
       setMessage(
         action === "test"
           ? publicSource
-            ? "Public endpoint reachable. No API key or paid data plan is required. Candle availability depends on the pair, date range and public API limits."
-            : "Connection verified. Instrument coverage depends on your provider access."
+            ? t(
+                "Public endpoint reachable. No API key or paid data plan is required. Candle availability depends on the pair, date range and public API limits.",
+              )
+            : t("Connection verified. Instrument coverage depends on your provider access.")
           : action === "save"
-            ? "Credentials saved. Test the connection to verify access."
+            ? t("Credentials saved. Test the connection to verify access.")
             : action === "enable"
-              ? "Public market data enabled."
-              : "Connection removed.",
+              ? t("Public market data enabled.")
+              : t("Connection removed."),
       );
       refresh();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Connection update failed.");
+      setError(cause instanceof Error ? cause.message : t("Connection update failed."));
     } finally {
       setBusy(false);
     }
@@ -94,31 +109,32 @@ function Connection({
         <h3 className="text-sm font-medium">{connection.name}</h3>
         <span className="text-xs text-muted-foreground">
           {managed
-            ? "Managed by server environment"
+            ? t("Managed by server environment")
             : connection.configured
               ? publicSource
-                ? "Enabled · no key required"
-                : "Credentials saved"
-              : "Not connected"}
+                ? t("Enabled · no key required")
+                : t("Credentials saved")
+              : t("Not connected")}
         </span>
       </div>
-      <p className="text-xs text-muted-foreground">{info.description}</p>
+      <p className="text-xs text-muted-foreground">{t(info.description)}</p>
       {!publicSource && (
         <p className="text-xs text-muted-foreground">
-          Credentials are encrypted locally and used only by the server for market data. Saved
-          secrets are never returned to the browser or included in journal exports.
+          {t(
+            "Credentials are encrypted locally and used only by the server for market data. Saved secrets are never returned to the browser or included in journal exports.",
+          )}
         </p>
       )}
       {managed && !connection.configured && (
         <p className="text-xs text-destructive">
-          Complete all required fields in the server environment.
+          {t("Complete all required fields in the server environment.")}
         </p>
       )}
       {!managed &&
         !publicSource &&
         info.fields.map((field) => (
           <div key={field.key} className="space-y-1">
-            <Label htmlFor={`key-${connection.id}-${field.key}`}>{field.label}</Label>
+            <Label htmlFor={`key-${connection.id}-${field.key}`}>{t(field.label)}</Label>
             {field.options ? (
               <OptionSelect
                 id={`key-${connection.id}-${field.key}`}
@@ -130,7 +146,7 @@ function Connection({
               >
                 {field.options.map((option) => (
                   <option key={option.value} value={option.value}>
-                    {option.label}
+                    {t(option.label)}
                   </option>
                 ))}
               </OptionSelect>
@@ -144,8 +160,8 @@ function Connection({
                 }
                 placeholder={
                   connection.configured
-                    ? `Enter replacement ${field.label.toLowerCase()}`
-                    : `Enter ${field.label.toLowerCase()}`
+                    ? t("Enter replacement {field}", { field: inSentence(t(field.label)) })
+                    : t("Enter {field}", { field: inSentence(t(field.label)) })
                 }
                 autoComplete="off"
                 spellCheck={false}
@@ -160,22 +176,22 @@ function Connection({
             disabled={busy || info.fields.some((field) => !fields[field.key]?.trim())}
             onClick={() => void act("save")}
           >
-            Save credentials
+            {t("Save credentials")}
           </Button>
         )}
         {publicSource && !connection.configured && (
           <Button disabled={busy} onClick={() => void act("enable")}>
-            Enable source
+            {t("Enable source")}
           </Button>
         )}
         {connection.configured && (
           <Button variant="outline" disabled={busy} onClick={() => void act("test")}>
-            Test connection
+            {t("Test connection")}
           </Button>
         )}
         {connection.configured && !managed && (
           <Button variant="outline" disabled={busy} onClick={() => void act("remove")}>
-            {publicSource ? "Disable source" : "Remove credentials"}
+            {publicSource ? t("Disable source") : t("Remove credentials")}
           </Button>
         )}
       </div>

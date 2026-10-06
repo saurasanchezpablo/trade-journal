@@ -29,6 +29,8 @@ import {
   type ChartDrawing,
 } from "@/components/analysis-chart";
 import { FilterBar } from "@/components/filter-bar";
+import { useI18n } from "@/components/i18n";
+import { tr } from "@/lib/i18n";
 import { LayersPanel, type LayersPanelActions } from "@/components/layers-panel";
 import { ChartAppearance } from "@/components/chart-appearance";
 import {
@@ -321,6 +323,7 @@ interface Shared {
  * (`/charts/workspace`).
  */
 function ChartLab() {
+  const { t } = useI18n();
   const params = useSearchParams();
   const { data: settings } = useApi<{ timeZone: string }>("/api/settings");
   const { data: connections, error: connectionError } = useApi<{
@@ -366,7 +369,9 @@ function ChartLab() {
       postJson("/api/chart-preferences", prefsRef.current, "PUT")
         .then(() => setPrefsError(""))
         .catch((cause) =>
-          setPrefsError(cause instanceof Error ? cause.message : "Could not save chart settings."),
+          setPrefsError(
+            cause instanceof Error ? cause.message : tr("Could not save chart settings."),
+          ),
         );
     }, 400);
   }, []);
@@ -530,7 +535,10 @@ function ChartLab() {
           {(prefsError || (prefsLoadError && !prefsReady)) && (
             <p role="alert" className="text-sm text-destructive">
               {prefsError ||
-                `Chart settings could not be loaded (${prefsLoadError}), so changes to them are not saved. Reload the page to try again.`}
+                t(
+                  "Chart settings could not be loaded ({error}), so changes to them are not saved. Reload the page to try again.",
+                  { error: prefsLoadError ?? "" },
+                )}
             </p>
           )}
         </div>
@@ -549,6 +557,7 @@ const ChartBoard = memo(function ChartBoard({
   shared: Shared;
   shell: Shell;
 }) {
+  const { t, tn, tx } = useI18n();
   const params = useSearchParams();
   const router = useRouter();
   const {
@@ -756,7 +765,7 @@ const ChartBoard = memo(function ChartBoard({
         setSaveState({ state: "saving" });
         try {
           const problem = drawingsProblem(captured.drawings);
-          if (problem) throw new Error(problem);
+          if (problem) throw new Error(tr(problem));
           const step = RESOLUTIONS[current.resolution];
           const now = Date.now();
           const rangeFrom = Math.round(captured.loaded?.from ?? now - INITIAL_BARS * step);
@@ -820,7 +829,7 @@ const ChartBoard = memo(function ChartBoard({
           if (state.current.board === board)
             setSaveState({
               state: "error",
-              message: cause instanceof Error ? cause.message : "Could not save.",
+              message: cause instanceof Error ? cause.message : tr("Could not save."),
             });
           return false;
         }
@@ -996,7 +1005,9 @@ const ChartBoard = memo(function ChartBoard({
         if (!saved.ok && !target.discard) {
           setOpenBlocked(target);
           throw new Error(
-            "This chart's latest changes could not be saved, so it stays open. Try again, or open the other chart anyway and lose them.",
+            tr(
+              "This chart's latest changes could not be saved, so it stays open. Try again, or open the other chart anyway and lose them.",
+            ),
           );
         }
       };
@@ -1006,7 +1017,12 @@ const ChartBoard = memo(function ChartBoard({
           const response = await fetch(url);
           const body = (await response.json().catch(() => ({}))) as { error?: string };
           check();
-          if (!response.ok) throw new Error(body.error ?? `Request failed (${response.status}).`);
+          if (!response.ok)
+            throw new Error(
+              body.error
+                ? tr(body.error)
+                : tr("Request failed ({status})", { status: response.status }),
+            );
           return body as T;
         };
         let analysis: ChartAnalysis | null = null;
@@ -1116,7 +1132,7 @@ const ChartBoard = memo(function ChartBoard({
         shell.addRecent({ provider: nextProvider, dataset: nextDataset, symbol: nextSymbol });
       } catch (cause) {
         if (cause instanceof Superseded) return;
-        setOpenError(cause instanceof Error ? cause.message : "Could not open the chart.");
+        setOpenError(cause instanceof Error ? cause.message : tr("Could not open the chart."));
       } finally {
         if (seq === openSeq.current) {
           openingRef.current = false;
@@ -1253,7 +1269,7 @@ const ChartBoard = memo(function ChartBoard({
           zone,
           state.current.plan,
         );
-        notify("Zone alert", alertText(message), `${zoneSymbol}-${key}`);
+        notify(message.title, alertText(message), `${zoneSymbol}-${key}`);
         pushAlert({
           key: `${key}-${now}`,
           label: message.body,
@@ -1279,7 +1295,7 @@ const ChartBoard = memo(function ChartBoard({
         const label =
           drawingName(state.current.layers, hit.drawingId) ?? drawingLabel(hit.type, drawing?.text);
         const message = lineAlert(state.current.analysisId, symbol, hit, label, state.current.plan);
-        notify("Chart alert", alertText(message), `${symbol}-${hit.drawingId}`);
+        notify(message.title, alertText(message), `${symbol}-${hit.drawingId}`);
         pushAlert({
           key: `${hit.drawingId}-${now}`,
           label: message.body,
@@ -1414,7 +1430,7 @@ const ChartBoard = memo(function ChartBoard({
       indicatorAlertAt.current.set(key, now);
       const symbol = state.current.board?.symbol ?? "";
       const label = `${symbol} · ${alert.indicator}: ${alert.message}`;
-      notify("Indicator alert", label, key);
+      notify(tr("Indicator alert"), label, key);
       pushAlert({ key: `${key}-${now}`, label, at: now });
     },
     [pushAlert],
@@ -1423,13 +1439,13 @@ const ChartBoard = memo(function ChartBoard({
   const addIndicator = async (ref: IndicatorRef, source: string) => {
     setIndicatorError("");
     const target = bridge();
-    if (!target) return setIndicatorError("Open a chart first.");
+    if (!target) return setIndicatorError(t("Open a chart first."));
     const result = await target.add(ref, source);
     if (!result.ok) setIndicatorError(result.error);
   };
   const runDraft = async (draft: EditorDraft) => {
     const target = bridge();
-    if (!target) return { error: "Open a chart first." };
+    if (!target) return { error: t("Open a chart first.") };
     const ref: IndicatorRef = draft.scriptId
       ? { kind: "script", id: draft.scriptId }
       : { kind: "inline" };
@@ -1475,7 +1491,7 @@ const ChartBoard = memo(function ChartBoard({
       );
       return { scriptId: script.id };
     } catch (cause) {
-      return { error: cause instanceof Error ? cause.message : "Could not save the indicator." };
+      return { error: cause instanceof Error ? cause.message : t("Could not save the indicator.") };
     }
   };
   const deleteScript = async (id: string) => {
@@ -1496,9 +1512,9 @@ const ChartBoard = memo(function ChartBoard({
     setJournalStatus(null);
     try {
       const saved = await flush({ final: true, create: true });
-      if (!saved.ok) throw new Error("Save the chart first: its latest changes are not saved.");
+      if (!saved.ok) throw new Error(t("Save the chart first: its latest changes are not saved."));
       const id = saved.id;
-      if (!id) throw new Error("Open a chart first.");
+      if (!id) throw new Error(t("Open a chart first."));
       await postJson(
         `/api/analyses/${encodeURIComponent(id)}`,
         { dayDate: day, addToJournal: true },
@@ -1508,7 +1524,7 @@ const ChartBoard = memo(function ChartBoard({
       refreshAll();
     } catch (cause) {
       setJournalStatus({
-        error: cause instanceof Error ? cause.message : "Could not add to the journal.",
+        error: cause instanceof Error ? cause.message : t("Could not add to the journal."),
       });
     }
   };
@@ -1519,7 +1535,10 @@ const ChartBoard = memo(function ChartBoard({
     if (!id || !day) return;
     if (
       !confirm(
-        `Replace the live analysis with its ${day} version? Today's version records the change; other days are kept.`,
+        t(
+          "Replace the live analysis with its {day} version? Today's version records the change; other days are kept.",
+          { day },
+        ),
       )
     )
       return;
@@ -1530,14 +1549,16 @@ const ChartBoard = memo(function ChartBoard({
       refreshAll();
       router.replace(analysisEditPath(id));
     } catch (cause) {
-      setOpenError(cause instanceof Error ? cause.message : "Could not restore that version.");
+      setOpenError(cause instanceof Error ? cause.message : t("Could not restore that version."));
     }
   };
 
   const deleteAnalysis = async (target: ChartAnalysisSummary) => {
     if (
       !confirm(
-        `Delete "${analysisLabel(target)}" and its saved day versions? Journal notes keep a placeholder.`,
+        t('Delete "{name}" and its saved day versions? Journal notes keep a placeholder.', {
+          name: analysisLabel(target),
+        }),
       )
     )
       return;
@@ -1562,7 +1583,7 @@ const ChartBoard = memo(function ChartBoard({
         });
       }
     } catch (cause) {
-      setOpenError(cause instanceof Error ? cause.message : "Could not delete the analysis.");
+      setOpenError(cause instanceof Error ? cause.message : t("Could not delete the analysis."));
     }
   };
 
@@ -1571,14 +1592,33 @@ const ChartBoard = memo(function ChartBoard({
     : undefined;
   /** What "On the chart" shows, for its folded title bar. */
   const overlaySummary = [
-    overlayOptions.trades && "trades",
-    overlayOptions.missed && "missed",
-    overlayOptions.zones && "zones",
-    overlayOptions.sessions && "sessions",
-    overlayOptions.economic && calendar?.enabled && "calendar",
+    overlayOptions.trades && tx("overlays", "trades"),
+    overlayOptions.missed && tx("overlays", "missed"),
+    overlayOptions.zones && tx("overlays", "zones"),
+    overlayOptions.sessions && tx("overlays", "sessions"),
+    overlayOptions.economic && calendar?.enabled && tx("overlays", "calendar"),
   ]
     .filter(Boolean)
     .join(", ");
+  /** The alerts card's help, split around its `alert()` code sample. */
+  const alertsHelp = t(
+    "While this page is open and live, get an alert when the price crosses a visible horizontal line, ray or trend line, enters or breaks a support/resistance zone, or when an indicator calls {code}{only}.",
+    {
+      only:
+        alertsOn && (!alertKinds.lines || !alertKinds.zones || !alertKinds.indicators)
+          ? t(" (only {kinds}, as chosen on the Alerts page)", {
+              kinds:
+                [
+                  alertKinds.lines && tx("alert kinds", "lines"),
+                  alertKinds.zones && tx("alert kinds", "zones"),
+                  alertKinds.indicators && tx("alert kinds", "indicators"),
+                ]
+                  .filter(Boolean)
+                  .join(", ") || tx("alert kinds", "none"),
+            })
+          : "",
+    },
+  ).split("{code}");
   const topCard = (
     <Card>
       <CardContent className="space-y-3 pt-4">
@@ -1589,11 +1629,11 @@ const ChartBoard = memo(function ChartBoard({
         )}
         {connections && !available.length && (
           <p className="text-sm text-muted-foreground">
-            Charts stream candles from a market data source you choose.{" "}
+            {t("Charts stream candles from a market data source you choose.")}{" "}
             <Link className="underline" href="/settings#market-data">
-              Connect a provider or upload a candle CSV in Settings
+              {t("Connect a provider or upload a candle CSV in Settings")}
             </Link>
-            . Binance and Coinbase need no key; enable them there first.
+            . {t("Binance and Coinbase need no key; enable them there first.")}
           </p>
         )}
         {available.length > 0 && (
@@ -1605,7 +1645,7 @@ const ChartBoard = memo(function ChartBoard({
             }}
           >
             <div className="w-44 space-y-1">
-              <Label htmlFor="chart-provider">Source</Label>
+              <Label htmlFor="chart-provider">{t("Source")}</Label>
               <OptionSelect
                 id="chart-provider"
                 value={provider}
@@ -1615,7 +1655,7 @@ const ChartBoard = memo(function ChartBoard({
                 }}
               >
                 <option value="" disabled>
-                  Choose a source
+                  {t("Choose a source")}
                 </option>
                 {available.map((item) => (
                   <option key={item.id} value={item.id}>
@@ -1626,11 +1666,11 @@ const ChartBoard = memo(function ChartBoard({
             </div>
             {(needsDataset || info?.mode === "csv") && (
               <div className="w-48 space-y-1">
-                <Label htmlFor="chart-dataset">Feed / file</Label>
+                <Label htmlFor="chart-dataset">{t("Feed / file")}</Label>
                 <OptionSelect id="chart-dataset" value={dataset} onValueChange={setDataset}>
                   {(
                     info?.datasets ?? [
-                      { value: "", label: "Automatic matching file" },
+                      { value: "", label: t("Automatic matching file") },
                       ...(csv?.datasets ?? []).map((item) => ({
                         value: item.id,
                         label: `${item.name} · ${item.symbol} · ${item.resolution}`,
@@ -1638,14 +1678,14 @@ const ChartBoard = memo(function ChartBoard({
                     ]
                   ).map((item) => (
                     <option key={item.value} value={item.value}>
-                      {item.label}
+                      {t(item.label)}
                     </option>
                   ))}
                 </OptionSelect>
               </div>
             )}
             <div className="w-44 space-y-1">
-              <Label htmlFor="chart-symbol">Symbol</Label>
+              <Label htmlFor="chart-symbol">{t("Symbol")}</Label>
               <SymbolSearchInput
                 id="chart-symbol"
                 value={symbolDraft}
@@ -1656,7 +1696,7 @@ const ChartBoard = memo(function ChartBoard({
               />
             </div>
             <Button type="submit" disabled={!canOpen}>
-              {opening ? "Opening…" : "Open"}
+              {opening ? t("Opening…") : t("Open")}
             </Button>
             <TimeframeBar
               value={resolution}
@@ -1675,9 +1715,9 @@ const ChartBoard = memo(function ChartBoard({
               onClick={() => setLive(!live)}
             >
               {live ? <Pause /> : <Play />}
-              {live ? "Pause" : "Go live"}
+              {live ? t("Pause") : t("Go live")}
             </Button>
-            <Button asChild variant="outline" title="Several charts at once, full screen">
+            <Button asChild variant="outline" title={t("Several charts at once, full screen")}>
               <Link
                 href={
                   board
@@ -1685,13 +1725,13 @@ const ChartBoard = memo(function ChartBoard({
                     : "/charts/workspace"
                 }
               >
-                <LayoutGrid /> Workspace
+                <LayoutGrid /> {t("Workspace")}
               </Link>
             </Button>
           </form>
         )}
         {watchlist.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1" aria-label="Watchlist">
+          <div className="flex flex-wrap items-center gap-1" aria-label={t("Watchlist")}>
             <Star aria-hidden="true" className="size-3.5 text-muted-foreground" />
             {watchlist.map((item) => {
               const current = board?.provider === item.provider && board.symbol === item.symbol;
@@ -1703,7 +1743,10 @@ const ChartBoard = memo(function ChartBoard({
                   variant={current ? "secondary" : "outline"}
                   className="h-7 gap-1.5 px-2"
                   disabled={!available.some((a) => a.id === item.provider) || opening}
-                  title={`${item.symbol} on ${providerInfo(item.provider)?.name ?? item.provider}`}
+                  title={t("{symbol} on {source}", {
+                    symbol: item.symbol,
+                    source: providerInfo(item.provider)?.name ?? item.provider,
+                  })}
                   onClick={() => {
                     if (!current) void openBoard({ provider: item.provider, symbol: item.symbol });
                   }}
@@ -1722,7 +1765,7 @@ const ChartBoard = memo(function ChartBoard({
           </div>
         )}
         {recent.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1" aria-label="Recent symbols">
+          <div className="flex flex-wrap items-center gap-1" aria-label={t("Recent symbols")}>
             {recent.map((item) => {
               const current =
                 board?.provider === item.provider &&
@@ -1737,7 +1780,7 @@ const ChartBoard = memo(function ChartBoard({
                   variant={current ? "secondary" : "ghost"}
                   className="h-7 gap-1 px-2"
                   disabled={!available.some((a) => a.id === item.provider) || opening}
-                  title={`${item.symbol} on ${name}`}
+                  title={t("{symbol} on {source}", { symbol: item.symbol, source: name })}
                   onClick={() => {
                     if (!current) void openBoard(item);
                   }}
@@ -1755,14 +1798,14 @@ const ChartBoard = memo(function ChartBoard({
             {openBlocked && (
               <>
                 <Button size="sm" variant="outline" onClick={() => void openBoard(openBlocked)}>
-                  Save and open
+                  {t("Save and open")}
                 </Button>
                 <Button
                   size="sm"
                   variant="outline"
                   onClick={() => void openBoard({ ...openBlocked, discard: true })}
                 >
-                  Open anyway
+                  {t("Open anyway")}
                 </Button>
               </>
             )}
@@ -1788,8 +1831,8 @@ const ChartBoard = memo(function ChartBoard({
                 type="button"
                 aria-label={
                   symbolPrefs?.favorite
-                    ? `Remove ${board.symbol} from the watchlist`
-                    : `Add ${board.symbol} to the watchlist`
+                    ? t("Remove {symbol} from the watchlist", { symbol: board.symbol })
+                    : t("Add {symbol} to the watchlist", { symbol: board.symbol })
                 }
                 aria-pressed={Boolean(symbolPrefs?.favorite)}
                 className="text-muted-foreground hover:text-foreground"
@@ -1819,8 +1862,9 @@ const ChartBoard = memo(function ChartBoard({
   const empty = available.length > 0 && (
     <Card>
       <CardContent className="py-10 text-center text-sm text-muted-foreground">
-        Type a symbol and press Open. The chart loads the latest candles and keeps updating; your
-        drawings save automatically.
+        {t(
+          "Type a symbol and press Open. The chart loads the latest candles and keeps updating; your drawings save automatically.",
+        )}
       </CardContent>
     </Card>
   );
@@ -1852,36 +1896,36 @@ const ChartBoard = memo(function ChartBoard({
                   type="button"
                   size="sm"
                   variant="ghost"
-                  title="Colours, chart type, formats, symbol and drawing defaults"
+                  title={t("Colours, chart type, formats, symbol and drawing defaults")}
                   onClick={() => setAppearanceOpen(true)}
                 >
-                  <Palette /> Appearance
+                  <Palette /> {t("Appearance")}
                 </Button>
                 <Button
                   type="button"
                   size="sm"
                   variant={placing === "missed" ? "secondary" : "ghost"}
                   aria-pressed={placing === "missed"}
-                  title="Log a setup you did not take: click the chart where you saw it"
+                  title={t("Log a setup you did not take: click the chart where you saw it")}
                   onClick={() => {
                     setZoneEdge(null);
                     setPlacing(placing === "missed" ? null : "missed");
                   }}
                 >
-                  <Diamond className="text-violet-500" /> Missed trade
+                  <Diamond className="text-violet-500" /> {t("Missed trade")}
                 </Button>
                 <Button
                   type="button"
                   size="sm"
                   variant={placing === "zone" ? "secondary" : "ghost"}
                   aria-pressed={placing === "zone"}
-                  title="Add a support or resistance zone: click its two edges"
+                  title={t("Add a support or resistance zone: click its two edges")}
                   onClick={() => {
                     setZoneEdge(null);
                     setPlacing(placing === "zone" ? null : "zone");
                   }}
                 >
-                  <Rows3 /> Zone
+                  <Rows3 /> {t("Zone")}
                 </Button>
               </>
             }
@@ -1905,7 +1949,7 @@ const ChartBoard = memo(function ChartBoard({
             onToolStyle={onToolStyle}
             onDrawingTemplates={onDrawingTemplates}
             sidePanel={{
-              title: "Layers",
+              title: t("Layers"),
               count: drawings.length,
               content: (
                 <LayersPanel
@@ -1926,7 +1970,7 @@ const ChartBoard = memo(function ChartBoard({
       {slots &&
         createPortal(
           <FilterBar
-            title={board ? `Charts · ${board.symbol}` : "Charts"}
+            title={board ? `${t("Charts")} · ${board.symbol}` : t("Charts")}
             actions={<LiveBadge store={live$} live={live} />}
           />,
           slots.header,
@@ -1942,8 +1986,18 @@ const ChartBoard = memo(function ChartBoard({
               >
                 <History aria-hidden="true" className="size-4 shrink-0" />
                 <span className="min-w-0 flex-1">
-                  Your analysis as of <strong>{viewing}</strong>, over today&apos;s candles.
-                  Read-only: changes here are not saved.
+                  {(() => {
+                    const [before, after = ""] = t(
+                      "Your analysis as of {day}, over today's candles. Read-only: changes here are not saved.",
+                    ).split("{day}");
+                    return (
+                      <>
+                        {before}
+                        <strong>{viewing}</strong>
+                        {after}
+                      </>
+                    );
+                  })()}
                 </span>
                 <Button
                   type="button"
@@ -1951,7 +2005,7 @@ const ChartBoard = memo(function ChartBoard({
                   variant="outline"
                   onClick={() => analysisId && router.replace(analysisEditPath(analysisId))}
                 >
-                  Back to the live analysis
+                  {t("Back to the live analysis")}
                 </Button>
                 <Button
                   type="button"
@@ -1959,7 +2013,7 @@ const ChartBoard = memo(function ChartBoard({
                   variant="ghost"
                   onClick={() => void restoreVersion()}
                 >
-                  Make this the live version
+                  {t("Make this the live version")}
                 </Button>
               </div>
             )}
@@ -1969,10 +2023,10 @@ const ChartBoard = memo(function ChartBoard({
                 className="rounded-md border border-primary/40 bg-primary/10 px-3 py-2 text-sm"
               >
                 {placing === "missed"
-                  ? "Click the chart where you saw the missed setup. Esc cancels."
+                  ? t("Click the chart where you saw the missed setup. Esc cancels.")
                   : zoneEdge
-                    ? "Now click the zone's other edge. Esc cancels."
-                    : "Click one edge of the support or resistance zone. Esc cancels."}
+                    ? t("Now click the zone's other edge. Esc cancels.")
+                    : t("Click one edge of the support or resistance zone. Esc cancels.")}
               </p>
             )}
             {board && editor && (
@@ -1993,12 +2047,12 @@ const ChartBoard = memo(function ChartBoard({
           <>
             <SectionCard
               id="chart-analysis"
-              title="Analysis"
+              title={t("Analysis")}
               summary={
                 board
                   ? analysisId
                     ? analysisLabel({ title, symbol: board.symbol, resolution })
-                    : `New ${board.symbol} analysis`
+                    : t("New {symbol} analysis", { symbol: board.symbol })
                   : undefined
               }
               actions={<SaveIndicator state={saveState} onRetry={() => void flush()} />}
@@ -2016,7 +2070,7 @@ const ChartBoard = memo(function ChartBoard({
                       <span className="truncate">
                         {analysisId
                           ? analysisLabel({ title, symbol: board.symbol, resolution })
-                          : `New ${board.symbol} analysis`}
+                          : t("New {symbol} analysis", { symbol: board.symbol })}
                       </span>
                       <ChevronDown className="size-3.5 text-muted-foreground" />
                     </Button>
@@ -2032,7 +2086,8 @@ const ChartBoard = memo(function ChartBoard({
                         })
                       }
                     >
-                      <Plus className="size-3.5" /> New {board.symbol} analysis
+                      <Plus className="size-3.5" />{" "}
+                      {t("New {symbol} analysis", { symbol: board.symbol })}
                     </DropdownMenuItem>
                     {symbolAnalyses?.analyses.map((item) => (
                       <DropdownMenuItem
@@ -2050,13 +2105,15 @@ const ChartBoard = memo(function ChartBoard({
                 </DropdownMenu>
               )}
               <div className="space-y-1">
-                <Label htmlFor="analysis-title">Title</Label>
+                <Label htmlFor="analysis-title">{t("Title")}</Label>
                 <Input
                   id="analysis-title"
                   value={title}
                   maxLength={200}
                   disabled={!board || Boolean(viewing)}
-                  placeholder={board ? `${board.symbol} · ${resolution}` : "Opening range levels"}
+                  placeholder={
+                    board ? `${board.symbol} · ${resolution}` : t("Opening range levels")
+                  }
                   onChange={(event) => {
                     setTitle(event.target.value);
                     state.current.title = event.target.value;
@@ -2065,13 +2122,13 @@ const ChartBoard = memo(function ChartBoard({
                 />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="analysis-notes">Notes</Label>
+                <Label htmlFor="analysis-notes">{t("Notes")}</Label>
                 <Textarea
                   id="analysis-notes"
                   value={notes}
                   rows={3}
                   disabled={!board || Boolean(viewing)}
-                  placeholder="Thesis, levels to watch, invalidation…"
+                  placeholder={t("Thesis, levels to watch, invalidation…")}
                   onChange={(event) => {
                     setNotes(event.target.value);
                     state.current.notes = event.target.value;
@@ -2104,11 +2161,11 @@ const ChartBoard = memo(function ChartBoard({
                 }}
               />
               <div className="space-y-1">
-                <Label>Add to journal</Label>
+                <Label>{t("Add to journal")}</Label>
                 <div className="flex gap-2">
                   <div className="min-w-0 flex-1">
                     <DatePicker
-                      label="Journal day"
+                      label={t("Journal day")}
                       value={journalDay || today}
                       onValueChange={setJournalDay}
                     />
@@ -2120,14 +2177,14 @@ const ChartBoard = memo(function ChartBoard({
                     disabled={!board || Boolean(viewing) || !settings}
                     onClick={() => void addToJournal()}
                   >
-                    <BookOpenText /> Add
+                    <BookOpenText /> {t("Add")}
                   </Button>
                 </div>
                 {journalStatus && "day" in journalStatus && (
                   <p role="status" className="text-xs text-muted-foreground">
-                    Added to the {journalStatus.day} journal.{" "}
+                    {t("Added to the {day} journal.", { day: journalStatus.day })}{" "}
                     <Link className="underline" href={`/journal/${journalStatus.day}`}>
-                      Open journal day
+                      {t("Open journal day")}
                     </Link>
                   </p>
                 )}
@@ -2137,14 +2194,14 @@ const ChartBoard = memo(function ChartBoard({
                   </p>
                 )}
                 <p className="text-xs text-muted-foreground">
-                  Each day you work on this analysis keeps its own version in that day&apos;s
-                  journal, frozen when the day ends. <strong>Add</strong> saves the analysis as it
-                  is now as that day&apos;s version and puts it in the day note.
+                  {t(
+                    "Each day you work on this analysis keeps its own version in that day's journal, frozen when the day ends. Add saves the analysis as it is now as that day's version and puts it in the day note.",
+                  )}
                 </p>
               </div>
               {analysisId && (snapshotDays?.snapshots.length ?? 0) > 0 && (
                 <div className="space-y-1">
-                  <Label>Versions by day</Label>
+                  <Label>{t("Versions by day")}</Label>
                   <ul className="max-h-40 space-y-0.5 overflow-y-auto text-xs">
                     {snapshotDays!.snapshots.map((snap) => (
                       <li key={snap.day} className="flex items-center justify-between gap-2">
@@ -2156,12 +2213,14 @@ const ChartBoard = memo(function ChartBoard({
                           )}
                           aria-current={viewing === snap.day ? "page" : undefined}
                         >
-                          {snap.day === today ? `${snap.day} (today, updating)` : snap.day}
+                          {snap.day === today
+                            ? t("{day} (today, updating)", { day: snap.day })
+                            : snap.day}
                         </Link>
                         <span className="flex items-center gap-2 text-muted-foreground">
-                          {snap.drawingCount} drawing{snap.drawingCount === 1 ? "" : "s"}
+                          {tn(snap.drawingCount, "{count} drawing", "{count} drawings")}
                           <Link href={`/journal/${snap.day}`} className="underline">
-                            Journal
+                            {t("Journal")}
                           </Link>
                         </span>
                       </li>
@@ -2180,15 +2239,19 @@ const ChartBoard = memo(function ChartBoard({
                     if (current) void deleteAnalysis(current);
                   }}
                 >
-                  <Trash2 /> Delete this analysis
+                  <Trash2 /> {t("Delete this analysis")}
                 </Button>
               )}
             </SectionCard>
 
             <SectionCard
               id="chart-overlays"
-              title="On the chart"
-              summary={board ? `${overlaySummary || "nothing"} shown` : undefined}
+              title={t("On the chart")}
+              summary={
+                board
+                  ? t("{list} shown", { list: overlaySummary || tx("overlays", "nothing") })
+                  : undefined
+              }
             >
               {board ? (
                 <OverlaysPanel
@@ -2202,15 +2265,15 @@ const ChartBoard = memo(function ChartBoard({
                 />
               ) : (
                 <p className="text-sm text-muted-foreground">
-                  Open a chart to see your trades on it.
+                  {t("Open a chart to see your trades on it.")}
                 </p>
               )}
             </SectionCard>
 
             <SectionCard
               id="chart-zones"
-              title="Support and resistance"
-              summary={`${zones.length} zone${zones.length === 1 ? "" : "s"}`}
+              title={t("Support and resistance")}
+              summary={tn(zones.length, "{count} zone", "{count} zones")}
             >
               <ZonesPanel
                 zones={zones}
@@ -2256,8 +2319,8 @@ const ChartBoard = memo(function ChartBoard({
 
             <SectionCard
               id="chart-indicators"
-              title="Indicators"
-              summary={`${indicators.length} on the chart`}
+              title={t("Indicators")}
+              summary={t("{count} on the chart", { count: indicators.length })}
               contentClassName="space-y-2"
             >
               <IndicatorsPanel
@@ -2302,8 +2365,8 @@ const ChartBoard = memo(function ChartBoard({
 
             <SectionCard
               id="chart-alerts"
-              title="Alerts"
-              summary={alertsOn ? `${alerts.length} recent` : "Off"}
+              title={t("Alerts")}
+              summary={alertsOn ? t("{count} recent", { count: alerts.length }) : t("Off")}
               actions={
                 <Button
                   type="button"
@@ -2313,30 +2376,18 @@ const ChartBoard = memo(function ChartBoard({
                   onClick={() => void shared.toggleAlerts()}
                 >
                   {alertsOn ? <Bell /> : <BellOff />}
-                  {alertsOn ? "On" : "Off"}
+                  {alertsOn ? t("On") : t("Off")}
                 </Button>
               }
               contentClassName="space-y-2"
             >
               <p className="text-xs text-muted-foreground">
-                While this page is open and live, get an alert when the price crosses a visible
-                horizontal line, ray or trend line, enters or breaks a support/resistance zone, or
-                when an indicator calls <code>alert()</code>
-                {alertsOn && (!alertKinds.lines || !alertKinds.zones || !alertKinds.indicators)
-                  ? ` (only ${
-                      [
-                        alertKinds.lines && "lines",
-                        alertKinds.zones && "zones",
-                        alertKinds.indicators && "indicators",
-                      ]
-                        .filter(Boolean)
-                        .join(", ") || "none"
-                    }, as chosen on the Alerts page)`
-                  : ""}
-                .
+                {alertsHelp[0]}
+                <code>alert()</code>
+                {alertsHelp[1]}
               </p>
               {alerts.length === 0 ? (
-                <p className="text-xs text-muted-foreground">No alerts yet.</p>
+                <p className="text-xs text-muted-foreground">{t("No alerts yet.")}</p>
               ) : (
                 <ul className="space-y-1">
                   {alerts.map((alert) => (
@@ -2344,7 +2395,7 @@ const ChartBoard = memo(function ChartBoard({
                       {alert.drawingId ? (
                         <button
                           type="button"
-                          aria-label="Show the line on the chart"
+                          aria-label={t("Show the line on the chart")}
                           className="mt-0.5 shrink-0 text-muted-foreground hover:text-foreground"
                           onClick={() => chart.current?.reveal([alert.drawingId!])}
                         >
@@ -2359,7 +2410,7 @@ const ChartBoard = memo(function ChartBoard({
                       <span className="min-w-0 flex-1">
                         {alert.direction && (
                           <span className="font-medium">
-                            {alert.direction === "up" ? "▲ Above " : "▼ Below "}
+                            {alert.direction === "up" ? `▲ ${t("Above")} ` : `▼ ${t("Below")} `}
                           </span>
                         )}
                         {alert.label}
@@ -2375,7 +2426,7 @@ const ChartBoard = memo(function ChartBoard({
               <BackgroundAlerts
                 analysisId={analysisId}
                 disabledReason={
-                  viewing ? "A day's version is read-only; open the live analysis." : undefined
+                  viewing ? t("A day's version is read-only; open the live analysis.") : undefined
                 }
                 ensureAnalysis={() => flush({ create: true }).then((saved) => saved.id)}
               />
@@ -2383,13 +2434,13 @@ const ChartBoard = memo(function ChartBoard({
 
             <SectionCard
               id="chart-all-analyses"
-              title="All analyses"
-              summary={`${allAnalyses?.analyses.length ?? 0} saved`}
+              title={t("All analyses")}
+              summary={t("{count} saved", { count: allAnalyses?.analyses.length ?? 0 })}
               contentClassName="space-y-2"
             >
               {allAnalyses?.analyses.length === 0 && (
                 <p className="text-sm text-muted-foreground">
-                  Nothing saved yet. Draw on a chart and it saves itself.
+                  {t("Nothing saved yet. Draw on a chart and it saves itself.")}
                 </p>
               )}
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 2xl:grid-cols-2">
@@ -2418,15 +2469,15 @@ const ChartBoard = memo(function ChartBoard({
                         />
                       ) : (
                         <div className="mb-1 flex aspect-video items-center justify-center rounded bg-muted text-[11px] text-muted-foreground">
-                          No snapshot
+                          {t("No snapshot")}
                         </div>
                       )}
                       <span className="block truncate text-xs font-medium">
                         {analysisLabel(item)}
                       </span>
                       <span className="block truncate text-[11px] text-muted-foreground">
-                        {item.symbol} · {item.drawingCount} drawing
-                        {item.drawingCount === 1 ? "" : "s"}
+                        {item.symbol} ·{" "}
+                        {tn(item.drawingCount, "{count} drawing", "{count} drawings")}
                       </span>
                     </button>
                   </div>
@@ -2440,7 +2491,9 @@ const ChartBoard = memo(function ChartBoard({
                   className="w-full"
                   onClick={() => setShowAll(!showAll)}
                 >
-                  {showAll ? "Show fewer" : `Show all ${allAnalyses!.analyses.length}`}
+                  {showAll
+                    ? t("Show fewer")
+                    : t("Show all {count}", { count: allAnalyses!.analyses.length })}
                 </Button>
               )}
             </SectionCard>
@@ -2476,6 +2529,7 @@ const layerVisible = (doc: LayersDocument, drawingId: string) =>
 
 /** The latest close, the change from the previous candle, and when it updated. */
 function LivePrice({ store }: { store: LiveStore }) {
+  const { t } = useI18n();
   const { latest, status } = useLiveView(store);
   const change = latest && latest.previousClose ? latest.bar.close - latest.previousClose : null;
   const changePct = change !== null && latest?.previousClose ? change / latest.previousClose : null;
@@ -2488,7 +2542,7 @@ function LivePrice({ store }: { store: LiveStore }) {
             <span className="tnum text-sm text-muted-foreground">
               {change >= 0 ? "+" : "−"}
               {fmtNumber(Math.abs(change))} ({change >= 0 ? "+" : "−"}
-              {(Math.abs(changePct) * 100).toFixed(2)}%) vs previous candle
+              {(Math.abs(changePct) * 100).toFixed(2)}%) {t("vs previous candle")}
             </span>
           )}
         </>
@@ -2497,14 +2551,14 @@ function LivePrice({ store }: { store: LiveStore }) {
           <span className="text-sm text-muted-foreground">
             {/* Candles arrived (updatedAt) but none: say so rather than load forever. */}
             {status.updatedAt
-              ? "No candles from this source for this symbol and candle size."
-              : "Loading candles…"}
+              ? t("No candles from this source for this symbol and candle size.")
+              : t("Loading candles…")}
           </span>
         )
       )}
       {status.state !== "error" && status.updatedAt && (
         <span className="text-xs text-muted-foreground">
-          Updated {new Date(status.updatedAt).toLocaleTimeString()}
+          {t("Updated {time}", { time: new Date(status.updatedAt).toLocaleTimeString() })}
         </span>
       )}
     </>
@@ -2512,11 +2566,12 @@ function LivePrice({ store }: { store: LiveStore }) {
 }
 
 function LiveError({ store }: { store: LiveStore }) {
+  const { t } = useI18n();
   const { status } = useLiveView(store);
   if (status.state !== "error" || !status.message) return null;
   return (
     <p role="alert" className="text-sm text-destructive">
-      {status.message}
+      {t(status.message)}
     </p>
   );
 }
@@ -2533,6 +2588,7 @@ const workspaceQuery = (
 };
 
 function LiveBadge({ store, live }: { store: LiveStore; live: boolean }) {
+  const { tx } = useI18n();
   const { status } = useLiveView(store);
   const label =
     status.state === "error"
@@ -2552,9 +2608,9 @@ function LiveBadge({ store, live }: { store: LiveStore; live: boolean }) {
       role="status"
       title={
         label === "Real time"
-          ? "Prices stream from the exchange as trades happen"
+          ? tx("feed", "Prices stream from the exchange as trades happen")
           : label === "Live"
-            ? "New candles are fetched periodically"
+            ? tx("feed", "New candles are fetched periodically")
             : undefined
       }
       className={cn(
@@ -2570,27 +2626,28 @@ function LiveBadge({ store, live }: { store: LiveStore; live: boolean }) {
           on ? "animate-pulse bg-primary" : "bg-muted-foreground",
         )}
       />
-      {label}
+      {tx("feed", label)}
     </span>
   );
 }
 
 function SaveIndicator({ state, onRetry }: { state: SaveState; onRetry: () => void }) {
+  const { t } = useI18n();
   if (state.state === "error")
     return (
       <span role="alert" className="flex items-center gap-2 text-xs text-destructive">
-        Not saved: {state.message}
+        {t("Not saved: {message}", { message: state.message })}
         <Button type="button" size="sm" variant="ghost" className="h-6 px-2" onClick={onRetry}>
-          Retry
+          {t("Retry")}
         </Button>
       </span>
     );
   const text =
     state.state === "saving" || state.state === "pending"
-      ? "Saving…"
+      ? t("Saving…")
       : state.state === "saved"
-        ? `Saved ${new Date(state.at).toLocaleTimeString()}`
-        : "Saves automatically";
+        ? t("Saved {time}", { time: new Date(state.at).toLocaleTimeString() })
+        : t("Saves automatically");
   return (
     <span role="status" className="text-xs text-muted-foreground">
       {text}

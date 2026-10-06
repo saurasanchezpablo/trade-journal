@@ -7,6 +7,7 @@ import { Button } from "./ui/button";
 import { AiNotice } from "./ai-notice";
 import { Markdown } from "./rich-editor";
 import { VoiceNote } from "./voice-note";
+import { useI18n } from "./i18n";
 
 /**
  * A voice memo made into a note: dictate (or type) freely, let the AI sort it into sections
@@ -20,6 +21,7 @@ export function VoiceMemo({
   kind: "day" | "trade";
   onInsert: (markdown: string) => void;
 }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [memo, setMemo] = useState("");
   const [note, setNote] = useState("");
@@ -38,7 +40,7 @@ export function VoiceMemo({
       setNote(result.note);
     } catch (cause) {
       setNote("");
-      setError(cause instanceof Error ? cause.message : "Could not make the note");
+      setError(cause instanceof Error ? cause.message : t("Could not make the note"));
     } finally {
       setBusy(false);
     }
@@ -47,24 +49,24 @@ export function VoiceMemo({
     return (
       <Button type="button" variant="outline" size="sm" onClick={() => setOpen(true)}>
         <AudioLines />
-        Voice memo
+        {t("Voice memo")}
       </Button>
     );
   return (
-    <div className="space-y-2 rounded-md border p-3" role="region" aria-label="Voice memo">
+    <div className="space-y-2 rounded-md border p-3" role="region" aria-label={t("Voice memo")}>
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm font-medium">Voice memo</span>
+        <span className="text-sm font-medium">{t("Voice memo")}</span>
         <span className="text-xs text-muted-foreground">
-          Talk it through; the AI sorts it into a note you check before adding.
+          {t("Talk it through; the AI sorts it into a note you check before adding.")}
         </span>
       </div>
       <div className="flex items-start gap-2">
         <textarea
-          aria-label="Memo"
+          aria-label={t("Memo")}
           value={memo}
           onChange={(e) => setMemo(e.target.value)}
           rows={4}
-          placeholder="Dictate or type what happened, how you felt, what to keep and fix…"
+          placeholder={t("Dictate or type what happened, how you felt, what to keep and fix…")}
           className="min-h-20 flex-1 rounded-md border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground"
         />
         <VoiceNote
@@ -80,7 +82,7 @@ export function VoiceMemo({
           onClick={() => void structure()}
         >
           <Sparkles />
-          {busy ? "Writing…" : "Make it a note"}
+          {busy ? t("Writing…") : t("Make it a note")}
         </Button>
         {note && !busy && (
           <Button
@@ -94,11 +96,11 @@ export function VoiceMemo({
               setOpen(false);
             }}
           >
-            Add to note
+            {t("Add to note")}
           </Button>
         )}
         <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>
-          Close
+          {t("Close")}
         </Button>
       </div>
       {error && (
@@ -107,7 +109,7 @@ export function VoiceMemo({
       {note && (
         <article
           className="rounded-md border bg-muted/20 p-3 text-sm"
-          aria-label="Note preview"
+          aria-label={t("Note preview")}
           aria-live="polite"
         >
           <Markdown externalImages="ask">{note}</Markdown>

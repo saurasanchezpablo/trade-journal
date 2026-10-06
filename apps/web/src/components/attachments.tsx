@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { Paperclip, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { postJson, useApi } from "@/lib/use-api";
+import { useI18n } from "./i18n";
 export function Attachments({
   type,
   id,
@@ -11,6 +12,7 @@ export function Attachments({
   type: "trade" | "day" | "note" | "missed" | "prop-account" | "prop-entry";
   id: string;
 }) {
+  const { t } = useI18n();
   const { data, error, refresh } = useApi<{
     attachments: { id: string; name: string; mime: string; size: number }[];
   }>(`/api/attachments?type=${type}&id=${encodeURIComponent(id)}`);
@@ -28,13 +30,15 @@ export function Attachments({
           onClick={() => input.current?.click()}
         >
           <Paperclip />
-          {busy ? "Uploading…" : "Add attachment"}
+          {busy ? t("Uploading…") : t("Add attachment")}
         </Button>
-        <span className="text-xs text-muted-foreground">Images or PDF · up to 8 MB each</span>
+        <span className="text-xs text-muted-foreground">
+          {t("Images or PDF · up to 8 MB each")}
+        </span>
       </div>
       <input
         ref={input}
-        aria-label="Upload attachment"
+        aria-label={t("Upload attachment")}
         type="file"
         accept="image/png,image/jpeg,image/webp,application/pdf"
         className="hidden"
@@ -51,10 +55,10 @@ export function Attachments({
               body.append("file", file);
               const r = await fetch("/api/attachments", { method: "POST", body });
               const result = await r.json();
-              if (!r.ok) throw new Error(result.error);
+              if (!r.ok) throw new Error(t(result.error ?? "Upload failed."));
             }
           } catch (err) {
-            setFailure(err instanceof Error ? err.message : "Upload failed.");
+            setFailure(err instanceof Error ? err.message : t("Upload failed."));
           } finally {
             setBusy(false);
             if (input.current) input.current.value = "";
@@ -94,9 +98,9 @@ export function Attachments({
                 variant="ghost"
                 size="icon"
                 className="h-6 w-6"
-                aria-label={`Remove ${a.name}`}
+                aria-label={t("Remove {name}", { name: a.name })}
                 onClick={async () => {
-                  if (!confirm(`Remove ${a.name}?`)) return;
+                  if (!confirm(t("Remove {name}?", { name: a.name }))) return;
                   try {
                     await postJson(`/api/attachments/${a.id}`, undefined, "DELETE");
                     refresh();

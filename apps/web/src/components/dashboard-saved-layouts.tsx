@@ -5,6 +5,7 @@ import * as Popover from "@radix-ui/react-popover";
 import { Check, ChevronDown, LayoutTemplate, Save, Search, X } from "lucide-react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
+import { useI18n } from "./i18n";
 import {
   normalizeArrangement,
   visibleCardIds,
@@ -24,6 +25,7 @@ export function DashboardSavedLayouts({
   onLoad(name: string): void;
   onSave(name: string): boolean;
 }) {
+  const { t, tn } = useI18n();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [name, setName] = useState("");
@@ -50,9 +52,9 @@ export function DashboardSavedLayouts({
           variant="outline"
           size="sm"
           className="dashboard-customize-trigger"
-          aria-label="Saved dashboard layouts"
+          aria-label={t("Saved dashboard layouts")}
         >
-          <LayoutTemplate /> Layouts <ChevronDown className="dashboard-customize-chevron" />
+          <LayoutTemplate /> {t("Layouts")} <ChevronDown className="dashboard-customize-chevron" />
         </Button>
       </Popover.Trigger>
       <Popover.Portal>
@@ -64,11 +66,13 @@ export function DashboardSavedLayouts({
           aria-labelledby={titleId}
         >
           <div className="dashboard-customize-heading">
-            <h2 id={titleId}>Saved layouts</h2>
-            <span className="dashboard-customize-count">{names.length} saved</span>
+            <h2 id={titleId}>{t("Saved layouts")}</h2>
+            <span className="dashboard-customize-count">
+              {t("{count} saved", { count: names.length })}
+            </span>
             <Popover.Close
               className="dashboard-customize-icon-button"
-              aria-label="Close saved layouts"
+              aria-label={t("Close saved layouts")}
             >
               <X size={15} />
             </Popover.Close>
@@ -77,8 +81,8 @@ export function DashboardSavedLayouts({
             <div className="dashboard-customize-search">
               <Search size={14} aria-hidden="true" />
               <input
-                aria-label="Find a layout"
-                placeholder="Find a layout…"
+                aria-label={t("Find a layout")}
+                placeholder={t("Find a layout…")}
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
               />
@@ -116,7 +120,7 @@ export function DashboardSavedLayouts({
                     data-saved-layout
                     className="dashboard-customize-option dashboard-layout-option"
                     style={{ "--option-index": Math.min(index, 7) } as CSSProperties}
-                    aria-label={`Load ${name}`}
+                    aria-label={t("Load {name}", { name })}
                     onClick={() => {
                       onLoad(name);
                       setOpen(false);
@@ -128,7 +132,13 @@ export function DashboardSavedLayouts({
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-xs font-medium">{name}</span>
                       <span className="mt-0.5 block text-[11px] text-muted-foreground">
-                        {visibleCardIds(layout).length} cards{active ? " · Current layout" : ""}
+                        {active
+                          ? tn(
+                              visibleCardIds(layout).length,
+                              "{count} card · Current layout",
+                              "{count} cards · Current layout",
+                            )
+                          : tn(visibleCardIds(layout).length, "{count} card", "{count} cards")}
                       </span>
                     </span>
                     {active && (
@@ -140,10 +150,10 @@ export function DashboardSavedLayouts({
               {!matches.length && (
                 <div className="dashboard-customize-empty">
                   <LayoutTemplate size={24} aria-hidden="true" />
-                  <p>{names.length ? "No matching layouts" : "Make this dashboard yours"}</p>
+                  <p>{names.length ? t("No matching layouts") : t("Make this dashboard yours")}</p>
                   {!names.length && (
                     <span className="max-w-56 text-center text-[11px] leading-relaxed">
-                      Save your favorite card arrangements and switch between them here.
+                      {t("Save your favorite card arrangements and switch between them here.")}
                     </span>
                   )}
                 </div>
@@ -156,7 +166,7 @@ export function DashboardSavedLayouts({
               event.preventDefault();
               if (!name.trim()) return;
               if (!onSave(name.trim())) return;
-              setSaved(`${name.trim()} saved`);
+              setSaved(t("{name} saved", { name: name.trim() }));
               setName("");
               setQuery("");
             }}
@@ -165,13 +175,13 @@ export function DashboardSavedLayouts({
               htmlFor={`${titleId}-name`}
               className="text-[11px] font-medium text-muted-foreground"
             >
-              Save current layout
+              {t("Save current layout")}
             </label>
             <div className="flex min-w-0 items-center gap-2">
               <Input
                 id={`${titleId}-name`}
-                aria-label="Layout name"
-                placeholder="e.g. Weekly review"
+                aria-label={t("Layout name")}
+                placeholder={t("e.g. Weekly review")}
                 value={name}
                 maxLength={80}
                 onChange={(event) => {
@@ -187,7 +197,7 @@ export function DashboardSavedLayouts({
                 disabled={!name.trim()}
               >
                 <Save className="h-3.5 w-3.5" />
-                Save
+                {t("Save")}
               </Button>
             </div>
             {saved && (

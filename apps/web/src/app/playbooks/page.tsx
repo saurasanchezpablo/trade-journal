@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { postJson, useApi } from "@/lib/use-api";
+import { useI18n } from "@/components/i18n";
 
 interface Playbook {
   id: string;
@@ -28,6 +29,7 @@ export default function PlaybooksPage() {
 }
 
 function Playbooks() {
+  const { t, tn } = useI18n();
   const { data, error, refresh } = useApi<{ playbooks: Playbook[] }>("/api/playbooks");
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -55,7 +57,7 @@ function Playbooks() {
       setRules("");
       refresh();
     } catch (cause) {
-      setFailure(cause instanceof Error ? cause.message : "Could not create the playbook.");
+      setFailure(cause instanceof Error ? cause.message : t("Could not create the playbook."));
     } finally {
       setBusy(false);
     }
@@ -64,11 +66,11 @@ function Playbooks() {
   return (
     <div>
       <FilterBar
-        title="Playbooks"
+        title={t("Playbooks")}
         actions={
           <Button size="sm" onClick={() => setOpen(true)}>
             <Plus />
-            New playbook
+            {t("New playbook")}
           </Button>
         }
       />
@@ -80,8 +82,9 @@ function Playbooks() {
         )}
         {data?.playbooks.length === 0 && (
           <p className="col-span-full py-16 text-center text-sm text-muted-foreground">
-            A playbook is a setup you trade on purpose: name it, write its rules, then tag trades
-            with it and let Reports tell you if it actually pays.
+            {t(
+              "A playbook is a setup you trade on purpose: name it, write its rules, then tag trades with it and let Reports tell you if it actually pays.",
+            )}
           </p>
         )}
         {data?.playbooks.map((playbook) => (
@@ -91,24 +94,30 @@ function Playbooks() {
                 {playbook.name}
               </CardTitle>
               <div className="ml-auto flex shrink-0 items-center gap-2">
-                <span className="text-xs text-muted-foreground">{playbook.tradeCount} trades</span>
+                <span className="text-xs text-muted-foreground">
+                  {tn(playbook.tradeCount, "{count} trade", "{count} trades")}
+                </span>
                 <Button
                   variant="ghost"
                   size="icon"
                   className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                  aria-label={`Delete playbook ${playbook.name}`}
-                  title="Delete playbook"
+                  aria-label={t("Delete playbook {name}", { name: playbook.name })}
+                  title={t("Delete playbook")}
                   onClick={async () => {
                     if (
                       confirm(
-                        `Delete "${playbook.name}"? Trades keep their data, just lose the link.`,
+                        t('Delete "{name}"? Trades keep their data, just lose the link.', {
+                          name: playbook.name,
+                        }),
                       )
                     ) {
                       try {
                         await postJson(`/api/playbooks/${playbook.id}`, undefined, "DELETE");
                       } catch (error) {
                         alert(
-                          error instanceof Error ? error.message : "Could not delete the playbook.",
+                          error instanceof Error
+                            ? error.message
+                            : t("Could not delete the playbook."),
                         );
                       }
                       refresh();
@@ -142,7 +151,7 @@ function Playbooks() {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>New playbook</DialogTitle>
+            <DialogTitle>{t("New playbook")}</DialogTitle>
           </DialogHeader>
           <form
             className="space-y-3"
@@ -152,24 +161,24 @@ function Playbooks() {
             }}
           >
             <Input
-              aria-label="Playbook name"
+              aria-label={t("Playbook name")}
               value={name}
               onChange={(event) => setName(event.target.value)}
-              placeholder="Name (e.g. Opening range breakout)"
+              placeholder={t("Name (e.g. Opening range breakout)")}
             />
             <Input
-              aria-label="Description"
+              aria-label={t("Description")}
               value={description}
               onChange={(event) => setDescription(event.target.value)}
-              placeholder="One-line description"
+              placeholder={t("One-line description")}
             />
             <Textarea
-              aria-label="Rules, one per line"
+              aria-label={t("Rules, one per line")}
               value={rules}
               onChange={(event) => setRules(event.target.value)}
-              placeholder={
-                "One rule per line:\nOnly A+ setups\nRisk max 1R\nNo entries after 11:30"
-              }
+              placeholder={t(
+                "One rule per line:\nOnly A+ setups\nRisk max 1R\nNo entries after 11:30",
+              )}
               className="min-h-32"
             />
             {failure && (
@@ -178,7 +187,7 @@ function Playbooks() {
               </p>
             )}
             <Button type="submit" disabled={busy || !name.trim()}>
-              {busy ? "Creating…" : "Create"}
+              {busy ? t("Creating…") : t("Create")}
             </Button>
           </form>
         </DialogContent>

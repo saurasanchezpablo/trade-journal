@@ -12,10 +12,14 @@ import {
   placeOrder,
   stepBar,
   type BacktestEvent,
+  type BacktestOrderType,
+  type BacktestSide,
   type BacktestState,
+  type BacktestTrade,
 } from "@luxalgo/journal-core";
 import { ArrowLeft, FastForward, Pause, Play, SkipForward } from "lucide-react";
 import { useFilters } from "@/components/filter-bar";
+import { useI18n, useT } from "@/components/i18n";
 import { Pnl } from "@/components/pnl";
 import { MonetaryValue } from "@/components/privacy";
 import { Button } from "@/components/ui/button";
@@ -72,26 +76,63 @@ const readChartDocument = (value: unknown): ChartDocument => {
   };
 };
 
+type Translate = (text: string, vars?: Record<string, string | number>) => string;
+
+const CLOSED_BY: Record<BacktestTrade["exitReason"], string> = {
+  stop: "{id} closed by stop at {price}",
+  target: "{id} closed by target at {price}",
+  manual: "{id} closed by hand at {price}",
+  end: "{id} closed by end at {price}",
+};
+
+/** A pending order's line: side and order type in one sentence each. */
+const ORDER_LINES: Record<BacktestSide, Record<BacktestOrderType, string>> = {
+  long: {
+    market: "Buy market {qty} at {price}",
+    limit: "Buy limit {qty} at {price}",
+    stop: "Buy stop {qty} at {price}",
+  },
+  short: {
+    market: "Sell market {qty} at {price}",
+    limit: "Sell limit {qty} at {price}",
+    stop: "Sell stop {qty} at {price}",
+  },
+};
+
 interface LogLine {
   text: string;
   /** A closed trade's result, shown apart so privacy mode can hide it. */
   pnl: number | null;
 }
-const logLine = (event: BacktestEvent): LogLine =>
+const logLine = (event: BacktestEvent, t: Translate): LogLine =>
   event.kind === "filled"
     ? {
-        text: `${event.side === "long" ? "Bought" : "Sold"} at ${fmtNumber(event.price, 6)}`,
+        text: t(event.side === "long" ? "Bought at {price}" : "Sold at {price}", {
+          price: fmtNumber(event.price, 6),
+        }),
         pnl: null,
       }
     : event.kind === "closed"
       ? {
-          text: `${event.trade.id} closed by ${event.trade.exitReason === "manual" ? "hand" : event.trade.exitReason} at ${fmtNumber(event.trade.exitPrice, 6)}${event.trade.ambiguous ? " (same-candle rule)" : ""}`,
+          text: t(
+            event.trade.ambiguous
+              ? `${CLOSED_BY[event.trade.exitReason]} (same-candle rule)`
+              : CLOSED_BY[event.trade.exitReason],
+            { id: event.trade.id, price: fmtNumber(event.trade.exitPrice, 6) },
+          ),
           pnl: event.trade.netPnl,
         }
-      : { text: `Order ${event.orderId} cancelled: ${event.reason}`, pnl: null };
+      : {
+          text: t("Order {id} cancelled: {reason}", {
+            id: event.orderId,
+            reason: t(event.reason),
+          }),
+          pnl: null,
+        };
 
 /** A replay backtest: the chart, its replay controls, orders, the position and the results. */
 export function SessionWorkspace({ initial }: { initial: BacktestSession }) {
+  const { t } = useI18n();
   const { timeZone } = useFilters();
   const [session, setSession] = useState(initial);
   const settings = session.settings;
@@ -109,7 +150,7 @@ export function SessionWorkspace({ initial }: { initial: BacktestSession }) {
     setEngineState(state);
   };
   const [, setTick] = useState(0);
-  const rerender = () => setTick((t) => t + 1);
+  const rerender = () => setTick((n) => n + 1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -249,7 +290,7 @@ export function SessionWorkspace({ initial }: { initial: BacktestSession }) {
   // ── The engine, one candle at a time ──
   const record = (events: BacktestEvent[]) => {
     if (!events.length) return;
-    setLog((lines) => [...events.map(logLine), ...lines].slice(0, 30));
+    setLog((lines) => [...events.map((event) => logLine(event, t)), ...lines].slice(0, 30));
   };
   /** Reveal the next candle; false when it filled or closed something and play should stop. */
   const advanceOne = (): boolean | null => {
@@ -389,30 +430,32 @@ export function SessionWorkspace({ initial }: { initial: BacktestSession }) {
             href="/backtest"
             className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:underline"
           >
-            <ArrowLeft className="size-3" /> All backtests
+            <ArrowLeft className="size-3" /> {t("All backtests")}
           </Link>
           <h2 className="truncate text-lg font-semibold">{session.name}</h2>
           <p className="text-xs text-muted-foreground">
             {initial.symbol} · {providerInfo(initial.provider)?.name ?? initial.provider} ·{" "}
-            {initial.resolution} candles
-            {current ? ` · replaying ${when(current.time)} (${timeZone})` : ""}
+            {t("{resolution} candles", { resolution: initial.resolution })}
+            {current
+              ? ` · ${t("replaying {time} ({timeZone})", { time: when(current.time), timeZone })}`
+              : ""}
           </p>
         </div>
         <div className="flex flex-wrap gap-4 text-sm">
           <div>
-            <p className="text-xs text-muted-foreground">Balance</p>
+            <p className="text-xs text-muted-foreground">{t("Balance")}</p>
             <p className="tnum font-medium">
               <MonetaryValue>{fmtAmount(engine.balance, settings.currency)}</MonetaryValue>
             </p>
           </div>
           <div>
-            <p className="text-xs text-muted-foreground">Equity</p>
+            <p className="text-xs text-muted-foreground">{t("Equity")}</p>
             <p className="tnum font-medium">
               <MonetaryValue>{fmtAmount(equity, settings.currency)}</MonetaryValue>
             </p>
           </div>
           <div>
-            <p className="text-xs text-muted-foreground">Net result</p>
+            <p className="text-xs text-muted-foreground">{t("Net result")}</p>
             <Pnl
               value={engine.balance - settings.initialBalance}
               currency={settings.currency}
@@ -423,7 +466,7 @@ export function SessionWorkspace({ initial }: { initial: BacktestSession }) {
       </div>
       {error && (
         <p role="alert" className="text-sm text-destructive">
-          {error}
+          {t(error)}
         </p>
       )}
       <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_340px]">
@@ -432,7 +475,7 @@ export function SessionWorkspace({ initial }: { initial: BacktestSession }) {
             <CardContent className="space-y-3 pt-4">
               {loading ? (
                 <div className="flex h-[520px] items-center justify-center text-sm text-muted-foreground">
-                  Loading candles…
+                  {t("Loading candles…")}
                 </div>
               ) : bars.current.length ? (
                 <BacktestChart
@@ -458,7 +501,7 @@ export function SessionWorkspace({ initial }: { initial: BacktestSession }) {
                   disabled={loading || !current}
                 >
                   {playing ? <Pause /> : <Play />}
-                  {playing ? "Pause" : "Play"}
+                  {playing ? t("Pause") : t("Play")}
                 </Button>
                 <Button
                   variant="outline"
@@ -466,7 +509,7 @@ export function SessionWorkspace({ initial }: { initial: BacktestSession }) {
                   disabled={loading || !current}
                 >
                   <SkipForward />
-                  Next candle
+                  {t("Next candle")}
                 </Button>
                 <Button
                   variant="outline"
@@ -484,7 +527,7 @@ export function SessionWorkspace({ initial }: { initial: BacktestSession }) {
                   +100
                 </Button>
                 <OptionSelect
-                  aria-label="Replay speed"
+                  aria-label={t("Replay speed")}
                   className="w-24"
                   value={speed}
                   onValueChange={setSpeed}
@@ -496,7 +539,7 @@ export function SessionWorkspace({ initial }: { initial: BacktestSession }) {
                   ))}
                 </OptionSelect>
                 <OptionSelect
-                  aria-label="Chart timeframe"
+                  aria-label={t("Chart timeframe")}
                   className="w-24"
                   value={view}
                   onValueChange={(value) => setView(value as Resolution)}
@@ -513,7 +556,7 @@ export function SessionWorkspace({ initial }: { initial: BacktestSession }) {
                     checked={pauseOnFill}
                     onChange={(event) => setPauseOnFill(event.target.checked)}
                   />
-                  Pause on fills and exits
+                  {t("Pause on fills and exits")}
                 </label>
               </div>
               <form
@@ -529,7 +572,7 @@ export function SessionWorkspace({ initial }: { initial: BacktestSession }) {
               >
                 <div>
                   <label htmlFor="backtest-skip" className="text-xs text-muted-foreground">
-                    Skip to ({timeZone})
+                    {t("Skip to ({timeZone})", { timeZone })}
                   </label>
                   <Input
                     id="backtest-skip"
@@ -540,26 +583,29 @@ export function SessionWorkspace({ initial }: { initial: BacktestSession }) {
                   />
                 </div>
                 <Button type="submit" variant="outline" disabled={loading || !current}>
-                  Skip
+                  {t("Skip")}
                 </Button>
                 <p className="pb-2 text-xs text-muted-foreground">
-                  Space plays or pauses; the right arrow reveals one candle. Skipping stops at a
-                  fill or exit while pausing on them is on.
+                  {t(
+                    "Space plays or pauses; the right arrow reveals one candle. Skipping stops at a fill or exit while pausing on them is on.",
+                  )}
                 </p>
               </form>
               {notice && (
                 <p role="status" className="text-xs text-muted-foreground">
-                  {notice}
+                  {t(notice)}
                 </p>
               )}
             </CardContent>
           </Card>
           <Tabs defaultValue="trades">
             <TabsList>
-              <TabsTrigger value="trades">Trades ({engine.trades.length})</TabsTrigger>
-              <TabsTrigger value="report">Report</TabsTrigger>
-              <TabsTrigger value="notes">Notes</TabsTrigger>
-              <TabsTrigger value="settings">Settings</TabsTrigger>
+              <TabsTrigger value="trades">
+                {t("Trades ({count})", { count: engine.trades.length })}
+              </TabsTrigger>
+              <TabsTrigger value="report">{t("Report")}</TabsTrigger>
+              <TabsTrigger value="notes">{t("Notes")}</TabsTrigger>
+              <TabsTrigger value="settings">{t("Settings")}</TabsTrigger>
             </TabsList>
             <TabsContent value="trades">
               <Card>
@@ -572,8 +618,8 @@ export function SessionWorkspace({ initial }: { initial: BacktestSession }) {
                       act(() => ({
                         state: {
                           ...engineRef.current,
-                          trades: engineRef.current.trades.map((t) =>
-                            t.id === id ? { ...t, note } : t,
+                          trades: engineRef.current.trades.map((trade) =>
+                            trade.id === id ? { ...trade, note } : trade,
                           ),
                         },
                       }))
@@ -597,7 +643,7 @@ export function SessionWorkspace({ initial }: { initial: BacktestSession }) {
               <Card>
                 <CardContent className="space-y-2 pt-4">
                   <label htmlFor="backtest-notes" className="text-xs text-muted-foreground">
-                    What you are testing, and what you learn
+                    {t("What you are testing, and what you learn")}
                   </label>
                   <textarea
                     id="backtest-notes"
@@ -620,13 +666,13 @@ export function SessionWorkspace({ initial }: { initial: BacktestSession }) {
                 onSave={(next) => {
                   const balance =
                     next.initialBalance +
-                    engineRef.current.trades.reduce((sum, t) => sum + t.netPnl, 0);
+                    engineRef.current.trades.reduce((sum, trade) => sum + trade.netPnl, 0);
                   setSession((s) => ({ ...s, settings: next }));
                   setEngine({ ...engineRef.current, balance });
                   save({ settings: next, state: engineRef.current });
                 }}
                 onRestart={() => {
-                  if (!confirm("Start this session over? Its trades and orders are removed."))
+                  if (!confirm(t("Start this session over? Its trades and orders are removed.")))
                     return;
                   setPlaying(false);
                   const fresh = newBacktest(settings);
@@ -650,14 +696,14 @@ export function SessionWorkspace({ initial }: { initial: BacktestSession }) {
         <div className="space-y-3">
           <Card>
             <CardHeader>
-              <CardTitle>Order</CardTitle>
+              <CardTitle>{t("Order")}</CardTitle>
             </CardHeader>
             <CardContent>
               <OrderTicket
                 price={price}
                 settings={settings}
                 balance={engine.balance}
-                disabled={position ? "Close the open position before entering again." : null}
+                disabled={position ? t("Close the open position before entering again.") : null}
                 onPlace={place}
               />
             </CardContent>
@@ -681,18 +727,20 @@ export function SessionWorkspace({ initial }: { initial: BacktestSession }) {
           {engine.orders.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle>Pending orders</CardTitle>
+                <CardTitle>{t("Pending orders")}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2 text-sm">
                 {engine.orders.map((order) => (
                   <div key={order.id} className="flex items-center justify-between gap-2">
                     <span>
-                      {order.side === "long" ? "Buy" : "Sell"} {order.type}{" "}
-                      {fmtNumber(order.qty, 6)} at {fmtNumber(order.price, 6)}
+                      {t(ORDER_LINES[order.side][order.type], {
+                        qty: fmtNumber(order.qty, 6),
+                        price: fmtNumber(order.price, 6),
+                      })}
                       {order.stop !== null && (
                         <span className="text-muted-foreground">
                           {" "}
-                          · stop {fmtNumber(order.stop, 6)}
+                          · {t("stop {price}", { price: fmtNumber(order.stop, 6) })}
                         </span>
                       )}
                     </span>
@@ -703,7 +751,7 @@ export function SessionWorkspace({ initial }: { initial: BacktestSession }) {
                         act(() => ({ state: cancelOrder(engineRef.current, order.id) }))
                       }
                     >
-                      Cancel
+                      {t("Cancel")}
                     </Button>
                   </div>
                 ))}
@@ -712,7 +760,7 @@ export function SessionWorkspace({ initial }: { initial: BacktestSession }) {
           )}
           <Card>
             <CardHeader>
-              <CardTitle>Activity</CardTitle>
+              <CardTitle>{t("Activity")}</CardTitle>
             </CardHeader>
             <CardContent>
               {log.length ? (
@@ -730,9 +778,13 @@ export function SessionWorkspace({ initial }: { initial: BacktestSession }) {
                 </ul>
               ) : (
                 <p className="text-xs text-muted-foreground">
-                  Fills and exits appear here as the replay reaches them. Orders fill from each new
-                  candle&apos;s prices; a candle that reaches both your stop and target counts{" "}
-                  {settings.sameCandle === "stop-first" ? "the stop" : "the target"}.
+                  {settings.sameCandle === "stop-first"
+                    ? t(
+                        "Fills and exits appear here as the replay reaches them. Orders fill from each new candle's prices; a candle that reaches both your stop and target counts the stop.",
+                      )
+                    : t(
+                        "Fills and exits appear here as the replay reaches them. Orders fill from each new candle's prices; a candle that reaches both your stop and target counts the target.",
+                      )}
                 </p>
               )}
             </CardContent>
@@ -760,6 +812,7 @@ function PositionCard({
   onModify: (levels: { stop: number | null; target: number | null }) => string | null;
   onClose: () => void;
 }) {
+  const { t, tn } = useI18n();
   const [stop, setStop] = useState(position.stop === null ? "" : String(position.stop));
   const [target, setTarget] = useState(position.target === null ? "" : String(position.target));
   const [error, setError] = useState("");
@@ -771,22 +824,34 @@ function PositionCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Open position</CardTitle>
+        <CardTitle>{t("Open position")}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3 text-sm">
         <p>
           <span className={position.side === "long" ? "text-profit" : "text-loss"}>
-            {position.side === "long" ? "Long" : "Short"}
+            {t(position.side === "long" ? "Long" : "Short")}
           </span>{" "}
-          {fmtNumber(position.qty, 6)} from {fmtNumber(position.entryPrice, 6)}
+          {t("{qty} from {price}", {
+            qty: fmtNumber(position.qty, 6),
+            price: fmtNumber(position.entryPrice, 6),
+          })}
           <span className="block text-xs text-muted-foreground">
-            since{" "}
-            {formatTimestamp(new Date(position.entryTime).toISOString(), timeZone).slice(0, 16)} ·{" "}
-            {position.bars} candles · now {fmtNumber(price, 6)}
+            {tn(
+              position.bars,
+              "since {time} · {count} candle · now {price}",
+              "since {time} · {count} candles · now {price}",
+              {
+                time: formatTimestamp(new Date(position.entryTime).toISOString(), timeZone).slice(
+                  0,
+                  16,
+                ),
+                price: fmtNumber(price, 6),
+              },
+            )}
           </span>
         </p>
         <p>
-          Open result <Pnl value={openPnl} currency={currency} className="font-medium" />
+          {t("Open result")} <Pnl value={openPnl} currency={currency} className="font-medium" />
           {r !== null && (
             <span className="ml-1 text-xs text-muted-foreground">
               ({r > 0 ? "+" : ""}
@@ -799,14 +864,14 @@ function PositionCard({
           onSubmit={(event) => {
             event.preventDefault();
             const s = parseDecimalInput(stop);
-            const t = parseDecimalInput(target);
-            if (s === undefined || t === undefined) return setError(NOT_A_NUMBER);
-            apply({ stop: s, target: t });
+            const tp = parseDecimalInput(target);
+            if (s === undefined || tp === undefined) return setError(NOT_A_NUMBER);
+            apply({ stop: s, target: tp });
           }}
         >
           <div>
             <label htmlFor="position-stop" className="text-xs text-muted-foreground">
-              Stop loss
+              {t("Stop loss")}
             </label>
             <Input
               id="position-stop"
@@ -817,7 +882,7 @@ function PositionCard({
           </div>
           <div>
             <label htmlFor="position-target" className="text-xs text-muted-foreground">
-              Take profit
+              {t("Take profit")}
             </label>
             <Input
               id="position-target"
@@ -827,7 +892,7 @@ function PositionCard({
             />
           </div>
           <Button type="submit" variant="outline" size="sm">
-            Update levels
+            {t("Update levels")}
           </Button>
           <Button
             type="button"
@@ -835,16 +900,16 @@ function PositionCard({
             size="sm"
             onClick={() => apply({ stop: position.entryPrice, target: position.target })}
           >
-            Stop to breakeven
+            {t("Stop to breakeven")}
           </Button>
         </form>
         {error && (
           <p role="alert" className="text-xs text-destructive">
-            {error}
+            {t(error)}
           </p>
         )}
         <Button className="w-full" variant="secondary" onClick={onClose}>
-          Close at market
+          {t("Close at market")}
         </Button>
       </CardContent>
     </Card>
@@ -864,6 +929,7 @@ function SettingsCard({
   onSave: (settings: SessionSettings) => void;
   onRestart: () => void;
 }) {
+  const t = useT();
   const [draft, setDraft] = useState(() => ({
     initialBalance: String(settings.initialBalance),
     currency: settings.currency,
@@ -937,10 +1003,10 @@ function SettingsCard({
             setMessage("Saved. Commission and slippage apply to fills from now on.");
           }}
         >
-          {numberField("initialBalance", "Starting balance")}
+          {numberField("initialBalance", t("Starting balance"))}
           <div>
             <label htmlFor="bt-currency" className="text-xs text-muted-foreground">
-              Currency
+              {t("Currency")}
             </label>
             <Input
               id="bt-currency"
@@ -951,50 +1017,53 @@ function SettingsCard({
           </div>
           <div>
             <label htmlFor="bt-riskMode" className="text-xs text-muted-foreground">
-              Risk per trade as
+              {t("Risk per trade as")}
             </label>
             <OptionSelect
               id="bt-riskMode"
-              aria-label="Risk per trade as"
+              aria-label={t("Risk per trade as")}
               value={draft.riskMode}
               onValueChange={(v) => set("riskMode")(v)}
             >
-              <option value="percent">% of the balance</option>
-              <option value="amount">An amount</option>
+              <option value="percent">{t("% of the balance")}</option>
+              <option value="amount">{t("An amount")}</option>
             </OptionSelect>
           </div>
-          {numberField("riskValue", draft.riskMode === "percent" ? "Risk (%)" : "Risk (amount)")}
-          {numberField("commissionPerFill", "Commission per fill")}
-          {numberField("commissionPct", "Commission (% of each fill)")}
-          {numberField("slippage", "Slippage (price, on market and stop fills)")}
-          {numberField("multiplier", "Contract multiplier")}
-          {numberField("lotStep", "Lot size (0 for exact)")}
+          {numberField(
+            "riskValue",
+            draft.riskMode === "percent" ? t("Risk (%)") : t("Risk (amount)"),
+          )}
+          {numberField("commissionPerFill", t("Commission per fill"))}
+          {numberField("commissionPct", t("Commission (% of each fill)"))}
+          {numberField("slippage", t("Slippage (price, on market and stop fills)"))}
+          {numberField("multiplier", t("Contract multiplier"))}
+          {numberField("lotStep", t("Lot size (0 for exact)"))}
           <div className="col-span-2 sm:col-span-3">
             <label htmlFor="bt-sameCandle" className="text-xs text-muted-foreground">
-              When one candle reaches both the stop and the target
+              {t("When one candle reaches both the stop and the target")}
             </label>
             <OptionSelect
               id="bt-sameCandle"
-              aria-label="Same candle rule"
+              aria-label={t("Same candle rule")}
               value={draft.sameCandle}
               onValueChange={(v) => set("sameCandle")(v)}
             >
-              <option value="stop-first">Count the stop (careful)</option>
-              <option value="target-first">Count the target</option>
+              <option value="stop-first">{t("Count the stop (careful)")}</option>
+              <option value="target-first">{t("Count the target")}</option>
             </OptionSelect>
           </div>
           <div className="col-span-2 flex items-center gap-3 sm:col-span-3">
-            <Button type="submit">Save settings</Button>
+            <Button type="submit">{t("Save settings")}</Button>
             {message && (
               <p role="status" className="text-xs text-muted-foreground">
-                {message}
+                {t(message)}
               </p>
             )}
           </div>
         </form>
         <div className="space-y-2">
           <p className="text-xs text-muted-foreground">
-            Indicators on the chart (built in; up to 10)
+            {t("Indicators on the chart (built in; up to 10)")}
           </p>
           <div className="flex flex-wrap gap-1.5">
             {INDICATOR_LIBRARY.map((item) => {
@@ -1014,14 +1083,14 @@ function SettingsCard({
                     )
                   }
                 >
-                  {item.name}
+                  {t(item.name)}
                 </Button>
               );
             })}
           </div>
         </div>
         <Button type="button" variant="outline" className="text-destructive" onClick={onRestart}>
-          Start the session over
+          {t("Start the session over")}
         </Button>
       </CardContent>
     </Card>

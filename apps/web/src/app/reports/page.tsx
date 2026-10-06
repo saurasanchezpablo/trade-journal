@@ -23,12 +23,16 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { useApi } from "@/lib/use-api";
 import { describeFilters } from "@/lib/filter-description";
 import { fmtDuration } from "@/lib/utils";
+import { useI18n, useT } from "@/components/i18n";
+function LoadingText({ text }: { text: string }) {
+  return useT()(text);
+}
 const TradeExplorer = dynamic(
   () => import("@/components/trade-explorer").then((module) => module.TradeExplorer),
   {
     loading: () => (
       <p role="status" className="py-6 text-sm text-muted-foreground">
-        Loading trade explorer…
+        <LoadingText text="Loading trade explorer…" />
       </p>
     ),
   },
@@ -38,7 +42,7 @@ const PerformanceTrendsReport = dynamic(
   {
     loading: () => (
       <p role="status" className="py-6 text-sm text-muted-foreground">
-        Loading performance trends…
+        <LoadingText text="Loading performance trends…" />
       </p>
     ),
   },
@@ -60,7 +64,23 @@ const number = (n: number | null) =>
 const percent = (n: number | null) => (n === null ? "-" : `${(n * 100).toFixed(1)}%`);
 /** Signed, so a gain never relies on its colour alone (docs/design.md). */
 const money = (n: number, currency: string) => `${n > 0 ? "+" : ""}${number(n)} ${currency}`;
+type Translate = ReturnType<typeof useI18n>["t"];
+type TranslateIn = ReturnType<typeof useI18n>["tx"];
+/** A dimension's name in the journal's language. */
+const dimensionName = (t: Translate, dimension: Dimension) => t(DIMENSIONS[dimension]);
+/**
+ * A group's label: names people typed (symbols, tags, mistakes, strategies) stay as they are;
+ * the journal's own keys (weekdays, sides, outcomes, bands, "Untagged") are translated.
+ */
+const groupLabel = (t: Translate, tx: TranslateIn, dimension: Dimension, key: string) => {
+  if (dimension === "symbol" || dimension === "month") return key;
+  if (dimension === "tag") return key === "Untagged" ? tx("group", key) : key;
+  if (dimension === "mistake") return key === "None" ? tx("group", key) : key;
+  if (dimension === "playbook") return key === "Unassigned" ? tx("group", key) : key;
+  return tx("group", key);
+};
 function Summary({ data }: { data: Analysis }) {
+  const { t } = useI18n();
   const s = data.summary;
   return (
     <div className="report-summary">
@@ -76,7 +96,7 @@ function Summary({ data }: { data: Analysis }) {
           ["Avg realized R", number(s.avgRealizedR)],
         ].map(([label, value]) => (
           <div key={label}>
-            <p className="text-xs text-muted-foreground">{label}</p>
+            <p className="text-xs text-muted-foreground">{t(label!)}</p>
             <p className="mt-1 break-words text-base font-semibold tabular-nums sm:text-lg">
               {label === "Net P&L" ? <MonetaryValue>{value}</MonetaryValue> : value}
             </p>
@@ -95,6 +115,7 @@ function DimensionSelect({
   value: Dimension;
   onChange: (d: Dimension) => void;
 }) {
+  const { t } = useI18n();
   return (
     <Field label={label}>
       <OptionSelect
@@ -104,7 +125,7 @@ function DimensionSelect({
       >
         {Object.entries(DIMENSIONS).map(([key, label]) => (
           <option key={key} value={key}>
-            {label}
+            {t(label)}
           </option>
         ))}
       </OptionSelect>
@@ -131,8 +152,13 @@ function Breakdown({
   primary: Dimension;
   secondary: Dimension;
 }) {
-  const rowLabel = (k: string) => (primary === "playbook" ? labels(data, k) : k),
-    colLabel = (k: string) => (secondary === "playbook" ? labels(data, k) : k);
+  const { t, tx, tn } = useI18n();
+  const label = (dimension: Dimension, k: string) =>
+    dimension === "playbook" && k !== "Unassigned"
+      ? labels(data, k)
+      : groupLabel(t, tx, dimension, k);
+  const rowLabel = (k: string) => label(primary, k),
+    colLabel = (k: string) => label(secondary, k);
   const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const rows = [...new Set(data.groups.map((g) => g.row))],
     columns = [...new Set(data.groups.map((g) => g.column))].sort((a, b) =>
@@ -151,7 +177,7 @@ function Breakdown({
             <thead>
               <tr>
                 <th className="p-3 text-left">
-                  {DIMENSIONS[primary]} / {DIMENSIONS[secondary]}
+                  {dimensionName(t, primary)} / {dimensionName(t, secondary)}
                 </th>
                 {columns.map((c) => (
                   <th key={c} className="min-w-24 p-2">
@@ -172,7 +198,9 @@ function Breakdown({
                       <HoverHint
                         key={c}
                         content={
-                          g ? `${g.trades} trades · Win rate ${percent(g.winRate)}` : "No trades"
+                          g
+                            ? `${tn(g.trades, "{count} trade", "{count} trades")} · ${t("Win rate {rate}", { rate: percent(g.winRate) })}`
+                            : t("No trades")
                         }
                       >
                         <td
@@ -195,7 +223,9 @@ function Breakdown({
             </tbody>
           </table>
           <p className="mt-2 text-xs text-muted-foreground">
-            Cell values are net P&L in {data.currencies[0] ?? "account currency"}.
+            {t("Cell values are net P&L in {currency}.", {
+              currency: data.currencies[0] ?? t("account currency"),
+            })}
           </p>
         </div>
       )}
@@ -204,15 +234,15 @@ function Breakdown({
           <thead className="text-xs text-muted-foreground">
             <tr>
               {[
-                DIMENSIONS[primary],
-                ...(cross ? [DIMENSIONS[secondary]] : []),
-                "Trades",
-                "Win %",
-                "Net P&L",
-                "Entry volume",
-                "Avg planned R",
-                "Avg realized R",
-                "Avg duration",
+                dimensionName(t, primary),
+                ...(cross ? [dimensionName(t, secondary)] : []),
+                t("Trades"),
+                t("Win %"),
+                t("Net P&L"),
+                t("Entry volume"),
+                t("Avg planned R"),
+                t("Avg realized R"),
+                t("Avg duration"),
               ].map((h) => (
                 <th key={h} className="whitespace-nowrap border-b px-3 py-3 text-left font-medium">
                   {h}
@@ -252,7 +282,7 @@ function Breakdown({
       </div>
       {!data.groups.length && (
         <p className="py-12 text-center text-sm text-muted-foreground">
-          No closed trades match these filters.
+          {t("No closed trades match these filters.")}
         </p>
       )}
     </div>
@@ -266,6 +296,7 @@ export default function ReportsPage() {
   );
 }
 function Reports() {
+  const { t, tx } = useI18n();
   const { query, values } = useFilters();
   const [mode, setMode] = useState<
       "overview" | "trends" | "explorer" | "breakdown" | "cross" | "compare" | "habits"
@@ -280,7 +311,7 @@ function Reports() {
   const multi = (data?.currencies.length ?? 0) > 1;
   return (
     <div>
-      <FilterBar title="Reports" />
+      <FilterBar title={t("Reports")} />
       <div className="space-y-4 p-4">
         <AskJournalChat />
         <div className="flex flex-wrap items-center gap-2">
@@ -302,7 +333,7 @@ function Reports() {
               aria-pressed={mode === key}
               onClick={() => setMode(key)}
             >
-              {name}
+              {t(name)}
             </Button>
           ))}
         </div>
@@ -323,10 +354,14 @@ function Reports() {
                 <CardHeader>
                   <div className="flex flex-wrap items-end justify-between gap-4">
                     <div className="flex flex-wrap gap-3">
-                      <DimensionSelect label="Group by" value={primary} onChange={setPrimary} />
+                      <DimensionSelect
+                        label={t("Group by")}
+                        value={primary}
+                        onChange={setPrimary}
+                      />
                       {mode === "cross" && (
                         <DimensionSelect
-                          label="Then by"
+                          label={t("Then by")}
                           value={secondary}
                           onChange={setSecondary}
                         />
@@ -338,17 +373,47 @@ function Reports() {
                         document={{
                           title:
                             mode === "cross"
-                              ? `${DIMENSIONS[primary]} by ${DIMENSIONS[secondary]}`
-                              : `${DIMENSIONS[primary]} performance`,
-                          subtitle: `${data.timeZone} · ${data.currencies[0] ?? "Account currency"}`,
+                              ? t("{primary} by {secondary}", {
+                                  primary: dimensionName(t, primary),
+                                  secondary: dimensionName(t, secondary),
+                                })
+                              : t("{dimension} performance", {
+                                  dimension: dimensionName(t, primary),
+                                }),
+                          subtitle: `${data.timeZone} · ${data.currencies[0] ?? t("Account currency")}`,
                           lines: [
-                            `Filters: ${describeFilters(values, data.accounts, data.playbooks)}`,
-                            `Closed trades: ${data.summary.trades} | Net P&L: ${number(data.summary.netPnl)} | Win rate: ${percent(data.summary.winRate)}`,
+                            t("Filters: {filters}", {
+                              filters: describeFilters(values, data.accounts, data.playbooks),
+                            }),
+                            t("Closed trades: {trades} | Net P&L: {pnl} | Win rate: {rate}", {
+                              trades: data.summary.trades,
+                              pnl: number(data.summary.netPnl),
+                              rate: percent(data.summary.winRate),
+                            }),
                             "",
-                            ...data.groups.map(
-                              (g) =>
-                                `${labels(data, g.row)}${g.column ? ` / ${labels(data, g.column)}` : ""}: ${g.trades} trades | P&L ${number(g.netPnl)} | Win ${percent(g.winRate)} | Planned ${number(g.avgPlannedR)}R | Realized ${number(g.avgRealizedR)}R | Volume ${number(g.volume)} | Holding time ${fmtDuration(g.avgDurationMs)}`,
-                            ),
+                            ...data.groups.map((g) => {
+                              const row =
+                                primary === "playbook" && g.row !== "Unassigned"
+                                  ? labels(data, g.row)
+                                  : groupLabel(t, tx, primary, g.row);
+                              const column = !g.column
+                                ? ""
+                                : secondary === "playbook" && g.column !== "Unassigned"
+                                  ? labels(data, g.column)
+                                  : groupLabel(t, tx, secondary, g.column);
+                              return `${row}${column ? ` / ${column}` : ""}: ${t(
+                                "{trades} trades | P&L {pnl} | Win {win} | Planned {planned}R | Realized {realized}R | Volume {volume} | Holding time {holding}",
+                                {
+                                  trades: g.trades,
+                                  pnl: number(g.netPnl),
+                                  win: percent(g.winRate),
+                                  planned: number(g.avgPlannedR),
+                                  realized: number(g.avgRealizedR),
+                                  volume: number(g.volume),
+                                  holding: fmtDuration(g.avgDurationMs),
+                                },
+                              )}`;
+                            }),
                           ],
                         }}
                       />
@@ -361,11 +426,13 @@ function Reports() {
                       {error}
                     </p>
                   ) : loading ? (
-                    <p className="text-sm text-muted-foreground">Loading report…</p>
+                    <p className="text-sm text-muted-foreground">{t("Loading report…")}</p>
                   ) : multi ? (
                     <p className="text-sm">
-                      These accounts use different currencies ({data?.currencies.join(", ")}).
-                      Select accounts with the same currency in Filters to compare monetary results.
+                      {t(
+                        "These accounts use different currencies ({currencies}). Select accounts with the same currency in Filters to compare monetary results.",
+                        { currencies: data?.currencies.join(", ") ?? "" },
+                      )}
                     </p>
                   ) : data ? (
                     <Summary data={data} />
@@ -377,8 +444,10 @@ function Reports() {
                   <CardHeader>
                     <CardTitle>
                       {mode === "cross"
-                        ? `${DIMENSIONS[primary]} × ${DIMENSIONS[secondary]}`
-                        : `Performance by ${DIMENSIONS[primary].toLowerCase()}`}
+                        ? `${dimensionName(t, primary)} × ${dimensionName(t, secondary)}`
+                        : t("Performance by {dimension}", {
+                            dimension: dimensionName(t, primary).toLowerCase(),
+                          })}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -392,12 +461,10 @@ function Reports() {
                 </Card>
               )}
               <p className="text-xs leading-relaxed text-muted-foreground">
-                Closed trades only. Dates use the closing day; weekday and entry time use the
-                opening time in {data?.timeZone ?? "your journal timezone"}. Volume is total entry
-                quantity. R uses weighted entry and total entry quantity; missing or invalid risk
-                inputs are excluded from R averages. Derivatives require a configured multiplier for
-                realized R. Multiple tags or mistakes can place a trade in more than one group, so
-                those group totals can overlap.
+                {t(
+                  "Closed trades only. Dates use the closing day; weekday and entry time use the opening time in {timeZone}. Volume is total entry quantity. R uses weighted entry and total entry quantity; missing or invalid risk inputs are excluded from R averages. Derivatives require a configured multiplier for realized R. Multiple tags or mistakes can place a trade in more than one group, so those group totals can overlap.",
+                  { timeZone: data?.timeZone ?? t("your journal timezone") },
+                )}
               </p>
             </>
           )}
@@ -407,11 +474,12 @@ function Reports() {
   );
 }
 function Comparison({ initial }: { initial: AnalysisFilters }) {
+  const { t } = useI18n();
   const privateMode = usePrivacy();
   const [a, setA] = useState<AnalysisFilters>({ ...initial, direction: "long" }),
     [b, setB] = useState<AnalysisFilters>({ ...initial, direction: "short" }),
-    [nameA, setNameA] = useState("Long trades"),
-    [nameB, setNameB] = useState("Short trades"),
+    [nameA, setNameA] = useState(() => t("Long trades")),
+    [nameB, setNameB] = useState(() => t("Short trades")),
     [editing, setEditing] = useState<"a" | "b" | null>(null),
     [draft, setDraft] = useState<AnalysisFilters>({});
   const aa = useApi<Analysis>(`/api/analysis?${new URLSearchParams(a).toString()}`),
@@ -420,18 +488,25 @@ function Comparison({ initial }: { initial: AnalysisFilters }) {
     multi = currencies.size > 1;
   const metricLines = (name: string, d: Analysis) => [
     name,
-    `Trades: ${d.summary.trades} | P&L: ${number(d.summary.netPnl)} ${d.currencies[0] ?? ""}`,
-    `Win rate: ${percent(d.summary.winRate)} | Planned R: ${number(d.summary.avgPlannedR)} | Realized R: ${number(d.summary.avgRealizedR)}`,
+    `${t("Trades: {trades} | P&L: {pnl}", { trades: d.summary.trades, pnl: number(d.summary.netPnl) })} ${d.currencies[0] ?? ""}`,
+    t("Win rate: {rate} | Planned R: {planned} | Realized R: {realized}", {
+      rate: percent(d.summary.winRate),
+      planned: number(d.summary.avgPlannedR),
+      realized: number(d.summary.avgRealizedR),
+    }),
   ];
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
-        Each group has its own filters. Compare strategies, accounts, periods, or trade
-        characteristics. Groups may overlap.
+        {t(
+          "Each group has its own filters. Compare strategies, accounts, periods, or trade characteristics. Groups may overlap.",
+        )}
       </p>
       {multi && (
         <p role="alert" className="rounded-md border p-3 text-sm">
-          Select accounts with the same currency in both groups. Currency conversion is not applied.
+          {t(
+            "Select accounts with the same currency in both groups. Currency conversion is not applied.",
+          )}
         </p>
       )}
       <div className="grid gap-4 lg:grid-cols-2">
@@ -445,7 +520,7 @@ function Comparison({ initial }: { initial: AnalysisFilters }) {
             <CardHeader>
               <div className="flex flex-wrap items-center gap-3">
                 <input
-                  aria-label={`Group ${group.key.toUpperCase()} name`}
+                  aria-label={t("Group {group} name", { group: group.key.toUpperCase() })}
                   className={`${fieldClass} min-w-32 flex-1 font-semibold`}
                   value={group.name}
                   onChange={(e) => group.setName(e.target.value)}
@@ -458,7 +533,7 @@ function Comparison({ initial }: { initial: AnalysisFilters }) {
                     setEditing(group.key);
                   }}
                 >
-                  Edit filters
+                  {t("Edit filters")}
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground break-words">
@@ -476,7 +551,7 @@ function Comparison({ initial }: { initial: AnalysisFilters }) {
                   {group.result.error}
                 </p>
               ) : group.result.loading ? (
-                <p>Loading…</p>
+                <p>{t("Loading…")}</p>
               ) : group.result.data && !multi ? (
                 <Summary data={group.result.data} />
               ) : null}
@@ -488,7 +563,7 @@ function Comparison({ initial }: { initial: AnalysisFilters }) {
         <Card>
           <CardContent className="space-y-4 pt-5">
             <p className="text-sm">
-              {nameB} minus {nameA}:{" "}
+              {t("{b} minus {a}:", { b: nameB, a: nameA })}{" "}
               <strong>
                 <MonetaryValue>
                   {money(
@@ -497,15 +572,24 @@ function Comparison({ initial }: { initial: AnalysisFilters }) {
                   )}
                 </MonetaryValue>
               </strong>{" "}
-              net P&L · {number(bb.data.summary.trades - aa.data.summary.trades)} trades
+              {t("net P&L")} ·{" "}
+              {t("{count} trades", {
+                count: number(bb.data.summary.trades - aa.data.summary.trades),
+              })}
             </p>
             <ReviewExport
               containsFinancialData
               document={{
-                title: `${nameA} vs ${nameB}`,
+                title: t("{a} vs {b}", { a: nameA, b: nameB }),
                 lines: [
-                  `Group A: ${describeFilters(a, aa.data.accounts, aa.data.playbooks)}`,
-                  `Group B: ${describeFilters(b, bb.data.accounts, bb.data.playbooks)}`,
+                  t("Group {group}: {filters}", {
+                    group: "A",
+                    filters: describeFilters(a, aa.data.accounts, aa.data.playbooks),
+                  }),
+                  t("Group {group}: {filters}", {
+                    group: "B",
+                    filters: describeFilters(b, bb.data.accounts, bb.data.playbooks),
+                  }),
                   "",
                   ...metricLines(nameA, aa.data),
                   "",
@@ -524,12 +608,14 @@ function Comparison({ initial }: { initial: AnalysisFilters }) {
       >
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
           <DialogHeader>
-            <DialogTitle>Group {editing?.toUpperCase()} filters</DialogTitle>
+            <DialogTitle>
+              {t("Group {group} filters", { group: editing?.toUpperCase() ?? "" })}
+            </DialogTitle>
           </DialogHeader>
           <FilterFields value={draft} onChange={setDraft} />
           <div className="flex justify-between">
             <Button variant="ghost" onClick={() => setDraft({})}>
-              Clear
+              {t("Clear")}
             </Button>
             <Button
               onClick={() => {
@@ -538,7 +624,7 @@ function Comparison({ initial }: { initial: AnalysisFilters }) {
                 setEditing(null);
               }}
             >
-              Apply to group
+              {t("Apply to group")}
             </Button>
           </div>
         </DialogContent>

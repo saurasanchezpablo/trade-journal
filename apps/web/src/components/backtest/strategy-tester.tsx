@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { StrategyState, StrategyTrade, Vela } from "@luxalgo/vela";
 import { backtestReport, type BacktestReport } from "@luxalgo/journal-core";
 import { useFilters } from "@/components/filter-bar";
+import { useI18n } from "@/components/i18n";
 import { Pnl } from "@/components/pnl";
 import { MonetaryValue } from "@/components/privacy";
 import { Button } from "@/components/ui/button";
@@ -76,6 +77,7 @@ export function strategyReport(
 
 /** Run a Pine Script strategy over a date range and read its results like a tester. */
 export function StrategyTester() {
+  const { t } = useI18n();
   const { timeZone } = useFilters();
   const { data } = useApi<{ connections: MarketConnection[] }>("/api/market-data/connections");
   const { data: scripts } = useApi<{ scripts: { id: string; name: string; source: string }[] }>(
@@ -111,16 +113,18 @@ export function StrategyTester() {
     setResult(null);
     const start = zonedTime(from, timeZone);
     const end = zonedTime(to, timeZone);
-    if (!chosen) return setError("Enable a market data source in Settings first.");
-    if (!symbol.trim()) return setError("Enter the source's symbol.");
+    if (!chosen) return setError(t("Enable a market data source in Settings first."));
+    if (!symbol.trim()) return setError(t("Enter the source's symbol."));
     if (start === null || end === null || start >= end)
-      return setError("Choose a start before the end.");
+      return setError(t("Choose a start before the end."));
     if ((end - start) / RESOLUTIONS[resolution] > MAX_BARS)
       return setError(
-        `That range holds more than ${MAX_BARS.toLocaleString("en-US")} candles. Shorten it or choose larger candles.`,
+        t("That range holds more than {max} candles. Shorten it or choose larger candles.", {
+          max: MAX_BARS.toLocaleString("en-US"),
+        }),
       );
     if (!/\bstrategy\s*\(/.test(source))
-      return setError("This is not a strategy: the script needs a strategy(...) declaration.");
+      return setError(t("This is not a strategy: the script needs a strategy(...) declaration."));
     setBusy(true);
     const id = ++runId.current;
     try {
@@ -143,13 +147,13 @@ export function StrategyTester() {
       const finished = loaded.filter((bar) => bar.time + RESOLUTIONS[resolution] <= Date.now());
       if (finished.length < 50) {
         setBusy(false);
-        return setError("Fewer than 50 candles in that range: widen it or check the symbol.");
+        return setError(t("Fewer than 50 candles in that range: widen it or check the symbol."));
       }
       setCurrency(quote && FIAT.has(quote) ? quote : "USD");
       setBars(finished);
     } catch (cause) {
       setBusy(false);
-      setError(cause instanceof Error ? cause.message : "The candles could not be loaded.");
+      setError(cause instanceof Error ? cause.message : t("The candles could not be loaded."));
     }
   };
 
@@ -157,11 +161,13 @@ export function StrategyTester() {
     <div className="space-y-3">
       <Card>
         <CardHeader>
-          <CardTitle>Strategy tester</CardTitle>
+          <CardTitle>{t("Strategy tester")}</CardTitle>
         </CardHeader>
         <CardContent>
           {data && !sources.length ? (
-            <p className="text-sm">Enable a market data source in Settings → Market data first.</p>
+            <p className="text-sm">
+              {t("Enable a market data source in Settings → Market data first.")}
+            </p>
           ) : (
             <form
               className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
@@ -172,11 +178,11 @@ export function StrategyTester() {
             >
               <div>
                 <label htmlFor="st-source" className="text-xs text-muted-foreground">
-                  Source
+                  {t("Source")}
                 </label>
                 <OptionSelect
                   id="st-source"
-                  aria-label="Source"
+                  aria-label={t("Source")}
                   value={chosen}
                   onValueChange={(v) => {
                     setProvider(v);
@@ -193,17 +199,17 @@ export function StrategyTester() {
               {(providerInfo(chosen)?.datasets?.length ?? 0) > 0 && (
                 <div>
                   <label htmlFor="st-dataset" className="text-xs text-muted-foreground">
-                    Market
+                    {t("Market")}
                   </label>
                   <OptionSelect
                     id="st-dataset"
-                    aria-label="Market"
+                    aria-label={t("Market")}
                     value={dataset}
                     onValueChange={setDataset}
                   >
                     {providerInfo(chosen)!.datasets!.map((item) => (
                       <option key={item.value} value={item.value} disabled={!item.value}>
-                        {item.label}
+                        {t(item.label)}
                       </option>
                     ))}
                   </OptionSelect>
@@ -211,7 +217,7 @@ export function StrategyTester() {
               )}
               <div>
                 <label htmlFor="st-symbol" className="text-xs text-muted-foreground">
-                  Symbol
+                  {t("Symbol")}
                 </label>
                 <Input
                   id="st-symbol"
@@ -222,11 +228,11 @@ export function StrategyTester() {
               </div>
               <div>
                 <label htmlFor="st-resolution" className="text-xs text-muted-foreground">
-                  Candles
+                  {t("Candles")}
                 </label>
                 <OptionSelect
                   id="st-resolution"
-                  aria-label="Candles"
+                  aria-label={t("Candles")}
                   value={resolution}
                   onValueChange={(v) => setResolution(v as Resolution)}
                 >
@@ -239,7 +245,7 @@ export function StrategyTester() {
               </div>
               <div>
                 <label htmlFor="st-from" className="text-xs text-muted-foreground">
-                  From ({timeZone})
+                  {t("From ({timeZone})", { timeZone })}
                 </label>
                 <Input
                   id="st-from"
@@ -250,7 +256,7 @@ export function StrategyTester() {
               </div>
               <div>
                 <label htmlFor="st-to" className="text-xs text-muted-foreground">
-                  To
+                  {t("To")}
                 </label>
                 <Input
                   id="st-to"
@@ -261,17 +267,17 @@ export function StrategyTester() {
               </div>
               <div className="sm:col-span-2">
                 <label htmlFor="st-script" className="text-xs text-muted-foreground">
-                  Strategy
+                  {t("Strategy")}
                 </label>
                 <OptionSelect
                   id="st-script"
-                  aria-label="Strategy"
+                  aria-label={t("Strategy")}
                   value={scriptKey}
                   onValueChange={pickScript}
                 >
                   {EXAMPLE_STRATEGIES.map((s) => (
                     <option key={s.key} value={s.key}>
-                      Example: {s.name}
+                      {t("Example: {name}", { name: t(s.name) })}
                     </option>
                   ))}
                   {(scripts?.scripts ?? [])
@@ -285,7 +291,7 @@ export function StrategyTester() {
               </div>
               <div className="sm:col-span-2 lg:col-span-4">
                 <label htmlFor="st-code" className="text-xs text-muted-foreground">
-                  Pine Script (capital, sizing and commission are in its strategy() line)
+                  {t("Pine Script (capital, sizing and commission are in its strategy() line)")}
                 </label>
                 <textarea
                   id="st-code"
@@ -302,7 +308,7 @@ export function StrategyTester() {
               )}
               <div className="sm:col-span-2 lg:col-span-4">
                 <Button type="submit" disabled={busy}>
-                  {busy ? "Running…" : "Run the strategy"}
+                  {busy ? t("Running…") : t("Run the strategy")}
                 </Button>
               </div>
             </form>
@@ -318,7 +324,7 @@ export function StrategyTester() {
           source={source}
           onDone={(outcome) => {
             setBusy(false);
-            if ("error" in outcome) return setError(outcome.error);
+            if ("error" in outcome) return setError(t(outcome.error));
             const first = bars[0]!.close;
             const last = bars.at(-1)!.close;
             setResult({
@@ -410,25 +416,39 @@ function StrategyChart({
 }
 
 function StrategyResults({ result, timeZone }: { result: Result; timeZone: string }) {
+  const { t, tn, tx } = useI18n();
   const { report, state, trades, currency } = result;
   const when = (time: number) =>
     formatTimestamp(new Date(time).toISOString(), timeZone).slice(0, 16);
-  const open = trades.filter((t) => t.open);
+  const open = trades.filter((trade) => trade.open);
   return (
     <>
       <Card>
         <CardHeader>
-          <CardTitle>Performance summary</CardTitle>
+          <CardTitle>{t("Performance summary")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-xs text-muted-foreground">
-            {result.bars.length.toLocaleString()} candles, {when(result.bars[0]!.time)} to{" "}
-            {when(result.bars.at(-1)!.time)} ({timeZone}). Buy and hold over the same candles:{" "}
-            {result.buyHold === null
-              ? "–"
-              : `${result.buyHold > 0 ? "+" : ""}${fmtPercent(result.buyHold)}`}
-            .{open.length > 0 && ` ${open.length} trade still open at the end, not counted.`} Max
-            run-up <MonetaryValue>{fmtMoney(state.maxRunup, currency)}</MonetaryValue>.
+            {t(
+              "{count} candles, {from} to {to} ({timeZone}). Buy and hold over the same candles: {buyHold}.",
+              {
+                count: result.bars.length.toLocaleString(),
+                from: when(result.bars[0]!.time),
+                to: when(result.bars.at(-1)!.time),
+                timeZone,
+                buyHold:
+                  result.buyHold === null
+                    ? "–"
+                    : `${result.buyHold > 0 ? "+" : ""}${fmtPercent(result.buyHold)}`,
+              },
+            )}
+            {open.length > 0 &&
+              ` ${tn(
+                open.length,
+                "{count} trade still open at the end, not counted.",
+                "{count} trades still open at the end, not counted.",
+              )}`}{" "}
+            {t("Max run-up")} <MonetaryValue>{fmtMoney(state.maxRunup, currency)}</MonetaryValue>.
           </p>
           <BacktestReportView
             report={report}
@@ -439,7 +459,7 @@ function StrategyResults({ result, timeZone }: { result: Result; timeZone: strin
       </Card>
       <Card>
         <CardHeader>
-          <CardTitle>List of trades</CardTitle>
+          <CardTitle>{t("List of trades")}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="max-h-[480px] overflow-auto">
@@ -449,43 +469,51 @@ function StrategyResults({ result, timeZone }: { result: Result; timeZone: strin
                   {["#", "Side", "Entry", "Exit", "Qty", "Net", "Run-up", "Drawdown"].map(
                     (label) => (
                       <th key={label} className="py-1.5 pr-3 font-normal">
-                        {label}
+                        {tx("backtest column", label)}
                       </th>
                     ),
                   )}
                 </tr>
               </thead>
               <tbody className="tnum">
-                {[...trades].reverse().map((t, i) => (
-                  <tr key={t.id} className="border-t align-top">
+                {[...trades].reverse().map((trade, i) => (
+                  <tr key={trade.id} className="border-t align-top">
                     <td className="py-1.5 pr-3 text-muted-foreground">{trades.length - i}</td>
                     <td
-                      className={`py-1.5 pr-3 ${t.side === "long" ? "text-profit" : "text-loss"}`}
+                      className={`py-1.5 pr-3 ${trade.side === "long" ? "text-profit" : "text-loss"}`}
                     >
-                      {t.side === "long" ? "Long" : "Short"}
+                      {t(trade.side === "long" ? "Long" : "Short")}
                     </td>
                     <td className="whitespace-nowrap py-1.5 pr-3">
-                      {when(t.entry.time)} · {fmtNumber(t.entry.price, 6)}
-                      <span className="block text-muted-foreground">{t.entry.id}</span>
+                      {when(trade.entry.time)} · {fmtNumber(trade.entry.price, 6)}
+                      <span className="block text-muted-foreground">{trade.entry.id}</span>
                     </td>
                     <td className="whitespace-nowrap py-1.5 pr-3">
-                      {t.exit ? `${when(t.exit.time)} · ${fmtNumber(t.exit.price, 6)}` : "Open"}
-                      {t.exit && <span className="block text-muted-foreground">{t.exit.id}</span>}
+                      {trade.exit
+                        ? `${when(trade.exit.time)} · ${fmtNumber(trade.exit.price, 6)}`
+                        : tx("status", "Open")}
+                      {trade.exit && (
+                        <span className="block text-muted-foreground">{trade.exit.id}</span>
+                      )}
                     </td>
-                    <td className="py-1.5 pr-3">{fmtNumber(t.qty, 6)}</td>
+                    <td className="py-1.5 pr-3">{fmtNumber(trade.qty, 6)}</td>
                     <td className="py-1.5 pr-3">
-                      {typeof t.pnl === "number" ? <Pnl value={t.pnl} currency={currency} /> : "–"}
+                      {typeof trade.pnl === "number" ? (
+                        <Pnl value={trade.pnl} currency={currency} />
+                      ) : (
+                        "–"
+                      )}
                     </td>
                     <td className="py-1.5 pr-3">
-                      {typeof t.maxRunup === "number" ? (
-                        <MonetaryValue>{fmtMoney(t.maxRunup, currency)}</MonetaryValue>
+                      {typeof trade.maxRunup === "number" ? (
+                        <MonetaryValue>{fmtMoney(trade.maxRunup, currency)}</MonetaryValue>
                       ) : (
                         "–"
                       )}
                     </td>
                     <td className="py-1.5">
-                      {typeof t.maxDrawdown === "number" ? (
-                        <MonetaryValue>{fmtMoney(-t.maxDrawdown, currency)}</MonetaryValue>
+                      {typeof trade.maxDrawdown === "number" ? (
+                        <MonetaryValue>{fmtMoney(-trade.maxDrawdown, currency)}</MonetaryValue>
                       ) : (
                         "–"
                       )}

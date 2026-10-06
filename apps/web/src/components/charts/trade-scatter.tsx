@@ -19,6 +19,7 @@ import {
   type TradeYAxis,
 } from "@/lib/trade-explorer";
 import { fmtMoney } from "@/lib/utils";
+import { useI18n } from "../i18n";
 import { usePrivacy } from "../privacy";
 import { ChartFrame } from "./chart-frame";
 import { tooltipStyle, useVizTokens } from "./tokens";
@@ -38,6 +39,7 @@ export function TradeScatter({
   timeZone: string;
   onSelect: (point: PlottedTrade) => void;
 }) {
+  const { t, intl } = useI18n();
   const tokens = useVizTokens();
   const privateMode = usePrivacy();
   const groups = useMemo(
@@ -49,8 +51,8 @@ export function TradeScatter({
     [points],
   );
   const date = useMemo(
-    () => new Intl.DateTimeFormat("en", { timeZone, dateStyle: "medium", timeStyle: "short" }),
-    [timeZone],
+    () => new Intl.DateTimeFormat(intl, { timeZone, dateStyle: "medium", timeStyle: "short" }),
+    [timeZone, intl],
   );
   const yLabel = (n: number) =>
     y === "realizedR" ? `${n.toFixed(2)}R` : privateMode ? "••••" : fmtMoney(n, currency);
@@ -68,7 +70,9 @@ export function TradeScatter({
       <ResponsiveContainer width="100%" height="100%">
         <ScatterChart
           margin={{ top: 12, right: 24, bottom: 8, left: 0 }}
-          aria-label="Individual trade outcomes. Select a point to inspect; all trades also have links in the table below."
+          aria-label={t(
+            "Individual trade outcomes. Select a point to inspect; all trades also have links in the table below.",
+          )}
         >
           <CartesianGrid stroke={tokens.gridline} />
           <XAxis
@@ -101,25 +105,41 @@ export function TradeScatter({
               return active && point ? (
                 <div style={{ ...tooltipStyle(tokens), maxWidth: 230, overflowWrap: "anywhere" }}>
                   <p className="font-medium">
-                    {point.symbol} · {point.direction}
+                    {point.symbol} ·{" "}
+                    {point.direction === "long"
+                      ? t("Long")
+                      : point.direction === "short"
+                        ? t("Short")
+                        : point.direction}
                   </p>
-                  <p className="text-xs">Closed {date.format(new Date(point.closedAt))}</p>
+                  <p className="text-xs">
+                    {t("Closed {date}", { date: date.format(new Date(point.closedAt)) })}
+                  </p>
                   <p>
                     {x === "durationMinutes"
-                      ? `${point.x.toLocaleString(undefined, { maximumFractionDigits: 2 })} minutes`
+                      ? t("{value} minutes", {
+                          value: point.x.toLocaleString(undefined, { maximumFractionDigits: 2 }),
+                        })
                       : x === "entryMinute"
-                        ? `${clockLabel(point.x)} entry`
-                        : `Estimated ${x.toUpperCase()}: ${xLabel(point.x)}`}
+                        ? t("{time} entry", { time: clockLabel(point.x) })
+                        : t("Estimated {metric}: {value}", {
+                            metric: x.toUpperCase(),
+                            value: xLabel(point.x),
+                          })}
                   </p>
                   <p>
                     {y === "netPnl"
-                      ? "Net P&L"
+                      ? t("Net P&L: {value}", { value: yLabel(point.y) })
                       : y === "realizedR"
-                        ? "Realized R"
-                        : `Estimated ${y.toUpperCase()}`}
-                    : {yLabel(point.y)}
+                        ? t("Realized R: {value}", { value: yLabel(point.y) })
+                        : t("Estimated {metric}: {value}", {
+                            metric: y.toUpperCase(),
+                            value: yLabel(point.y),
+                          })}
                   </p>
-                  <p className="text-xs text-muted-foreground">Select to inspect this trade</p>
+                  <p className="text-xs text-muted-foreground">
+                    {t("Select to inspect this trade")}
+                  </p>
                 </div>
               ) : null;
             }}
@@ -128,7 +148,7 @@ export function TradeScatter({
             <Scatter
               key={index}
               data={data}
-              name={["Positive net P&L", "Negative net P&L", "Zero net P&L"][index]}
+              name={t(["Positive net P&L", "Negative net P&L", "Zero net P&L"][index] ?? "")}
               shape="circle"
               fill={[tokens.profitFill, tokens.loss, tokens.inkMuted][index]}
               fillOpacity={0.7}

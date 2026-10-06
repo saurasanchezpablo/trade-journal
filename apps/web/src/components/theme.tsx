@@ -4,10 +4,12 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import { Moon, Sun } from "lucide-react";
 import { THEME_KEY, themePreference, type Theme } from "@/lib/theme";
 import { Button } from "./ui/button";
+import { useT } from "./i18n";
 
 const ThemeContext = createContext({ theme: "dark" as Theme, ready: false, toggle: () => {} });
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
+  const t = useT();
   const [theme, setTheme] = useState<Theme>("dark");
   const [ready, setReady] = useState(false);
   const [error, setError] = useState("");
@@ -46,7 +48,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
           role="status"
           className="fixed bottom-4 right-4 z-50 max-w-[calc(100vw-32px)] rounded-lg border bg-popover px-4 py-3 text-sm text-popover-foreground shadow-lg"
         >
-          {error}
+          {t(error)}
         </p>
       )}
     </ThemeContext.Provider>
@@ -55,7 +57,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
 export function ThemeToggle({ iconOnly = false }: { iconOnly?: boolean }) {
   const { theme, ready, toggle } = useContext(ThemeContext);
-  const label = theme === "dark" ? "Switch to light mode" : "Switch to dark mode";
+  const t = useT();
+  const label = theme === "dark" ? t("Switch to light mode") : t("Switch to dark mode");
   return (
     <Button
       type="button"
@@ -72,7 +75,7 @@ export function ThemeToggle({ iconOnly = false }: { iconOnly?: boolean }) {
       title={iconOnly ? label : undefined}
     >
       {theme === "dark" ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}
-      {!iconOnly && (theme === "dark" ? "Light mode" : "Dark mode")}
+      {!iconOnly && (theme === "dark" ? t("Light mode") : t("Dark mode"))}
     </Button>
   );
 }

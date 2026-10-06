@@ -6,6 +6,7 @@ import type { DayTypeBreakdown } from "@/server/day-types";
 import { Pnl } from "./pnl";
 import { Button } from "./ui/button";
 import { SectionCard } from "./section-card";
+import { useI18n } from "./i18n";
 
 const PERIODS = [30, 90, 180, 365] as const;
 
@@ -14,6 +15,7 @@ const PERIODS = [30, 90, 180, 365] as const;
  * candles (fetched on request, so opening the journal never calls a market data source).
  */
 export function DayTypeStats() {
+  const { t } = useI18n();
   const [days, setDays] = useState<(typeof PERIODS)[number] | null>(null);
   const [period, setPeriod] = useState<(typeof PERIODS)[number]>(90);
   const { data, error, loading, refresh } = useApi<DayTypeBreakdown>(
@@ -31,19 +33,19 @@ export function DayTypeStats() {
   return (
     <SectionCard
       id="journal-day-types"
-      title="Results by day type"
+      title={t("Results by day type")}
       contentClassName="space-y-2 text-sm"
     >
       <div className="flex flex-wrap items-center gap-2">
         <select
-          aria-label="Period"
+          aria-label={t("Period")}
           value={period}
           onChange={(e) => setPeriod(Number(e.target.value) as (typeof PERIODS)[number])}
           className="h-8 rounded-md border bg-background px-2 text-sm"
         >
           {PERIODS.map((p) => (
             <option key={p} value={p}>
-              Last {p} days
+              {t("Last {count} days", { count: p })}
             </option>
           ))}
         </select>
@@ -54,13 +56,13 @@ export function DayTypeStats() {
           disabled={loading}
           onClick={() => (days === period ? refresh() : setDays(period))}
         >
-          {data && days === period ? "Refresh" : "Show"}
+          {data && days === period ? t("Refresh") : t("Show")}
         </Button>
         <span className="text-xs text-muted-foreground">
-          Trend or range, quiet or volatile, news or not: from each symbol&apos;s daily candles.
+          {t("Trend or range, quiet or volatile, news or not: from each symbol's daily candles.")}
         </span>
       </div>
-      {loading && <p className="text-muted-foreground">Reading daily candles…</p>}
+      {loading && <p className="text-muted-foreground">{t("Reading daily candles…")}</p>}
       {error && (
         <p role="alert" className="text-destructive">
           {error}
@@ -69,21 +71,23 @@ export function DayTypeStats() {
       {data && !loading && (
         <>
           {data.rows.length === 0 ? (
-            <p className="text-muted-foreground">No closed trades with candles in this period.</p>
+            <p className="text-muted-foreground">
+              {t("No closed trades with candles in this period.")}
+            </p>
           ) : (
             <table className="w-full text-sm">
               <thead className="text-left text-xs text-muted-foreground">
                 <tr>
-                  <th className="py-1 font-medium">Day type</th>
-                  <th className="py-1 text-right font-medium">Trades</th>
-                  <th className="py-1 text-right font-medium">Win rate</th>
-                  <th className="py-1 text-right font-medium">Net P&amp;L</th>
+                  <th className="py-1 font-medium">{t("Day type")}</th>
+                  <th className="py-1 text-right font-medium">{t("Trades")}</th>
+                  <th className="py-1 text-right font-medium">{t("Win rate")}</th>
+                  <th className="py-1 text-right font-medium">{t("Net P&L")}</th>
                 </tr>
               </thead>
               <tbody>
                 {data.rows.map((row) => (
                   <tr key={row.tag} className="border-t">
-                    <td className="py-1">{row.tag}</td>
+                    <td className="py-1">{t(row.tag)}</td>
                     <td className="tnum py-1 text-right">{row.trades}</td>
                     <td className="tnum py-1 text-right">
                       {Math.round((row.wins / row.trades) * 100)}%
@@ -101,15 +105,17 @@ export function DayTypeStats() {
             </table>
           )}
           <p className="text-xs text-muted-foreground">
-            Each trade counts once per group (shape, volatility, news).
+            {t("Each trade counts once per group (shape, volatility, news).")}
             {currencies && currencies.length > 1
-              ? ` Your accounts use ${currencies.join(", ")}, so net P&L is not added across them.`
+              ? ` ${t("Your accounts use {currencies}, so net P&L is not added across them.", { currencies: currencies.join(", ") })}`
               : ""}
             {data.symbols.some((s) => s.problem) &&
-              ` Left out: ${data.symbols
-                .filter((s) => s.problem)
-                .map((s) => `${s.symbol} (${s.problem})`)
-                .join(", ")}.`}
+              ` ${t("Left out: {symbols}.", {
+                symbols: data.symbols
+                  .filter((s) => s.problem)
+                  .map((s) => `${s.symbol} (${t(s.problem!)})`)
+                  .join(", "),
+              })}`}
           </p>
         </>
       )}

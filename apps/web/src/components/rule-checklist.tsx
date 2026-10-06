@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { AiNotice } from "@/components/ai-notice";
 import { tradeSnapshot } from "@/lib/trade-snapshot";
 import { Sparkles } from "lucide-react";
+import { useI18n } from "@/components/i18n";
 
 type Verdict = "followed" | "broken" | "unclear";
 interface AiCheck {
@@ -27,6 +28,7 @@ export function RuleChecklist({
   tradeKey: string;
   playbookId: string | null;
 }) {
+  const { t, tn, tx } = useI18n();
   const url = `/api/trades/${encodeURIComponent(tradeKey)}/rules`;
   const { data, error, refresh } = useApi<{
       name: string | null;
@@ -68,7 +70,7 @@ export function RuleChecklist({
       if (currentScope.current === asked) setAi(result);
     } catch (e) {
       if (currentScope.current === asked)
-        setAiError(e instanceof Error ? e.message : "The check failed");
+        setAiError(e instanceof Error ? e.message : t("The check failed"));
     } finally {
       if (currentScope.current === asked) setAiBusy(false);
     }
@@ -89,7 +91,7 @@ export function RuleChecklist({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Strategy rule review</CardTitle>
+        <CardTitle>{t("Strategy rule review")}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
         {data?.name ? (
@@ -97,13 +99,19 @@ export function RuleChecklist({
             <p className="text-sm font-medium">{data.name}</p>
             <p className="text-xs text-muted-foreground">
               {evaluated.length
-                ? `${Math.round((followed / evaluated.length) * 100)}% followed · `
-                : ""}
-              {evaluated.length}/{data.rules.length} rules assessed
+                ? t("{percent}% followed · {assessed}/{total} rules assessed", {
+                    percent: Math.round((followed / evaluated.length) * 100),
+                    assessed: evaluated.length,
+                    total: data.rules.length,
+                  })
+                : t("{assessed}/{total} rules assessed", {
+                    assessed: evaluated.length,
+                    total: data.rules.length,
+                  })}
             </p>
             {data.rules.length === 0 && (
               <p className="text-xs text-muted-foreground">
-                Add rules to this playbook to review adherence.
+                {t("Add rules to this playbook to review adherence.")}
               </p>
             )}
             {data.rules.length > 0 && (
@@ -116,7 +124,7 @@ export function RuleChecklist({
                   onClick={() => void check()}
                 >
                   <Sparkles />
-                  {aiBusy ? "Checking…" : "Check with AI"}
+                  {aiBusy ? t("Checking…") : t("Check with AI")}
                 </Button>
                 {decided.length > 0 && (
                   <Button
@@ -129,7 +137,7 @@ export function RuleChecklist({
                       })()
                     }
                   >
-                    Apply {decided.length} suggestion{decided.length === 1 ? "" : "s"}
+                    {tn(decided.length, "Apply {count} suggestion", "Apply {count} suggestions")}
                   </Button>
                 )}
               </div>
@@ -154,16 +162,18 @@ export function RuleChecklist({
                       void save(r.rule, next === "unreviewed" ? null : next === "true")
                     }
                   >
-                    <option value="unreviewed">Not assessed</option>
-                    <option value="true">Followed</option>
-                    <option value="false">Broken</option>
+                    <option value="unreviewed">{t("Not assessed")}</option>
+                    <option value="true">{tx("rule", "Followed")}</option>
+                    <option value="false">{tx("rule", "Broken")}</option>
                   </OptionSelect>
                 </label>
                 {suggestion(r.rule) && (
                   <p className="flex flex-wrap items-baseline gap-x-2 text-xs text-muted-foreground">
                     <span>
                       <span className="font-medium text-foreground">
-                        AI: {VERDICT_LABEL[suggestion(r.rule)!.verdict]}.
+                        {t("AI: {verdict}.", {
+                          verdict: tx("rule", VERDICT_LABEL[suggestion(r.rule)!.verdict]),
+                        })}
                       </span>{" "}
                       {suggestion(r.rule)!.reason}
                     </span>
@@ -176,7 +186,7 @@ export function RuleChecklist({
                             void save(r.rule, suggestion(r.rule)!.verdict === "followed")
                           }
                         >
-                          Apply
+                          {t("Apply")}
                         </button>
                       )}
                   </p>
@@ -186,7 +196,7 @@ export function RuleChecklist({
           </>
         ) : (
           <p className="text-xs text-muted-foreground">
-            Assign a playbook to check its rules for this trade.
+            {t("Assign a playbook to check its rules for this trade.")}
           </p>
         )}
         {(error || failure) && (

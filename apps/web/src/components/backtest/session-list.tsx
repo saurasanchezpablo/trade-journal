@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Plus, Trash2 } from "lucide-react";
 import { useFilters } from "@/components/filter-bar";
+import { useI18n } from "@/components/i18n";
 import { Pnl } from "@/components/pnl";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,6 +28,7 @@ import { fmtPercent } from "@/lib/utils";
 /** Your replay sessions, and the form that starts one. */
 export function SessionList() {
   const { data, error, refresh } = useApi<{ sessions: BacktestSessionSummary[] }>("/api/backtests");
+  const { t } = useI18n();
   const { timeZone } = useFilters();
   const [creating, setCreating] = useState(false);
   const when = (time: number) =>
@@ -36,7 +38,7 @@ export function SessionList() {
       <div className="flex justify-end">
         <Button onClick={() => setCreating((v) => !v)}>
           <Plus />
-          New replay session
+          {t("New replay session")}
         </Button>
       </div>
       {creating && <NewSession onCancel={() => setCreating(false)} />}
@@ -48,8 +50,9 @@ export function SessionList() {
       {!data && !error && <Skeleton className="h-32" />}
       {data?.sessions.length === 0 && !creating && (
         <p className="py-10 text-center text-sm text-muted-foreground">
-          No backtests yet. Start a replay session on any symbol and date your market data sources
-          cover.
+          {t(
+            "No backtests yet. Start a replay session on any symbol and date your market data sources cover.",
+          )}
         </p>
       )}
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -71,13 +74,16 @@ export function SessionList() {
                 size="icon"
                 variant="ghost"
                 className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                aria-label={`Delete backtest ${session.name}`}
+                aria-label={t("Delete backtest {name}", { name: session.name })}
                 onClick={async () => {
-                  if (!confirm(`Delete "${session.name}" and its trades?`)) return;
+                  if (!confirm(t('Delete "{name}" and its trades?', { name: session.name })))
+                    return;
                   try {
                     await postJson(`/api/backtests/${session.id}`, undefined, "DELETE");
                   } catch (cause) {
-                    alert(cause instanceof Error ? cause.message : "Could not delete the session.");
+                    alert(
+                      cause instanceof Error ? cause.message : t("Could not delete the session."),
+                    );
                   }
                   refresh();
                 }}
@@ -87,22 +93,24 @@ export function SessionList() {
             </CardHeader>
             <CardContent className="grid grid-cols-3 gap-2 text-sm">
               <div>
-                <p className="text-xs text-muted-foreground">Net</p>
+                <p className="text-xs text-muted-foreground">{t("Net")}</p>
                 <Pnl value={session.netProfit} currency={session.currency} />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">Trades</p>
+                <p className="text-xs text-muted-foreground">{t("Trades")}</p>
                 <p className="tnum">
-                  {session.trades}
-                  {session.open ? " + open" : ""}
+                  {session.open ? t("{count} + open", { count: session.trades }) : session.trades}
                 </p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">Win rate</p>
+                <p className="text-xs text-muted-foreground">{t("Win rate")}</p>
                 <p className="tnum">{fmtPercent(session.winRate)}</p>
               </div>
               <p className="col-span-3 text-xs text-muted-foreground">
-                From {when(session.startAt)}, now at {when(session.cursorAt)}
+                {t("From {start}, now at {now}", {
+                  start: when(session.startAt),
+                  now: when(session.cursorAt),
+                })}
               </p>
             </CardContent>
           </Card>
@@ -113,6 +121,7 @@ export function SessionList() {
 }
 
 function NewSession({ onCancel }: { onCancel: () => void }) {
+  const { t } = useI18n();
   const router = useRouter();
   const { timeZone } = useFilters();
   const { data } = useApi<{ connections: MarketConnection[] }>("/api/market-data/connections");
@@ -159,7 +168,7 @@ function NewSession({ onCancel }: { onCancel: () => void }) {
       });
       router.push(`/backtest/${session.id}`);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not start the session.");
+      setError(cause instanceof Error ? cause.message : t("Could not start the session."));
       setBusy(false);
     }
   };
@@ -167,16 +176,16 @@ function NewSession({ onCancel }: { onCancel: () => void }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>New replay session</CardTitle>
+        <CardTitle>{t("New replay session")}</CardTitle>
       </CardHeader>
       <CardContent>
         {data && !sources.length ? (
           <p className="text-sm">
-            Enable a market data source first:{" "}
+            {t("Enable a market data source first:")}{" "}
             <Link className="underline" href="/settings#market-data">
-              Settings → Market data
+              {t("Settings → Market data")}
             </Link>
-            . Binance, Bybit, OKX, Kraken, Coinbase, Nasdaq and Yahoo Finance need no key.
+            . {t("Binance, Bybit, OKX, Kraken, Coinbase, Nasdaq and Yahoo Finance need no key.")}
           </p>
         ) : (
           <form
@@ -188,11 +197,11 @@ function NewSession({ onCancel }: { onCancel: () => void }) {
           >
             <div>
               <label htmlFor="new-bt-source" className="text-xs text-muted-foreground">
-                Source
+                {t("Source")}
               </label>
               <OptionSelect
                 id="new-bt-source"
-                aria-label="Source"
+                aria-label={t("Source")}
                 value={chosen}
                 onValueChange={(value) => {
                   setProvider(value);
@@ -209,17 +218,17 @@ function NewSession({ onCancel }: { onCancel: () => void }) {
             {(providerInfo(chosen)?.datasets?.length ?? 0) > 0 && (
               <div>
                 <label htmlFor="new-bt-dataset" className="text-xs text-muted-foreground">
-                  Market
+                  {t("Market")}
                 </label>
                 <OptionSelect
                   id="new-bt-dataset"
-                  aria-label="Market"
+                  aria-label={t("Market")}
                   value={dataset}
                   onValueChange={setDataset}
                 >
                   {providerInfo(chosen)!.datasets!.map((item) => (
                     <option key={item.value} value={item.value} disabled={!item.value}>
-                      {item.label}
+                      {t(item.label)}
                     </option>
                   ))}
                 </OptionSelect>
@@ -227,7 +236,7 @@ function NewSession({ onCancel }: { onCancel: () => void }) {
             )}
             <div>
               <label htmlFor="new-bt-symbol" className="text-xs text-muted-foreground">
-                Symbol
+                {t("Symbol")}
               </label>
               <Input
                 id="new-bt-symbol"
@@ -238,11 +247,11 @@ function NewSession({ onCancel }: { onCancel: () => void }) {
             </div>
             <div>
               <label htmlFor="new-bt-resolution" className="text-xs text-muted-foreground">
-                Candles
+                {t("Candles")}
               </label>
               <OptionSelect
                 id="new-bt-resolution"
-                aria-label="Candles"
+                aria-label={t("Candles")}
                 value={resolution}
                 onValueChange={(value) => setResolution(value as Resolution)}
               >
@@ -257,7 +266,7 @@ function NewSession({ onCancel }: { onCancel: () => void }) {
             </div>
             <div>
               <label htmlFor="new-bt-start" className="text-xs text-muted-foreground">
-                Start ({timeZone})
+                {t("Start ({timeZone})", { timeZone })}
               </label>
               <Input
                 id="new-bt-start"
@@ -268,7 +277,7 @@ function NewSession({ onCancel }: { onCancel: () => void }) {
             </div>
             <div>
               <label htmlFor="new-bt-name" className="text-xs text-muted-foreground">
-                Name (optional)
+                {t("Name (optional)")}
               </label>
               <Input
                 id="new-bt-name"
@@ -279,7 +288,7 @@ function NewSession({ onCancel }: { onCancel: () => void }) {
             </div>
             <div>
               <label htmlFor="new-bt-balance" className="text-xs text-muted-foreground">
-                Starting balance
+                {t("Starting balance")}
               </label>
               <Input
                 id="new-bt-balance"
@@ -291,7 +300,7 @@ function NewSession({ onCancel }: { onCancel: () => void }) {
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label htmlFor="new-bt-currency" className="text-xs text-muted-foreground">
-                  Currency
+                  {t("Currency")}
                 </label>
                 <Input
                   id="new-bt-currency"
@@ -302,7 +311,7 @@ function NewSession({ onCancel }: { onCancel: () => void }) {
               </div>
               <div>
                 <label htmlFor="new-bt-risk" className="text-xs text-muted-foreground">
-                  Risk (%)
+                  {t("Risk (%)")}
                 </label>
                 <Input
                   id="new-bt-risk"
@@ -313,20 +322,22 @@ function NewSession({ onCancel }: { onCancel: () => void }) {
               </div>
             </div>
             <p className="text-xs text-muted-foreground sm:col-span-2 lg:col-span-4">
-              {info?.symbolHint ?? providerInfo(chosen)?.symbolHint} Commission, slippage, the lot
-              size and a contract multiplier are set in the session&apos;s settings.
+              {t(info?.symbolHint ?? providerInfo(chosen)?.symbolHint ?? "")}{" "}
+              {t(
+                "Commission, slippage, the lot size and a contract multiplier are set in the session's settings.",
+              )}
             </p>
             {error && (
               <p role="alert" className="text-sm text-destructive sm:col-span-2 lg:col-span-4">
-                {error}
+                {t(error)}
               </p>
             )}
             <div className="flex gap-2 sm:col-span-2 lg:col-span-4">
               <Button type="submit" disabled={busy}>
-                {busy ? "Starting…" : "Start replay"}
+                {busy ? t("Starting…") : t("Start replay")}
               </Button>
               <Button type="button" variant="outline" onClick={onCancel}>
-                Cancel
+                {t("Cancel")}
               </Button>
             </div>
           </form>

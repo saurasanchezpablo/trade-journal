@@ -88,6 +88,8 @@ import { drawingLabel } from "@/lib/chart-analysis";
 import { isHexColor } from "@/lib/style-validation";
 import { cn } from "@/lib/utils";
 import type { ChartDrawing, DrawingPatch } from "./analysis-chart";
+import { tr, trn } from "@/lib/i18n";
+import { useI18n, useT } from "./i18n";
 import { Button } from "./ui/button";
 import {
   DropdownMenu,
@@ -134,6 +136,7 @@ export const LayersPanel = memo(function LayersPanel({
   /** Kept stable by the page, so the panel only re-renders when its data changes. */
   actions: LayersPanelActions;
 }) {
+  const { t, tn } = useI18n();
   const { onChange } = actions;
   const [open, setOpen] = useState<Set<string>>(() => new Set([layers.activeLayerId]));
   const [editing, setEditing] = useState<string | null>(null);
@@ -150,12 +153,23 @@ export const LayersPanel = memo(function LayersPanel({
   const ids = useMemo(() => drawings.map((d) => d.id), [drawings]);
   const selected = useMemo(() => new Set(selectedIds), [selectedIds]);
   const byId = useMemo(() => new Map(drawings.map((d) => [d.id, d])), [drawings]);
-  const nameOf = (d: ChartDrawing) => drawingName(layers, d.id) ?? drawingLabel(d.type, d.text);
+  /** A drawing tool's name in the journal's language. */
+  const typeName = (type: string) => t(drawingLabel(type));
+  /** A drawing's own name, or its tool's name with the start of its text. */
+  const nameOf = (d: ChartDrawing) => {
+    const own = drawingName(layers, d.id);
+    if (own) return own;
+    const base = drawingLabel(d.type);
+    return typeName(d.type) + drawingLabel(d.type, d.text).slice(base.length);
+  };
   const needle = query.trim().toLowerCase();
   const filtering = Boolean(needle || typeFilter);
   const matches = (d: ChartDrawing) =>
     (!typeFilter || d.type === typeFilter) &&
-    (!needle || `${nameOf(d)} ${drawingLabel(d.type)} ${d.type}`.toLowerCase().includes(needle));
+    (!needle ||
+      `${nameOf(d)} ${drawingLabel(d.type)} ${typeName(d.type)} ${d.type}`
+        .toLowerCase()
+        .includes(needle));
   const types = [...new Set(drawings.map((d) => d.type))].sort();
   const liveChecked = [...checked].filter((id) => byId.has(id));
   const trees = useMemo(
@@ -191,7 +205,7 @@ export const LayersPanel = memo(function LayersPanel({
   /** A drawing as menus and banners name it: its outline number and name. */
   const labelOf = (id: string) => {
     const drawing = byId.get(id);
-    return `${indexOf.get(id) ?? ""} ${drawing ? nameOf(drawing) : "a drawing"}`.trim();
+    return `${indexOf.get(id) ?? ""} ${drawing ? nameOf(drawing) : t("a drawing")}`.trim();
   };
 
   // A drawing selected on the chart opens its place in the tree and scrolls to it.
@@ -254,10 +268,15 @@ export const LayersPanel = memo(function LayersPanel({
     let moveTo: string | null = null;
     if (inside.length) {
       const keep = confirm(
-        `"${layer.name}" has ${inside.length} drawing${inside.length === 1 ? "" : "s"}. OK moves them to "${others[0]!.name}"; Cancel deletes them with the layer.`,
+        tn(
+          inside.length,
+          '"{layer}" has {count} drawing. OK moves it to "{other}"; Cancel deletes it with the layer.',
+          '"{layer}" has {count} drawings. OK moves them to "{other}"; Cancel deletes them with the layer.',
+          { layer: layer.name, other: others[0]!.name },
+        ),
       );
       if (keep) moveTo = others[0]!.id;
-      else if (!confirm(`Delete "${layer.name}" and its drawings?`)) return;
+      else if (!confirm(t('Delete "{layer}" and its drawings?', { layer: layer.name }))) return;
     }
     const result = removeLayer(layers, layer.id, moveTo);
     onChange(result.doc);
@@ -266,7 +285,7 @@ export const LayersPanel = memo(function LayersPanel({
 
   const duplicateLayer = (layer: DrawingLayer) => {
     const inside = drawingsIn(layers, layer.id, ids);
-    let next = addLayer(layers, `${layer.name} copy`, layer.folderId);
+    let next = addLayer(layers, t("{name} copy", { name: layer.name }), layer.folderId);
     const copyId = next.activeLayerId;
     if (layer.color) next = setLayerColor(next, copyId, layer.color);
     // The copy sits right under the original.
@@ -396,11 +415,11 @@ export const LayersPanel = memo(function LayersPanel({
         menu={() => (
           <>
             <DropdownMenuItem onSelect={() => setEditing(`drawing:${id}`)}>
-              <Pencil className="size-3.5" /> Rename
+              <Pencil className="size-3.5" /> {t("Rename")}
             </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => revealTree(id, tree)}>
               <Crosshair className="size-3.5" />
-              {inside.length ? "Go to it and what is inside" : "Go to it on the chart"}
+              {inside.length ? t("Go to it and what is inside") : t("Go to it on the chart")}
             </DropdownMenuItem>
             <DropdownMenuItem
               onSelect={() => {
@@ -409,7 +428,7 @@ export const LayersPanel = memo(function LayersPanel({
               }}
             >
               <Focus className="size-3.5" />
-              {focused ? "Stop focusing" : "Focus on this (hide the rest)"}
+              {focused ? t("Stop focusing") : t("Focus on this (hide the rest)")}
             </DropdownMenuItem>
             <DropdownMenuItem
               onSelect={() => {
@@ -418,12 +437,14 @@ export const LayersPanel = memo(function LayersPanel({
               }}
             >
               <CornerDownRight className="size-3.5" />
-              {target ? "Stop drawing inside this" : "Draw inside this"}
+              {target ? t("Stop drawing inside this") : t("Draw inside this")}
             </DropdownMenuItem>
             {inside.length > 0 && (
               <DropdownMenuItem onSelect={() => setDrawings(inside, { visible: insideHidden })}>
                 {insideHidden ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
-                {insideHidden ? "Show what is inside" : "Hide what is inside"} ({inside.length})
+                {insideHidden
+                  ? t("Show what is inside ({count})", { count: inside.length })
+                  : t("Hide what is inside ({count})", { count: inside.length })}
               </DropdownMenuItem>
             )}
             {above && (
@@ -433,29 +454,30 @@ export const LayersPanel = memo(function LayersPanel({
                   expandNode(above.id);
                 }}
               >
-                <IndentIncrease className="size-3.5" /> Put inside the one above
+                <IndentIncrease className="size-3.5" /> {t("Put inside the one above")}
               </DropdownMenuItem>
             )}
             {parent && (
               <DropdownMenuItem onSelect={() => onChange(unnestDrawings(layers, [id]))}>
-                <IndentDecrease className="size-3.5" /> Take out of {labelOf(parent)}
+                <IndentDecrease className="size-3.5" />{" "}
+                {t("Take out of {drawing}", { drawing: labelOf(parent) })}
               </DropdownMenuItem>
             )}
             <DropdownMenuItem onSelect={() => actions.onEditDrawing(id)}>
-              <SlidersHorizontal className="size-3.5" /> Edit style on the chart
+              <SlidersHorizontal className="size-3.5" /> {t("Edit style on the chart")}
             </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => actions.onFront([id])}>
-              <ArrowUpToLine className="size-3.5" /> Bring to front
+              <ArrowUpToLine className="size-3.5" /> {t("Bring to front")}
             </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => actions.onBack([id])}>
-              <ArrowDownToLine className="size-3.5" /> Send to back
+              <ArrowDownToLine className="size-3.5" /> {t("Send to back")}
             </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => duplicateDrawings([id])}>
-              <Copy className="size-3.5" /> Duplicate
+              <Copy className="size-3.5" /> {t("Duplicate")}
             </DropdownMenuItem>
             {inside.length > 0 && (
               <DropdownMenuItem onSelect={() => duplicateDrawings(tree)}>
-                <Copy className="size-3.5" /> Duplicate with what is inside
+                <Copy className="size-3.5" /> {t("Duplicate with what is inside")}
               </DropdownMenuItem>
             )}
             {layers.layers
@@ -465,7 +487,7 @@ export const LayersPanel = memo(function LayersPanel({
                   key={l.id}
                   onSelect={() => onChange(assignDrawings(layers, [id], l.id))}
                 >
-                  <Layers className="size-3.5" /> Move to {l.name}
+                  <Layers className="size-3.5" /> {t("Move to {name}", { name: l.name })}
                 </DropdownMenuItem>
               ))}
             <DropdownMenuItem
@@ -473,17 +495,27 @@ export const LayersPanel = memo(function LayersPanel({
               onSelect={() => actions.onDeleteDrawings([id])}
             >
               <Trash2 className="size-3.5" />
-              {inside.length ? "Delete (keep what is inside)" : "Delete"}
+              {inside.length ? t("Delete (keep what is inside)") : t("Delete")}
             </DropdownMenuItem>
             {inside.length > 0 && (
               <DropdownMenuItem
                 className="text-destructive"
                 onSelect={() => {
-                  if (confirm(`Delete ${name} and the ${inside.length} drawings inside it?`))
+                  if (
+                    confirm(
+                      tn(
+                        inside.length,
+                        "Delete {name} and the drawing inside it?",
+                        "Delete {name} and the {count} drawings inside it?",
+                        { name },
+                      ),
+                    )
+                  )
                     actions.onDeleteDrawings(tree);
                 }}
               >
-                <Trash2 className="size-3.5" /> Delete with what is inside ({inside.length})
+                <Trash2 className="size-3.5" />{" "}
+                {t("Delete with what is inside ({count})", { count: inside.length })}
               </DropdownMenuItem>
             )}
           </>
@@ -528,7 +560,11 @@ export const LayersPanel = memo(function LayersPanel({
           >
             <button
               type="button"
-              aria-label={expanded ? `Collapse ${layer.name}` : `Expand ${layer.name}`}
+              aria-label={
+                expanded
+                  ? t("Collapse {name}", { name: layer.name })
+                  : t("Expand {name}", { name: layer.name })
+              }
               onClick={() => toggleOpen(layer.id)}
               className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground"
             >
@@ -539,13 +575,13 @@ export const LayersPanel = memo(function LayersPanel({
               )}
             </button>
             <HoverHint
-              content={active ? "Active layer: new drawings go here" : "Draw on this layer"}
+              content={active ? t("Active layer: new drawings go here") : t("Draw on this layer")}
             >
               <button
                 type="button"
                 role="radio"
                 aria-checked={active}
-                aria-label={`Draw on ${layer.name}`}
+                aria-label={t("Draw on {name}", { name: layer.name })}
                 onClick={() => onChange(setActiveLayer(layers, layer.id))}
                 className="flex size-6 shrink-0 items-center justify-center"
               >
@@ -568,7 +604,7 @@ export const LayersPanel = memo(function LayersPanel({
             {editing === layer.id ? (
               <NameInput
                 value={layer.name}
-                label="Layer name"
+                label={t("Layer name")}
                 onDone={(name) => {
                   setEditing(null);
                   if (name !== null) onChange(renameLayer(layers, layer.id, name));
@@ -586,51 +622,59 @@ export const LayersPanel = memo(function LayersPanel({
             )}
             <span
               className="tnum shrink-0 text-xs text-muted-foreground"
-              title={hiddenCount ? `${hiddenCount} hidden` : undefined}
+              title={hiddenCount ? t("{count} hidden", { count: hiddenCount }) : undefined}
             >
               {filtering ? `${shown.length}/` : ""}
               {inside.length}
-              {hiddenCount ? ` · ${hiddenCount} hidden` : ""}
+              {hiddenCount ? ` · ${t("{count} hidden", { count: hiddenCount })}` : ""}
             </span>
             <IconToggle
-              label={layer.visible ? `Hide ${layer.name}` : `Show ${layer.name}`}
+              label={
+                layer.visible
+                  ? t("Hide {name}", { name: layer.name })
+                  : t("Show {name}", { name: layer.name })
+              }
               on={layer.visible}
               onIcon={Eye}
               offIcon={EyeOff}
               onClick={() => onChange(updateLayer(layers, layer.id, { visible: !layer.visible }))}
             />
             <IconToggle
-              label={layer.locked ? `Unlock ${layer.name}` : `Lock ${layer.name}`}
+              label={
+                layer.locked
+                  ? t("Unlock {name}", { name: layer.name })
+                  : t("Lock {name}", { name: layer.name })
+              }
               on={!layer.locked}
               onIcon={LockOpen}
               offIcon={Lock}
               onClick={() => onChange(updateLayer(layers, layer.id, { locked: !layer.locked }))}
             />
             <RowMenu
-              label={`${layer.name} options`}
+              label={t("{name} options", { name: layer.name })}
               className="w-60"
               items={() => (
                 <>
                   <DropdownMenuItem onSelect={() => setEditing(layer.id)}>
-                    <Pencil className="size-3.5" /> Rename
+                    <Pencil className="size-3.5" /> {t("Rename")}
                   </DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => onChange(soloLayer(layers, layer.id))}>
-                    <Focus className="size-3.5" /> Show only this layer
+                    <Focus className="size-3.5" /> {t("Show only this layer")}
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     disabled={!inside.length}
                     onSelect={() => actions.onRevealDrawings(inside)}
                   >
-                    <Crosshair className="size-3.5" /> Show its drawings on the chart
+                    <Crosshair className="size-3.5" /> {t("Show its drawings on the chart")}
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     disabled={!inside.length}
                     onSelect={() => setChecked(new Set(inside))}
                   >
-                    <Layers className="size-3.5" /> Check its drawings
+                    <Layers className="size-3.5" /> {t("Check its drawings")}
                   </DropdownMenuItem>
                   <MenuColorRow
-                    label="Layer colour"
+                    label={t("Layer colour")}
                     value={layer.color}
                     onPick={(color) => onChange(setLayerColor(layers, layer.id, color))}
                     onClear={
@@ -645,22 +689,22 @@ export const LayersPanel = memo(function LayersPanel({
                       layer.color && setDrawings(inside, { style: { lineColor: layer.color } })
                     }
                   >
-                    <Paintbrush className="size-3.5" /> Colour its drawings with it
+                    <Paintbrush className="size-3.5" /> {t("Colour its drawings with it")}
                   </DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => duplicateLayer(layer)}>
-                    <Copy className="size-3.5" /> Duplicate layer with drawings
+                    <Copy className="size-3.5" /> {t("Duplicate layer with drawings")}
                   </DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => onChange(moveLayer(layers, layer.id, -1))}>
-                    <ArrowUp className="size-3.5" /> Move up
+                    <ArrowUp className="size-3.5" /> {t("Move up")}
                   </DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => onChange(moveLayer(layers, layer.id, 1))}>
-                    <ArrowDown className="size-3.5" /> Move down
+                    <ArrowDown className="size-3.5" /> {t("Move down")}
                   </DropdownMenuItem>
                   {layer.folderId && (
                     <DropdownMenuItem
                       onSelect={() => onChange(updateLayer(layers, layer.id, { folderId: null }))}
                     >
-                      <Layers className="size-3.5" /> Move out of folder
+                      <Layers className="size-3.5" /> {t("Move out of folder")}
                     </DropdownMenuItem>
                   )}
                   {layers.folders
@@ -670,7 +714,7 @@ export const LayersPanel = memo(function LayersPanel({
                         key={f.id}
                         onSelect={() => onChange(updateLayer(layers, layer.id, { folderId: f.id }))}
                       >
-                        <Folder className="size-3.5" /> Move to {f.name}
+                        <Folder className="size-3.5" /> {t("Move to {name}", { name: f.name })}
                       </DropdownMenuItem>
                     ))}
                   <DropdownMenuItem
@@ -678,7 +722,7 @@ export const LayersPanel = memo(function LayersPanel({
                     onSelect={() => deleteLayer(layer)}
                     className="text-destructive"
                   >
-                    <Trash2 className="size-3.5" /> Delete layer
+                    <Trash2 className="size-3.5" /> {t("Delete layer")}
                   </DropdownMenuItem>
                 </>
               )}
@@ -704,15 +748,15 @@ export const LayersPanel = memo(function LayersPanel({
                       })
                     }
                   />
-                  All {order.length}
+                  {t("All {count}", { count: order.length })}
                 </label>
               </li>
             )}
             {inside.length === 0 && (
               <li className="px-1 text-xs text-muted-foreground">
                 {active
-                  ? "Draw on the chart to add to this layer."
-                  : "No drawings. Drag some here."}
+                  ? t("Draw on the chart to add to this layer.")
+                  : t("No drawings. Drag some here.")}
               </li>
             )}
             {roots.map((node, i) => renderNode(node, layer, order, aboveOf(tree, roots, i)))}
@@ -732,39 +776,41 @@ export const LayersPanel = memo(function LayersPanel({
           size="sm"
           variant="outline"
           onClick={() => {
-            const next = addLayer(layers, "");
+            const next = addLayer(layers, t("Layer {n}", { n: layers.layers.length + 1 }));
             setOpen((current) => new Set([...current, next.activeLayerId]));
             setEditing(next.activeLayerId);
             onChange(next);
           }}
         >
-          <Plus /> Layer
+          <Plus /> {t("Layer")}
         </Button>
         <Button
           type="button"
           size="sm"
           variant="outline"
           onClick={() => {
-            const next = addFolder(layers, "");
+            const next = addFolder(layers, t("Folder {n}", { n: layers.folders.length + 1 }));
             setEditing(next.folders.at(-1)!.id);
             onChange(next);
           }}
         >
-          <FolderPlus /> Folder
+          <FolderPlus /> {t("Folder")}
         </Button>
         <span className="ml-auto flex items-center">
           <IconButton
-            label="Show every layer"
+            label={t("Show every layer")}
             icon={Eye}
             onClick={() => onChange(showEverything(layers))}
           />
           <IconButton
-            label="Unlock every layer"
+            label={t("Unlock every layer")}
             icon={LockOpen}
             onClick={() => onChange(unlockEverything(layers))}
           />
           <IconButton
-            label={anyCollapsed ? "Open all folders and layers" : "Close all folders and layers"}
+            label={
+              anyCollapsed ? t("Open all folders and layers") : t("Close all folders and layers")
+            }
             icon={anyCollapsed ? ChevronsUpDown : ChevronsDownUp}
             onClick={() => {
               onChange(setAllFoldersCollapsed(layers, !anyCollapsed));
@@ -782,15 +828,21 @@ export const LayersPanel = memo(function LayersPanel({
             <p className="flex items-center gap-1.5">
               <Focus aria-hidden="true" className="size-3.5 shrink-0" />
               <span className="min-w-0 flex-1">
-                Focused on <strong>{labelOf(layers.focusId)}</strong>: only it and what is inside
-                show{layers.drawInto ? "" : ", and new drawings go inside it"}.
+                {withStrong(
+                  layers.drawInto
+                    ? t("Focused on {drawing}: only it and what is inside show.")
+                    : t(
+                        "Focused on {drawing}: only it and what is inside show, and new drawings go inside it.",
+                      ),
+                  labelOf(layers.focusId),
+                )}
               </span>
               <button
                 type="button"
                 className="shrink-0 underline"
                 onClick={() => onChange(setFocus(layers, null, drawings))}
               >
-                Show everything
+                {t("Show everything")}
               </button>
             </p>
           )}
@@ -798,14 +850,14 @@ export const LayersPanel = memo(function LayersPanel({
             <p className="flex items-center gap-1.5">
               <CornerDownRight aria-hidden="true" className="size-3.5 shrink-0" />
               <span className="min-w-0 flex-1">
-                New drawings go inside <strong>{labelOf(layers.drawInto)}</strong>.
+                {withStrong(t("New drawings go inside {drawing}."), labelOf(layers.drawInto))}
               </span>
               <button
                 type="button"
                 className="shrink-0 underline"
                 onClick={() => onChange(setDrawInto(layers, null))}
               >
-                Stop
+                {t("Stop")}
               </button>
             </p>
           )}
@@ -822,21 +874,21 @@ export const LayersPanel = memo(function LayersPanel({
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Find drawings"
-              aria-label="Find drawings by name or type"
+              placeholder={t("Find drawings")}
+              aria-label={t("Find drawings by name or type")}
               className="h-8 w-full rounded-md border bg-background pl-7 pr-2 text-sm"
             />
           </label>
           <select
-            aria-label="Filter by drawing type"
+            aria-label={t("Filter by drawing type")}
             value={typeFilter}
             onChange={(e) => setTypeFilter(e.target.value)}
             className="h-8 max-w-32 rounded-md border bg-background px-1 text-xs"
           >
-            <option value="">All types</option>
+            <option value="">{t("All types")}</option>
             {types.map((type) => (
               <option key={type} value={type}>
-                {drawingLabel(type)}
+                {typeName(type)}
               </option>
             ))}
           </select>
@@ -864,7 +916,7 @@ export const LayersPanel = memo(function LayersPanel({
           onDelete={() => {
             if (
               !confirm(
-                `Delete ${liveChecked.length} drawing${liveChecked.length === 1 ? "" : "s"}?`,
+                tn(liveChecked.length, "Delete {count} drawing?", "Delete {count} drawings?"),
               )
             )
               return;
@@ -901,7 +953,11 @@ export const LayersPanel = memo(function LayersPanel({
                   >
                     <button
                       type="button"
-                      aria-label={folder.collapsed ? `Open ${folder.name}` : `Close ${folder.name}`}
+                      aria-label={
+                        folder.collapsed
+                          ? t("Open {name}", { name: folder.name })
+                          : t("Close {name}", { name: folder.name })
+                      }
                       onClick={() =>
                         onChange(updateFolder(layers, folder.id, { collapsed: !folder.collapsed }))
                       }
@@ -920,7 +976,7 @@ export const LayersPanel = memo(function LayersPanel({
                     {editing === folder.id ? (
                       <NameInput
                         value={folder.name}
-                        label="Folder name"
+                        label={t("Folder name")}
                         onDone={(name) => {
                           setEditing(null);
                           if (name !== null) onChange(renameFolder(layers, folder.id, name));
@@ -944,7 +1000,11 @@ export const LayersPanel = memo(function LayersPanel({
                       {inside.length} · {count}
                     </span>
                     <IconToggle
-                      label={folder.visible ? `Hide ${folder.name}` : `Show ${folder.name}`}
+                      label={
+                        folder.visible
+                          ? t("Hide {name}", { name: folder.name })
+                          : t("Show {name}", { name: folder.name })
+                      }
                       on={folder.visible}
                       onIcon={Eye}
                       offIcon={EyeOff}
@@ -953,7 +1013,11 @@ export const LayersPanel = memo(function LayersPanel({
                       }
                     />
                     <IconToggle
-                      label={folder.locked ? `Unlock ${folder.name}` : `Lock ${folder.name}`}
+                      label={
+                        folder.locked
+                          ? t("Unlock {name}", { name: folder.name })
+                          : t("Lock {name}", { name: folder.name })
+                      }
                       on={!folder.locked}
                       onIcon={LockOpen}
                       offIcon={Lock}
@@ -962,27 +1026,31 @@ export const LayersPanel = memo(function LayersPanel({
                       }
                     />
                     <RowMenu
-                      label={`${folder.name} options`}
+                      label={t("{name} options", { name: folder.name })}
                       className="w-56"
                       items={() => (
                         <>
                           <DropdownMenuItem
                             onSelect={() => {
-                              const next = addLayer(layers, "", folder.id);
+                              const next = addLayer(
+                                layers,
+                                t("Layer {n}", { n: layers.layers.length + 1 }),
+                                folder.id,
+                              );
                               setOpen((current) => new Set([...current, next.activeLayerId]));
                               setEditing(next.activeLayerId);
                               onChange(next);
                             }}
                           >
-                            <Plus className="size-3.5" /> New layer here
+                            <Plus className="size-3.5" /> {t("New layer here")}
                           </DropdownMenuItem>
                           <DropdownMenuItem onSelect={() => setEditing(folder.id)}>
-                            <Pencil className="size-3.5" /> Rename
+                            <Pencil className="size-3.5" /> {t("Rename")}
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onSelect={() => onChange(soloFolder(layers, folder.id))}
                           >
-                            <Focus className="size-3.5" /> Show only this folder
+                            <Focus className="size-3.5" /> {t("Show only this folder")}
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             disabled={!count}
@@ -992,13 +1060,13 @@ export const LayersPanel = memo(function LayersPanel({
                               )
                             }
                           >
-                            <Crosshair className="size-3.5" /> Show its drawings on the chart
+                            <Crosshair className="size-3.5" /> {t("Show its drawings on the chart")}
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onSelect={() => onChange(removeFolder(layers, folder.id))}
                             className="text-destructive"
                           >
-                            <Trash2 className="size-3.5" /> Delete folder (keep layers)
+                            <Trash2 className="size-3.5" /> {t("Delete folder (keep layers)")}
                           </DropdownMenuItem>
                         </>
                       )}
@@ -1009,7 +1077,7 @@ export const LayersPanel = memo(function LayersPanel({
                   <ul className="space-y-0.5">
                     {inside.length === 0 && (
                       <li className="ml-10 text-xs text-muted-foreground">
-                        Empty. Drag a layer here or use its menu.
+                        {t("Empty. Drag a layer here or use its menu.")}
                       </li>
                     )}
                     {rendered}
@@ -1028,7 +1096,7 @@ export const LayersPanel = memo(function LayersPanel({
                 !dragging?.startsWith("layer:") && "hidden",
               )}
             >
-              Drop here to take the layer out of its folder
+              {t("Drop here to take the layer out of its folder")}
             </p>
           </DropTarget>
         )}
@@ -1042,7 +1110,7 @@ export const LayersPanel = memo(function LayersPanel({
       </DndContext>
       {filtering && (
         <p className="text-[11px] text-muted-foreground">
-          Showing drawings that match.{" "}
+          {t("Showing drawings that match.")}{" "}
           <button
             type="button"
             className="underline"
@@ -1051,13 +1119,26 @@ export const LayersPanel = memo(function LayersPanel({
               setTypeFilter("");
             }}
           >
-            Clear
+            {t("Clear")}
           </button>
         </p>
       )}
     </div>
   );
 });
+
+/** A translated sentence with its `{drawing}` shown in bold. */
+const withStrong = (sentence: string, value: string) =>
+  sentence.split("{drawing}").map((part, i) =>
+    i === 0 ? (
+      part
+    ) : (
+      <span key={i}>
+        <strong>{value}</strong>
+        {part}
+      </span>
+    ),
+  );
 
 const split = (dragId: string): [string, string] => {
   const i = dragId.indexOf(":");
@@ -1072,11 +1153,12 @@ function dragLabel(
   checked: Set<string>,
 ) {
   const [kind, id] = split(dragId);
-  if (kind === "layer") return doc.layers.find((l) => l.id === id)?.name ?? "Layer";
-  if (kind === "folder") return doc.folders.find((f) => f.id === id)?.name ?? "Folder";
+  if (kind === "layer") return doc.layers.find((l) => l.id === id)?.name ?? tr("Layer");
+  if (kind === "folder") return doc.folders.find((f) => f.id === id)?.name ?? tr("Folder");
   const drawing = byId.get(id);
-  if (checked.has(id) && checked.size > 1) return `${checked.size} drawings`;
-  return drawing ? nameOf(drawing) : "Drawing";
+  if (checked.has(id) && checked.size > 1)
+    return trn(checked.size, "{count} drawing", "{count} drawings");
+  return drawing ? nameOf(drawing) : tr("Drawing");
 }
 
 function DropTarget({
@@ -1106,12 +1188,13 @@ function DragHandleRow({
   className: string;
   children: React.ReactNode;
 }) {
+  const t = useT();
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id });
   return (
     <div ref={setNodeRef} className={cn(className, isDragging && "opacity-40")}>
       <button
         type="button"
-        aria-label="Drag to move"
+        aria-label={t("Drag to move")}
         className="flex h-6 w-4 shrink-0 cursor-grab touch-none items-center justify-center text-muted-foreground/60 hover:text-foreground"
         {...listeners}
         {...attributes}
@@ -1183,6 +1266,7 @@ function DrawingRow({
   menu: () => React.ReactNode;
   children?: React.ReactNode;
 }) {
+  const t = useT();
   const hasInside = insideCount > 0;
   return (
     <li data-drawing-row={id}>
@@ -1198,7 +1282,7 @@ function DrawingRow({
         >
           <input
             type="checkbox"
-            aria-label={`Check ${name}`}
+            aria-label={t("Check {name}", { name })}
             checked={checked}
             onChange={() => undefined}
             onClick={(e) => onCheck(e.shiftKey)}
@@ -1207,7 +1291,7 @@ function DrawingRow({
           {hasInside ? (
             <button
               type="button"
-              aria-label={expanded ? `Collapse ${name}` : `Expand ${name}`}
+              aria-label={expanded ? t("Collapse {name}", { name }) : t("Expand {name}", { name })}
               aria-expanded={expanded}
               onClick={onToggle}
               className="flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground"
@@ -1224,7 +1308,7 @@ function DrawingRow({
           />
           <span className="tnum shrink-0 text-[10px] text-muted-foreground">{index}</span>
           {editing ? (
-            <NameInput value={name} label="Drawing name" onDone={onRename} />
+            <NameInput value={name} label={t("Drawing name")} onDone={onRename} />
           ) : (
             <button
               type="button"
@@ -1239,15 +1323,15 @@ function DrawingRow({
             </button>
           )}
           {focused && (
-            <HoverHint content="Focused: only this and what is inside show">
-              <Focus aria-label="Focused" className="size-3 shrink-0 text-primary" />
+            <HoverHint content={t("Focused: only this and what is inside show")}>
+              <Focus aria-label={t("Focused")} className="size-3 shrink-0 text-primary" />
             </HoverHint>
           )}
           {drawInto && (
-            <HoverHint content="New drawings go inside this. Click to stop.">
+            <HoverHint content={t("New drawings go inside this. Click to stop.")}>
               <button
                 type="button"
-                aria-label={`Stop drawing inside ${name}`}
+                aria-label={t("Stop drawing inside {name}", { name })}
                 onClick={onStopDrawInto}
                 className="flex size-6 shrink-0 items-center justify-center rounded text-primary hover:bg-accent"
               >
@@ -1259,10 +1343,10 @@ function DrawingRow({
             small
             label={
               forcedHidden
-                ? "Hidden by its layer or the focus"
+                ? t("Hidden by its layer or the focus")
                 : visible
-                  ? `Hide ${name}${hasInside ? " and what is inside" : ""}`
-                  : `Show ${name}${hasInside ? " and what is inside" : ""}`
+                  ? t(hasInside ? "Hide {name} and what is inside" : "Hide {name}", { name })
+                  : t(hasInside ? "Show {name} and what is inside" : "Show {name}", { name })
             }
             on={visible}
             disabled={forcedHidden}
@@ -1274,10 +1358,10 @@ function DrawingRow({
             small
             label={
               forcedLocked
-                ? "Locked by its layer"
+                ? t("Locked by its layer")
                 : locked
-                  ? `Unlock ${name}${hasInside ? " and what is inside" : ""}`
-                  : `Lock ${name}${hasInside ? " and what is inside" : ""}`
+                  ? t(hasInside ? "Unlock {name} and what is inside" : "Unlock {name}", { name })
+                  : t(hasInside ? "Lock {name} and what is inside" : "Lock {name}", { name })
             }
             on={!locked}
             disabled={forcedLocked}
@@ -1285,7 +1369,7 @@ function DrawingRow({
             offIcon={Lock}
             onClick={onLocked}
           />
-          <RowMenu small label={`${name} options`} className="w-64" items={menu} />
+          <RowMenu small label={t("{name} options", { name })} className="w-64" items={menu} />
         </DragHandleRow>
       </DropTarget>
       {children}
@@ -1382,19 +1466,20 @@ function BulkBar({
   onDuplicate: () => void;
   onDelete: () => void;
 }) {
+  const { t, tn, tx } = useI18n();
   return (
     <div
       role="toolbar"
-      aria-label="Checked drawings"
+      aria-label={t("Checked drawings")}
       className="space-y-1.5 rounded-md border bg-accent/30 p-2 text-xs"
     >
       <div className="flex items-center justify-between gap-2">
         <span className="font-medium">
-          {count} drawing{count === 1 ? "" : "s"} checked
+          {tn(count, "{count} drawing checked", "{count} drawings checked")}
         </span>
         <button
           type="button"
-          aria-label="Uncheck all"
+          aria-label={t("Uncheck all")}
           className="text-muted-foreground hover:text-foreground"
           onClick={onClear}
         >
@@ -1402,26 +1487,30 @@ function BulkBar({
         </button>
       </div>
       <div className="flex flex-wrap gap-1">
-        <IconButton label="Select them on the chart" icon={Crosshair} onClick={onSelectOnChart} />
-        <IconButton label="Scroll the chart to them" icon={Focus} onClick={onReveal} />
-        <IconButton label="Show" icon={Eye} onClick={() => onVisible(true)} />
-        <IconButton label="Hide" icon={EyeOff} onClick={() => onVisible(false)} />
-        <IconButton label="Lock" icon={Lock} onClick={() => onLocked(true)} />
-        <IconButton label="Unlock" icon={LockOpen} onClick={() => onLocked(false)} />
-        <IconButton label="Bring to front" icon={ArrowUpToLine} onClick={onFront} />
-        <IconButton label="Send to back" icon={ArrowDownToLine} onClick={onBack} />
-        <IconButton label="Duplicate" icon={Copy} onClick={onDuplicate} />
-        <IconButton label="Take out one level" icon={IndentDecrease} onClick={onUnnest} />
-        <IconButton label="Delete" icon={Trash2} onClick={onDelete} />
+        <IconButton
+          label={t("Select them on the chart")}
+          icon={Crosshair}
+          onClick={onSelectOnChart}
+        />
+        <IconButton label={t("Scroll the chart to them")} icon={Focus} onClick={onReveal} />
+        <IconButton label={t("Show")} icon={Eye} onClick={() => onVisible(true)} />
+        <IconButton label={t("Hide")} icon={EyeOff} onClick={() => onVisible(false)} />
+        <IconButton label={t("Lock")} icon={Lock} onClick={() => onLocked(true)} />
+        <IconButton label={t("Unlock")} icon={LockOpen} onClick={() => onLocked(false)} />
+        <IconButton label={t("Bring to front")} icon={ArrowUpToLine} onClick={onFront} />
+        <IconButton label={t("Send to back")} icon={ArrowDownToLine} onClick={onBack} />
+        <IconButton label={t("Duplicate")} icon={Copy} onClick={onDuplicate} />
+        <IconButton label={t("Take out one level")} icon={IndentDecrease} onClick={onUnnest} />
+        <IconButton label={t("Delete")} icon={Trash2} onClick={onDelete} />
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <select
-          aria-label="Move checked drawings to layer"
+          aria-label={t("Move checked drawings to layer")}
           value=""
           onChange={(e) => e.target.value && onMove(e.target.value)}
           className="h-7 rounded border bg-background px-1"
         >
-          <option value="">Move to layer…</option>
+          <option value="">{t("Move to layer…")}</option>
           {layers.map((l) => (
             <option key={l.id} value={l.id}>
               {l.name}
@@ -1430,15 +1519,15 @@ function BulkBar({
         </select>
         {nestTargets.length > 0 && (
           <select
-            aria-label="Put checked drawings inside another drawing"
+            aria-label={t("Put checked drawings inside another drawing")}
             value=""
             onChange={(e) => e.target.value && onNest(e.target.value)}
             className="h-7 max-w-40 rounded border bg-background px-1"
           >
-            <option value="">Put inside…</option>
-            {nestTargets.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.label}
+            <option value="">{t("Put inside…")}</option>
+            {nestTargets.map((target) => (
+              <option key={target.id} value={target.id}>
+                {target.label}
               </option>
             ))}
           </select>
@@ -1446,19 +1535,19 @@ function BulkBar({
         <ColorRow onPick={(color) => onStyle({ lineColor: color })} />
       </div>
       <div className="flex flex-wrap items-center gap-1">
-        <span className="text-muted-foreground">Width</span>
+        <span className="text-muted-foreground">{t("Width")}</span>
         {[1, 2, 3, 4].map((width) => (
           <button
             key={width}
             type="button"
-            aria-label={`Width ${width}`}
+            aria-label={t("Width {width}", { width })}
             onClick={() => onStyle({ lineWidth: width })}
             className="flex h-6 w-7 items-center justify-center rounded border hover:bg-accent"
           >
             <span className="block w-4 rounded-full bg-foreground" style={{ height: width }} />
           </button>
         ))}
-        <span className="ml-2 text-muted-foreground">Line</span>
+        <span className="ml-2 text-muted-foreground">{tx("tool", "Line")}</span>
         {(["solid", "dashed", "dotted"] as const).map((lineStyle) => (
           <button
             key={lineStyle}
@@ -1466,7 +1555,7 @@ function BulkBar({
             onClick={() => onStyle({ lineStyle })}
             className="h-6 rounded border px-1.5 capitalize hover:bg-accent"
           >
-            {lineStyle}
+            {tx("line style", lineStyle)}
           </button>
         ))}
       </div>
@@ -1484,13 +1573,14 @@ function ColorRow({
   onPick: (color: string) => void;
   onClear?: () => void;
 }) {
+  const t = useT();
   return (
     <div className="flex flex-wrap items-center gap-1">
       {SWATCHES.map((color) => (
         <button
           key={color}
           type="button"
-          aria-label={`Colour ${color}`}
+          aria-label={t("Colour {color}", { color })}
           aria-pressed={value === color}
           onClick={() => onPick(color)}
           className={cn(
@@ -1502,12 +1592,12 @@ function ColorRow({
       ))}
       <label
         className="relative flex size-5 cursor-pointer items-center justify-center rounded-full border border-dashed"
-        title="Any colour"
+        title={t("Any colour")}
       >
         <Plus className="size-3" aria-hidden="true" />
         <input
           type="color"
-          aria-label="Pick any colour"
+          aria-label={t("Pick any colour")}
           value={isHexColor(value) ? value : "#2962ff"}
           onChange={(e) => onPick(e.target.value)}
           className="absolute inset-0 cursor-pointer opacity-0"
@@ -1515,7 +1605,7 @@ function ColorRow({
       </label>
       {onClear && (
         <button type="button" className="ml-1 text-[11px] underline" onClick={onClear}>
-          None
+          {t("None")}
         </button>
       )}
     </div>
@@ -1537,6 +1627,7 @@ function MenuColorRow({
   onPick: (color: string) => void;
   onClear?: () => void;
 }) {
+  const t = useT();
   const any = useRef<HTMLInputElement>(null);
   const swatch = "size-7 min-h-0 justify-center rounded-full p-0";
   return (
@@ -1548,7 +1639,11 @@ function MenuColorRow({
         {SWATCHES.map((color) => (
           <DropdownMenuItem
             key={color}
-            aria-label={`Colour ${color}${value === color ? " (current)" : ""}`}
+            aria-label={
+              value === color
+                ? t("Colour {color} (current)", { color })
+                : t("Colour {color}", { color })
+            }
             className={swatch}
             onSelect={(e) => {
               e.preventDefault();
@@ -1566,7 +1661,7 @@ function MenuColorRow({
           </DropdownMenuItem>
         ))}
         <DropdownMenuItem
-          aria-label="Pick any colour"
+          aria-label={t("Pick any colour")}
           className={swatch}
           onSelect={(e) => {
             e.preventDefault();
@@ -1600,7 +1695,7 @@ function MenuColorRow({
               onClear();
             }}
           >
-            None
+            {t("None")}
           </DropdownMenuItem>
         )}
       </div>

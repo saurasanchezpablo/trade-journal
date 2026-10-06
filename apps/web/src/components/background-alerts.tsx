@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { postJson, useApi } from "@/lib/use-api";
 import { watchSummary } from "./alerts/watched-charts";
+import { useT } from "./i18n";
 
 interface WatchState {
   watched: boolean;
@@ -42,6 +43,7 @@ export function BackgroundAlerts({
   /** Saves the chart as an analysis when it has none yet; returns its id. */
   ensureAnalysis: () => Promise<string | null>;
 }) {
+  const t = useT();
   const { data: watchState, refresh: refreshWatch } = useApi<WatchState>(
     analysisId ? `/api/alerts/watch?analysisId=${encodeURIComponent(analysisId)}` : null,
   );
@@ -69,11 +71,11 @@ export function BackgroundAlerts({
     setMessage("");
     try {
       const id = analysisId ?? (await ensureAnalysis());
-      if (!id) throw new Error("Draw something first, so there is an analysis to watch.");
+      if (!id) throw new Error(t("Draw something first, so there is an analysis to watch."));
       await postJson("/api/alerts/watch", { analysisId: id, watched: next }, "PUT");
       refreshWatch();
     } catch (cause) {
-      setMessage(cause instanceof Error ? cause.message : "Something went wrong.");
+      setMessage(cause instanceof Error ? cause.message : t("Something went wrong."));
     } finally {
       setPending(null);
       setBusy(false);
@@ -91,10 +93,12 @@ export function BackgroundAlerts({
           onChange={(e) => void toggle(e.target.checked)}
         />
         <span>
-          Keep watching when this page is closed
+          {t("Keep watching when this page is closed")}
           <span className="block text-xs text-muted-foreground">
             {disabledReason ??
-              "The server checks this analysis's lines and zones and notifies you. Indicator alerts only run while the chart is open."}
+              t(
+                "The server checks this analysis's lines and zones and notifies you. Indicator alerts only run while the chart is open.",
+              )}
           </span>
         </span>
       </label>
@@ -116,23 +120,23 @@ export function BackgroundAlerts({
         </p>
       )}
       <p className="text-xs text-muted-foreground">
-        Browsers, webhook, which alerts you receive, quiet hours and every chart watched:{" "}
+        {t("Browsers, webhook, which alerts you receive, quiet hours and every chart watched:")}{" "}
         <Link href="/alerts" className="underline">
-          Alerts
+          {t("Alerts")}
         </Link>
         .
       </p>
 
       {events && events.events.length > 0 && (
         <div className="space-y-1">
-          <p className="text-xs font-medium">Sent by the server</p>
+          <p className="text-xs font-medium">{t("Sent by the server")}</p>
           <ul className="max-h-40 space-y-1 overflow-y-auto text-xs">
             {events.events.map((event) => (
               <li key={event.id}>
                 {event.message}
                 <span className="block text-muted-foreground">
                   {new Date(event.at).toLocaleString()}
-                  {event.delivered ? "" : " · not sent (see Alerts)"}
+                  {event.delivered ? "" : ` · ${t("not sent (see Alerts)")}`}
                 </span>
               </li>
             ))}

@@ -29,6 +29,7 @@ import { ReviewExport } from "@/components/review-export";
 import { useAutosave } from "@/lib/use-autosave";
 import { useApi } from "@/lib/use-api";
 import { fmtMoney, fmtNumber, fmtPercent } from "@/lib/utils";
+import { useI18n } from "@/components/i18n";
 
 interface TradeRowLite {
   key: string;
@@ -63,7 +64,16 @@ export default function JournalDayPage({ params }: { params: Promise<{ date: str
 const appended = (separator: string, block: string) => (current: string) =>
   current ? `${current}${separator}${block}` : block;
 
+/** A trade's status as its badge reads it (statuses are lowercase in the data). */
+const STATUS_LABELS: Record<string, string> = {
+  win: "Win",
+  loss: "Loss",
+  breakeven: "Breakeven",
+  open: "Open",
+};
+
 function JournalDay({ date }: { date: string }) {
+  const { t, tx } = useI18n();
   const { query, values: filters, timeZone } = useFilters();
   // A scheduled recap's notification links here with its chat.
   const chatId = useSearchParams()?.get("chat") ?? null;
@@ -98,37 +108,37 @@ function JournalDay({ date }: { date: string }) {
   const m = data?.metrics;
   return (
     <div>
-      <FilterBar title={`Journal · ${date}`} />
+      <FilterBar title={t("Journal · {date}", { date })} />
       <div className="grid gap-3 p-4 xl:grid-cols-3">
         <div className="min-w-0 space-y-3 xl:col-span-2">
           {m && m.closedTrades > 0 ? (
             <Card>
               <CardHeader>
-                <CardTitle>Day stats</CardTitle>
+                <CardTitle>{t("Day stats")}</CardTitle>
               </CardHeader>
               <CardContent className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:grid-cols-3 2xl:grid-cols-5">
-                <Stat label="Net P&L">
+                <Stat label={t("Net P&L")}>
                   <Pnl value={m.netPnl} className="font-semibold" />
                 </Stat>
-                <Stat label="Trades">{m.closedTrades}</Stat>
-                <Stat label="Winrate">{fmtPercent(m.winRate)}</Stat>
-                <Stat label="Winners">{m.wins}</Stat>
-                <Stat label="Losers">{m.losses}</Stat>
-                <Stat label="Gross">
+                <Stat label={t("Trades")}>{m.closedTrades}</Stat>
+                <Stat label={t("Winrate")}>{fmtPercent(m.winRate)}</Stat>
+                <Stat label={t("Winners")}>{m.wins}</Stat>
+                <Stat label={t("Losers")}>{m.losses}</Stat>
+                <Stat label={t("Gross")}>
                   <MonetaryValue>{fmtMoney(m.grossPnl)}</MonetaryValue>
                 </Stat>
-                <Stat label="Fees">
+                <Stat label={t("Fees")}>
                   <MonetaryValue>{fmtMoney(m.fees)}</MonetaryValue>
                 </Stat>
-                <Stat label="Volume">{fmtNumber(m.totalVolume, 0)}</Stat>
-                <Stat label="Profit factor">
+                <Stat label={t("Volume")}>{fmtNumber(m.totalVolume, 0)}</Stat>
+                <Stat label={t("Profit factor")}>
                   {m.profitFactorIsInfinite
                     ? "∞"
                     : m.profitFactor === null
                       ? "–"
                       : fmtNumber(m.profitFactor)}
                 </Stat>
-                <Stat label="Expectancy">
+                <Stat label={t("Expectancy")}>
                   <MonetaryValue>
                     {m.expectancy === null ? "–" : fmtMoney(m.expectancy)}
                   </MonetaryValue>
@@ -139,7 +149,7 @@ function JournalDay({ date }: { date: string }) {
             m && (
               <Card>
                 <CardContent className="py-8 text-center text-sm text-muted-foreground">
-                  No closed trades this day.
+                  {t("No closed trades this day.")}
                 </CardContent>
               </Card>
             )
@@ -148,7 +158,7 @@ function JournalDay({ date }: { date: string }) {
           {data && data.intraday.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle>Intraday cumulative net P&L</CardTitle>
+                <CardTitle>{t("Intraday cumulative net P&L")}</CardTitle>
               </CardHeader>
               <CardContent>
                 <EquityArea
@@ -165,7 +175,7 @@ function JournalDay({ date }: { date: string }) {
           {data && data.trades.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle>Trades</CardTitle>
+                <CardTitle>{t("Trades")}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-1">
                 {data.trades.map((trade) => (
@@ -184,10 +194,15 @@ function JournalDay({ date }: { date: string }) {
                               : "secondary"
                         }
                       >
-                        {trade.status.toUpperCase()}
+                        {(STATUS_LABELS[trade.status]
+                          ? tx("status", STATUS_LABELS[trade.status]!)
+                          : trade.status
+                        ).toUpperCase()}
                       </Badge>
                       <span className="font-medium">{trade.symbol}</span>
-                      <span className="text-xs text-muted-foreground">{trade.direction}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {tx("direction", trade.direction)}
+                      </span>
                     </span>
                     <span className="ml-auto flex flex-wrap items-center justify-end gap-x-4 gap-y-1">
                       <span className="tnum text-xs text-muted-foreground">
@@ -224,12 +239,12 @@ function JournalDay({ date }: { date: string }) {
 
         <Card className="h-fit">
           <CardHeader className="flex-row flex-wrap items-center justify-between gap-2">
-            <CardTitle>Day note</CardTitle>
+            <CardTitle>{t("Day note")}</CardTitle>
             <div className="flex items-center gap-2">
               <Button asChild variant="outline" size="sm">
                 <Link href={`/charts?day=${date}`}>
                   <CandlestickChart />
-                  Chart analysis
+                  {t("Chart analysis")}
                 </Link>
               </Button>
               <VoiceNote
@@ -244,9 +259,9 @@ function JournalDay({ date }: { date: string }) {
           </CardHeader>
           <CardContent>
             <p className="mb-3 text-xs text-muted-foreground">
-              This note is shared across accounts. AI recaps use the selected filters and append a
-              labeled section. Shared notes are excluded from filtered AI context. This day's chart
-              analyses are sent as they were that day.
+              {t(
+                "This note is shared across accounts. AI recaps use the selected filters and append a labeled section. Shared notes are excluded from filtered AI context. This day's chart analyses are sent as they were that day.",
+              )}
             </p>
             <div className="mb-3">
               <VoiceMemo kind="day" onInsert={(markdown) => change(appended("\n\n", markdown))} />
@@ -261,7 +276,7 @@ function JournalDay({ date }: { date: string }) {
                 onRecap={({ recap, scope, analyses }) => {
                   setLastRecap({ key: `${date}:${timeZone}:${query}`, text: recap });
                   // Append to the current draft, including edits made while AI was running.
-                  const section = `## AI recap\n\n${scope.label.replace(/[\\`*_{}\[\]<>#]/g, "").replace(/[\r\n]+/g, " ")}\n\n${analysesUsedMarkdown(analyses)}${recap}`;
+                  const section = `## ${t("AI recap")}\n\n${scope.label.replace(/[\\`*_{}\[\]<>#]/g, "").replace(/[\r\n]+/g, " ")}\n\n${analysesUsedMarkdown(analyses)}${recap}`;
                   change(appended("\n\n---\n\n", section));
                 }}
               />
@@ -281,18 +296,21 @@ function JournalDay({ date }: { date: string }) {
               <Skeleton className="h-48" />
             )}
             <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span role="status">{saving}</span>
+              <span role="status">{savingLabel(saving, t)}</span>
               <Button variant="ghost" size="sm" onClick={() => void flush()}>
-                Save now
+                {t("Save now")}
               </Button>
             </div>
             <ReviewExport
               containsFinancialData
               document={{
-                title: `Daily review · ${date}`,
-                subtitle: query ? `Filters: ${query}` : "All accounts",
+                title: t("Daily review · {date}", { date }),
+                subtitle: query ? t("Filters: {filters}", { filters: query }) : t("All accounts"),
                 lines: [
-                  `Closed trades: ${m?.closedTrades ?? 0} | Net P&L: ${m?.netPnl.toFixed(2) ?? "0.00"}`,
+                  t("Closed trades: {count} | Net P&L: {pnl}", {
+                    count: m?.closedTrades ?? 0,
+                    pnl: m?.netPnl.toFixed(2) ?? "0.00",
+                  }),
                   "",
                   noteValue,
                 ],
@@ -308,25 +326,33 @@ function JournalDay({ date }: { date: string }) {
         />
         <Card>
           <CardHeader>
-            <CardTitle>Ask about this day</CardTitle>
+            <CardTitle>{t("Ask about this day")}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="mb-3">
-              <SimilarPast similarTo={{ date }} label="Find similar past days" />
+              <SimilarPast similarTo={{ date }} label={t("Find similar past days")} />
             </div>
             <JournalChat
               key={`${date}:${timeZone}:${query}`}
               target={{ kind: "day", date, filters, timeZone }}
               openId={chatId}
               seed={lastRecap?.key === `${date}:${timeZone}:${query}` ? lastRecap.text : null}
-              placeholder={lastRecap ? "Ask about the recap" : "Ask about this day's trades"}
-              intro="Uses the selected filters, like recaps. The AI can read the day's trades, plans and charts, and compare with other days."
+              placeholder={lastRecap ? t("Ask about the recap") : t("Ask about this day's trades")}
+              intro={t(
+                "Uses the selected filters, like recaps. The AI can read the day's trades, plans and charts, and compare with other days.",
+              )}
             />
           </CardContent>
         </Card>
       </div>
     </div>
   );
+}
+
+/** The autosave status in the journal's language ("Not saved: …" keeps the reason). */
+function savingLabel(status: string, t: (text: string, vars?: Record<string, string>) => string) {
+  const failed = status.match(/^Not saved: (.*)$/s);
+  return failed ? t("Not saved: {reason}", { reason: t(failed[1]!) }) : status && t(status);
 }
 
 function Stat({ label, children }: { label: string; children: React.ReactNode }) {

@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { FlaskConical, WalletCards } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "./ui/select";
 import { postJson, useApi } from "@/lib/use-api";
+import { useI18n } from "./i18n";
 
 interface AccountOption {
   id: string;
@@ -15,6 +16,7 @@ interface AccountOption {
 
 /** Quick account switching; the full Filters panel still supports multiple accounts. */
 export function AccountSelector() {
+  const { t, tn } = useI18n();
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
@@ -27,9 +29,9 @@ export function AccountSelector() {
   const value = selected.length > 1 ? "multiple" : (selected[0] ?? "all");
   const label =
     selected.length > 1
-      ? `${selected.length} accounts`
+      ? tn(selected.length, "{count} account", "{count} accounts")
       : (accounts.find((a) => a.id === selected[0])?.name ??
-        (selected.length ? "Selected account" : "All accounts"));
+        (selected.length ? t("Selected account") : t("All accounts")));
 
   function selectAccount(id: string) {
     const next = new URLSearchParams(params.toString());
@@ -47,7 +49,7 @@ export function AccountSelector() {
       refresh();
       selectAccount(result.accountId);
     } catch (cause) {
-      setDemoError(cause instanceof Error ? cause.message : "Could not load demo data.");
+      setDemoError(cause instanceof Error ? cause.message : t("Could not load demo data."));
     } finally {
       setLoadingDemo(false);
     }
@@ -57,17 +59,17 @@ export function AccountSelector() {
     <div className="relative min-w-0 max-w-full">
       <Select value={value} onValueChange={(value) => void select(value)} disabled={loadingDemo}>
         <SelectTrigger
-          aria-label="Select account"
+          aria-label={t("Select account")}
           className="h-8 w-44 max-w-full rounded-lg text-xs"
         >
           <WalletCards className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           <span className="min-w-0 flex-1 truncate text-left">
-            {loadingDemo ? "Loading demo…" : label}
+            {loadingDemo ? t("Loading demo…") : label}
           </span>
         </SelectTrigger>
         <SelectContent className="rounded-2xl border-white/10 p-1 shadow-2xl" align="end">
           <SelectItem value="all" className="rounded-lg text-xs">
-            All accounts
+            {t("All accounts")}
           </SelectItem>
           {selected.length > 1 && (
             <SelectItem value="multiple" disabled className="text-xs">
@@ -79,8 +81,9 @@ export function AccountSelector() {
             .map((account) => (
               <SelectItem key={account.id} value={account.id} className="rounded-lg text-xs">
                 <span className="block max-w-64 truncate">
-                  {account.name}
-                  {account.archivedAt ? " (archived)" : ""}
+                  {account.archivedAt
+                    ? t("{name} (archived)", { name: account.name })
+                    : account.name}
                 </span>
               </SelectItem>
             ))}
@@ -88,7 +91,7 @@ export function AccountSelector() {
           <SelectItem value={demo?.id ?? "load-demo"} className="rounded-lg text-xs">
             <span className="flex items-center gap-2">
               <FlaskConical className="h-3.5 w-3.5 text-muted-foreground" />
-              {demo?.name ?? "Load demo data"}
+              {demo?.name ?? t("Load demo data")}
             </span>
           </SelectItem>
         </SelectContent>

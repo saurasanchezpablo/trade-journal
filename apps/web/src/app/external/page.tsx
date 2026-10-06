@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useId, useRef, useState } from "react";
+import { Suspense, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { ExternalLink, Plus, RefreshCw, Sparkles, Trash2 } from "lucide-react";
 import { dayKeyOf } from "@luxalgo/journal-core";
 import type { ExternalSummary } from "@/lib/external-summary";
 import { postJson, useApi } from "@/lib/use-api";
 import { FilterBar } from "@/components/filter-bar";
+import { useI18n } from "@/components/i18n";
 import { SectionCard } from "@/components/section-card";
 import { ExternalSummaryView } from "@/components/external-summary-view";
 import { Button } from "@/components/ui/button";
@@ -68,13 +69,48 @@ const STATUS: Record<Status, string> = {
   skipped: "NOT SUMMARISED",
 };
 
-const summaryCount = (n: number) => `${n} ${n === 1 ? "summary" : "summaries"}`;
-
 const SOURCE = {
   captions: "from its captions",
   pasted: "from your transcript",
   video: "watched by Gemini",
 };
+
+type Translate = (text: string, vars?: Record<string, string | number>) => string;
+
+/** A translated sentence with a link where its `{link}` is. */
+function Linked({ text, link }: { text: string; link: ReactNode }) {
+  const [before = "", after = ""] = text.split("{link}");
+  return (
+    <>
+      {before}
+      {link}
+      {after}
+    </>
+  );
+}
+
+/**
+ * A video's detail as the server stored it (English), in the journal's language: the
+ * messages with a number or a reason in them are matched, the rest looked up as they are.
+ */
+function detailText(detail: string, t: Translate): string {
+  let match = /^Older than (\d+) days when first seen\.$/.exec(detail);
+  if (match) return t("Older than {days} days when first seen.", { days: match[1]! });
+  match = /^Shorter than (\d+) minutes \(a Short\)\.$/.exec(detail);
+  if (match) return t("Shorter than {minutes} minutes (a Short).", { minutes: match[1]! });
+  match =
+    /^No captions after two days \((.*)\)\. Paste the transcript, or use Google Gemini as the AI provider to have it watch the video\.$/.exec(
+      detail,
+    );
+  if (match)
+    return t(
+      "No captions after two days ({reason}). Paste the transcript, or use Google Gemini as the AI provider to have it watch the video.",
+      { reason: detailText(match[1]!, t) },
+    );
+  match = /^YouTube says: (.*)$/.exec(detail);
+  if (match) return t("YouTube says: {reason}", { reason: match[1]! });
+  return t(detail);
+}
 
 export default function ExternalPage() {
   return (
@@ -85,6 +121,7 @@ export default function ExternalPage() {
 }
 
 function ExternalAnalysis() {
+  const { t, tn, tx, intl } = useI18n();
   const focus = useSearchParams()?.get("video") ?? null;
   const [channelFilter, setChannelFilter] = useState("");
   const { data, error, refresh } = useApi<State>(
@@ -114,7 +151,7 @@ function ExternalAnalysis() {
       return true;
     } catch (cause) {
       setMessage({
-        text: cause instanceof Error ? cause.message : "It did not work.",
+        text: cause instanceof Error ? cause.message : t("It did not work."),
         error: true,
       });
       return false;
@@ -133,8 +170,10 @@ function ExternalAnalysis() {
       setInput("");
       setMessage({
         text: result.existed
-          ? `You already follow ${result.channel.title}.`
-          : `Following ${result.channel.title}. Its newest video is being summarised.`,
+          ? t("You already follow {channel}.", { channel: result.channel.title })
+          : t("Following {channel}. Its newest video is being summarised.", {
+              channel: result.channel.title,
+            }),
         error: false,
       });
     });
@@ -145,7 +184,7 @@ function ExternalAnalysis() {
   return (
     <div>
       <FilterBar
-        title="External analysis"
+        title={t("External analysis")}
         actions={
           <Button
             size="sm"
@@ -155,33 +194,39 @@ function ExternalAnalysis() {
               void act(
                 "check",
                 () => postJson("/api/external/check", {}),
-                "Checking every channel now.",
+                t("Checking every channel now."),
               )
             }
           >
             <RefreshCw className={data?.checking ? "animate-spin" : undefined} />
-            {data?.checking ? "Checking…" : "Check now"}
+            {data?.checking ? t("Checking…") : t("Check now")}
           </Button>
         }
       />
       <div className="space-y-3 p-4">
         <p className="text-sm text-muted-foreground">
-          Follow YouTube channels whose analysis you watch. Every day the journal looks for new
-          videos and the AI summarises each into its main and secondary scenario, the reasons for
-          each, the author&apos;s trades, and when they would go long or short with the stop loss
-          and take profits. Add a summary to a{" "}
-          <Link href="/journal" className="underline">
-            journal day
-          </Link>{" "}
-          as an external opinion.
+          {t(
+            "Follow YouTube channels whose analysis you watch. Every day the journal looks for new videos and the AI summarises each into its main and secondary scenario, the reasons for each, the author's trades, and when they would go long or short with the stop loss and take profits.",
+          )}{" "}
+          <Linked
+            text={t("Add a summary to a {link} as an external opinion.")}
+            link={
+              <Link href="/journal" className="underline">
+                {t("journal day")}
+              </Link>
+            }
+          />
         </p>
         {data && !data.ai.configured && (
           <p role="status" className="text-sm">
-            Add an AI provider key in{" "}
-            <Link href="/settings" className="underline">
-              Settings
-            </Link>{" "}
-            to summarise videos.
+            <Linked
+              text={t("Add an AI provider key in {link} to summarise videos.")}
+              link={
+                <Link href="/settings" className="underline">
+                  {t("Settings")}
+                </Link>
+              }
+            />
           </p>
         )}
         {message && (
@@ -201,8 +246,8 @@ function ExternalAnalysis() {
         <div className="grid gap-3 xl:grid-cols-3">
           <SectionCard
             id="external-channels"
-            title="Channels"
-            summary={data ? `${data.channels.length} followed` : undefined}
+            title={t("Channels")}
+            summary={data ? t("{count} followed", { count: data.channels.length }) : undefined}
             contentClassName="space-y-3"
           >
             <form
@@ -213,21 +258,21 @@ function ExternalAnalysis() {
               }}
             >
               <input
-                aria-label="YouTube channel"
+                aria-label={t("YouTube channel")}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="@channel, channel link or a video link"
+                placeholder={t("@channel, channel link or a video link")}
                 className="h-9 min-w-0 flex-1 rounded-md border bg-background px-3 text-sm"
               />
               <Button type="submit" size="sm" disabled={!input.trim() || busy !== null}>
                 <Plus />
-                {busy === "follow" ? "Adding…" : "Follow"}
+                {busy === "follow" ? t("Adding…") : t("Follow")}
               </Button>
             </form>
             {data?.channels.length === 0 && (
-              <p className="text-xs text-muted-foreground">No channels yet.</p>
+              <p className="text-xs text-muted-foreground">{t("No channels yet.")}</p>
             )}
-            <ul className="divide-y rounded-md border" aria-label="Followed channels">
+            <ul className="divide-y rounded-md border" aria-label={t("Followed channels")}>
               {data?.channels.map((c) => (
                 <li key={c.id} className="space-y-1 px-3 py-2">
                   <div className="flex items-center gap-2">
@@ -243,7 +288,7 @@ function ExternalAnalysis() {
                       <input
                         type="checkbox"
                         checked={c.enabled}
-                        aria-label={`Check ${c.title} daily`}
+                        aria-label={t("Check {channel} daily", { channel: c.title })}
                         onChange={(e) =>
                           void act("toggle", () =>
                             postJson(
@@ -254,16 +299,22 @@ function ExternalAnalysis() {
                           )
                         }
                       />
-                      Daily
+                      {t("Daily")}
                     </label>
                     <Button
                       type="button"
                       variant="ghost"
                       size="icon"
                       className="h-7 w-7"
-                      aria-label={`Stop following ${c.title}`}
+                      aria-label={t("Stop following {channel}", { channel: c.title })}
                       onClick={() => {
-                        if (confirm(`Stop following ${c.title}? Its summaries are removed too.`))
+                        if (
+                          confirm(
+                            t("Stop following {channel}? Its summaries are removed too.", {
+                              channel: c.title,
+                            }),
+                          )
+                        )
                           void act("remove", () =>
                             postJson("/api/external/channels", { id: c.id }, "DELETE"),
                           );
@@ -274,10 +325,12 @@ function ExternalAnalysis() {
                   </div>
                   <p className="text-xs text-muted-foreground">
                     {c.checkError
-                      ? `Last check failed: ${c.checkError}`
+                      ? t("Last check failed: {error}", { error: detailText(c.checkError, t) })
                       : c.checkedAt
-                        ? `Checked ${new Date(c.checkedAt).toLocaleString(undefined, { timeZone })}`
-                        : "Not checked yet"}
+                        ? t("Checked {time}", {
+                            time: new Date(c.checkedAt).toLocaleString(intl, { timeZone }),
+                          })
+                        : t("Not checked yet")}
                   </p>
                 </li>
               ))}
@@ -286,16 +339,16 @@ function ExternalAnalysis() {
 
           <SectionCard
             id="external-settings"
-            title="Daily check"
+            title={t("Daily check")}
             contentClassName="space-y-2 text-sm"
           >
             {data ? (
               <>
                 <label className="flex flex-wrap items-center gap-2">
-                  Check every day at
+                  {t("Check every day at")}
                   <SettingInput
                     type="time"
-                    label="Daily check time"
+                    label={t("Daily check time")}
                     value={data.settings.checkTime}
                     read={readTime}
                     onCommit={(checkTime) => saveSettings({ checkTime })}
@@ -304,9 +357,9 @@ function ExternalAnalysis() {
                   <span className="text-xs text-muted-foreground">({timeZone})</span>
                 </label>
                 <label className="flex flex-wrap items-center gap-2">
-                  Summaries in
+                  {t("Summaries in")}
                   <select
-                    aria-label="Summary language"
+                    aria-label={t("Summary language")}
                     value={data.settings.language}
                     onChange={(e) => void saveSettings({ language: e.target.value })}
                     className="h-8 rounded-md border bg-background px-2"
@@ -317,43 +370,46 @@ function ExternalAnalysis() {
                   </select>
                 </label>
                 <label className="flex flex-wrap items-center gap-2">
-                  Summarise videos up to
+                  {t("Summarise videos up to")}
                   <SettingInput
                     type="number"
                     min={1}
                     max={30}
-                    label="Maximum age in days"
+                    label={t("Maximum age in days")}
                     value={data.settings.maxAgeDays}
                     read={wholeNumber(1, 30)}
                     onCommit={(maxAgeDays) => saveSettings({ maxAgeDays })}
                     className="h-8 w-16 rounded-md border bg-background px-2"
                   />
-                  days old, skipping those under
+                  {t("days old, skipping those under")}
                   <SettingInput
                     type="number"
                     min={0}
                     max={60}
-                    label="Minimum length in minutes"
+                    label={t("Minimum length in minutes")}
                     value={data.settings.minMinutes}
                     read={wholeNumber(0, 60)}
                     onCommit={(minMinutes) => saveSettings({ minMinutes })}
                     className="h-8 w-16 rounded-md border bg-background px-2"
                   />
-                  minutes
+                  {t("minutes")}
                 </label>
                 <p className="text-xs">
-                  Notifications when a summary is ready, and which channels send them: YouTube
-                  analyses on the{" "}
-                  <Link href="/alerts" className="underline">
-                    Alerts
-                  </Link>{" "}
-                  page.
+                  <Linked
+                    text={t(
+                      "Notifications when a summary is ready, and which channels send them: YouTube analyses on the {link} page.",
+                    )}
+                    link={
+                      <Link href="/alerts" className="underline">
+                        {t("Alerts")}
+                      </Link>
+                    }
+                  />
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Videos are read from their captions (sent to your AI provider to summarise).
-                  Automatic captions can take a few hours to appear, so a new video is tried again
-                  every two hours for two days. With Google Gemini as the provider, a video without
-                  captions is watched instead.
+                  {t(
+                    "Videos are read from their captions (sent to your AI provider to summarise). Automatic captions can take a few hours to appear, so a new video is tried again every two hours for two days. With Google Gemini as the provider, a video without captions is watched instead.",
+                  )}
                 </p>
               </>
             ) : (
@@ -361,14 +417,18 @@ function ExternalAnalysis() {
             )}
           </SectionCard>
 
-          <SectionCard id="external-filter" title="Show" contentClassName="space-y-2 text-sm">
+          <SectionCard
+            id="external-filter"
+            title={tx("filter", "Show")}
+            contentClassName="space-y-2 text-sm"
+          >
             <select
-              aria-label="Channel to show"
+              aria-label={t("Channel to show")}
               value={channelFilter}
               onChange={(e) => setChannelFilter(e.target.value)}
               className="h-8 w-full rounded-md border bg-background px-2"
             >
-              <option value="">Every channel</option>
+              <option value="">{t("Every channel")}</option>
               {data?.channels.map((c) => (
                 <option key={c.channelId} value={c.channelId}>
                   {c.title}
@@ -377,7 +437,11 @@ function ExternalAnalysis() {
             </select>
             <p className="text-xs text-muted-foreground">
               {data
-                ? `${summaryCount(data.videos.filter((v) => v.status === "summarized").length)}, newest first.`
+                ? tn(
+                    data.videos.filter((v) => v.status === "summarized").length,
+                    "{count} summary, newest first.",
+                    "{count} summaries, newest first.",
+                  )
                 : ""}
             </p>
           </SectionCard>
@@ -387,10 +451,12 @@ function ExternalAnalysis() {
           <Skeleton className="h-64" />
         ) : data.videos.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            {data.channels.length ? "No videos yet." : "Follow a channel to see its analysis here."}
+            {data.channels.length
+              ? t("No videos yet.")
+              : t("Follow a channel to see its analysis here.")}
           </p>
         ) : (
-          <ul className="space-y-3" aria-label="Videos">
+          <ul className="space-y-3" aria-label={t("Videos")}>
             {data.videos.map((v, index) => (
               <VideoCard
                 key={v.videoId}
@@ -409,7 +475,10 @@ function ExternalAnalysis() {
 }
 
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
-type Read<T> = (text: string) => { value: T } | { problem: string };
+/** A typed value, or what to type instead (English, with its values, translated on screen). */
+type Read<T> = (
+  text: string,
+) => { value: T } | { problem: string; vars?: Record<string, string | number> };
 const readTime: Read<string> = (text) =>
   TIME.test(text.trim()) ? { value: text.trim() } : { problem: "Enter a time, like 08:00." };
 const wholeNumber =
@@ -418,7 +487,7 @@ const wholeNumber =
     const value = Number(text.trim());
     return text.trim() !== "" && Number.isInteger(value) && value >= min && value <= max
       ? { value }
-      : { problem: `Enter a whole number from ${min} to ${max}.` };
+      : { problem: "Enter a whole number from {min} to {max}.", vars: { min, max } };
   };
 
 /**
@@ -444,7 +513,11 @@ function SettingInput<T extends string | number>({
   className: string;
 }) {
   const [draft, setDraft] = useState<string | null>(null);
-  const [problem, setProblem] = useState<string | null>(null);
+  const t = useI18n().t;
+  const [problem, setProblem] = useState<{
+    text: string;
+    vars?: Record<string, string | number>;
+  } | null>(null);
   // A saved draft stays on screen until the page reloads the setting, so the old value never
   // flashes back: `from` is the value it replaces.
   const [saving, setSaving] = useState<{ from: T } | null>(null);
@@ -456,7 +529,7 @@ function SettingInput<T extends string | number>({
   const commit = async () => {
     if (draft === null || saving) return;
     const result = read(draft);
-    if ("problem" in result) return setProblem(result.problem);
+    if ("problem" in result) return setProblem({ text: result.problem, vars: result.vars });
     setProblem(null);
     if (result.value === value) return setDraft(null);
     setSaving({ from: value });
@@ -491,7 +564,7 @@ function SettingInput<T extends string | number>({
       />
       {problem && (
         <span id={id} role="alert" className="basis-full text-xs text-destructive">
-          {label}: {problem}
+          {label}: {t(problem.text, problem.vars)}
         </span>
       )}
     </>
@@ -511,6 +584,7 @@ function VideoCard({
   focused: boolean;
   onChanged: () => void;
 }) {
+  const { t, tx, intl } = useI18n();
   // Follows the page (the newest summary opens once it is ready) until you open or close it.
   const [chosen, setChosen] = useState<boolean | null>(null);
   const open = chosen ?? initiallyOpen;
@@ -539,7 +613,10 @@ function VideoCard({
       );
       if (done) setNote({ text: done(result), error: false });
     } catch (cause) {
-      setNote({ text: cause instanceof Error ? cause.message : "It did not work.", error: true });
+      setNote({
+        text: cause instanceof Error ? cause.message : t("It did not work."),
+        error: true,
+      });
     } finally {
       setBusy(false);
       onChanged();
@@ -564,38 +641,44 @@ function VideoCard({
               </a>
               <p className="text-xs text-muted-foreground">
                 {video.channelTitle} ·{" "}
-                {new Date(video.publishedAt).toLocaleString(undefined, { timeZone })}
-                {minutes ? ` · ${minutes} min` : ""}
-                {video.source ? ` · ${SOURCE[video.source]}` : ""}
+                {new Date(video.publishedAt).toLocaleString(intl, { timeZone })}
+                {minutes ? ` · ${t("{minutes} min", { minutes })}` : ""}
+                {video.source ? ` · ${t(SOURCE[video.source])}` : ""}
               </p>
             </div>
             <Badge variant={video.status === "summarized" ? "secondary" : "outline"}>
-              {STATUS[video.status]}
+              {tx("video status", STATUS[video.status])}
             </Badge>
           </div>
           {video.status !== "summarized" && video.detail && (
             <p className="text-xs text-muted-foreground">
-              {video.detail}
+              {detailText(video.detail, t)}
               {video.status === "waiting" && video.nextAttemptAt
-                ? ` Next try ${new Date(video.nextAttemptAt).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", timeZone })}.`
+                ? ` ${t("Next try {time}.", {
+                    time: new Date(video.nextAttemptAt).toLocaleTimeString(intl, {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      timeZone,
+                    }),
+                  })}`
                 : ""}
             </p>
           )}
           {video.status === "new" && (
-            <p className="text-xs text-muted-foreground">Being summarised…</p>
+            <p className="text-xs text-muted-foreground">{t("Being summarised…")}</p>
           )}
           {video.summary && open && <ExternalSummaryView summary={video.summary} />}
           <div className="flex flex-wrap items-center gap-2">
             {video.summary && (
               <Button type="button" size="sm" variant="ghost" onClick={() => setChosen(!open)}>
-                {open ? "Hide summary" : "Show summary"}
+                {open ? t("Hide summary") : t("Show summary")}
               </Button>
             )}
             {video.summary && (
               <span className="flex flex-wrap items-center gap-1.5">
                 <input
                   type="date"
-                  aria-label="Journal day"
+                  aria-label={t("Journal day")}
                   value={day}
                   onChange={(e) => e.target.value && setDay(e.target.value)}
                   className="h-8 rounded-md border bg-background px-2 text-sm"
@@ -607,14 +690,14 @@ function VideoCard({
                   disabled={busy}
                   onClick={() =>
                     void post({ action: "add-to-day", date: day }, (r) =>
-                      r.added ? `Added to ${day}.` : (r.reason ?? "Not added."),
+                      r.added ? t("Added to {day}.", { day }) : t(r.reason ?? "Not added."),
                     )
                   }
                 >
-                  Add to journal day
+                  {t("Add to journal day")}
                 </Button>
                 <Link href={`/journal/${day}`} className="text-xs underline">
-                  Open day
+                  {t("Open day")}
                 </Link>
               </span>
             )}
@@ -627,23 +710,23 @@ function VideoCard({
                 onClick={() => void post({ action: "summarize" })}
               >
                 <Sparkles />
-                {video.summary ? "Summarise again" : "Summarise now"}
+                {video.summary ? t("Summarise again") : t("Summarise now")}
               </Button>
             )}
             {video.status !== "new" && (
               <Button type="button" size="sm" variant="ghost" onClick={() => setPasting((v) => !v)}>
-                Paste transcript
+                {t("Paste transcript")}
               </Button>
             )}
           </div>
           {pasting && (
             <div className="space-y-2">
               <textarea
-                aria-label="Transcript"
+                aria-label={t("Transcript")}
                 value={transcript}
                 onChange={(e) => setTranscript(e.target.value)}
                 rows={6}
-                placeholder="Paste the video's transcript (YouTube: … → Show transcript)."
+                placeholder={t("Paste the video's transcript (YouTube: … → Show transcript).")}
                 className="w-full rounded-md border bg-background px-3 py-2 text-sm"
               />
               <Button
@@ -655,7 +738,7 @@ function VideoCard({
                   void post({ action: "transcript", text: transcript });
                 }}
               >
-                Summarise this transcript
+                {t("Summarise this transcript")}
               </Button>
             </div>
           )}

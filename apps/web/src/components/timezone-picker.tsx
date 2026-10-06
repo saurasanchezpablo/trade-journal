@@ -7,6 +7,7 @@ import { timeZoneLabel, timeZoneOptions } from "@/lib/timezone-options";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useI18n } from "@/components/i18n";
 
 export function TimeZonePicker({
   id,
@@ -23,6 +24,7 @@ export function TimeZonePicker({
   disabled?: boolean;
   describedBy?: string;
 }) {
+  const { t, tn } = useI18n();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
@@ -61,16 +63,16 @@ export function TimeZonePicker({
           variant="outline"
           className="w-full min-w-0 justify-between font-normal"
           disabled={disabled}
-          aria-label={`${label}: ${value || "Choose a timezone"}`}
+          aria-label={`${label}: ${value || t("Choose a timezone")}`}
           aria-describedby={describedBy}
         >
-          <span className="truncate">{value ? timeZoneLabel(value) : "Choose a timezone"}</span>
+          <span className="truncate">{value ? timeZoneLabel(value) : t("Choose a timezone")}</span>
           <ChevronsUpDown className="shrink-0 text-muted-foreground" aria-hidden="true" />
         </Button>
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content
-          aria-label={`${label} options`}
+          aria-label={t("{label} options", { label })}
           sideOffset={6}
           collisionPadding={12}
           className="journal-popup journal-menu-surface z-50 flex max-h-[min(24rem,var(--radix-popover-content-available-height))] w-[var(--radix-popover-trigger-width)] max-w-[calc(100vw-24px)] flex-col overflow-hidden rounded-xl border bg-popover p-1.5 text-popover-foreground"
@@ -87,12 +89,12 @@ export function TimeZonePicker({
             <Input
               ref={input}
               role="combobox"
-              aria-label="Search timezones"
+              aria-label={t("Search timezones")}
               aria-expanded={open}
               aria-autocomplete="list"
               aria-controls={listId}
               aria-activedescendant={activeId}
-              placeholder="Search city or timezone…"
+              placeholder={t("Search city or timezone…")}
               className="pl-8"
               value={query}
               autoComplete="off"
@@ -122,7 +124,7 @@ export function TimeZonePicker({
           <div
             id={listId}
             role="listbox"
-            aria-label="Timezones"
+            aria-label={t("Timezones")}
             className="mt-1 min-h-0 overflow-y-auto overscroll-contain"
           >
             {options.map((zone, index) => (
@@ -149,8 +151,8 @@ export function TimeZonePicker({
           </div>
           <p role="status" className="shrink-0 px-2 pb-1 pt-2 text-xs text-muted-foreground">
             {options.length
-              ? `${options.length} timezone${options.length === 1 ? "" : "s"}`
-              : "No matching timezone. Try a city or a full timezone name."}
+              ? tn(options.length, "{count} timezone", "{count} timezones")
+              : t("No matching timezone. Try a city or a full timezone name.")}
           </p>
         </Popover.Content>
       </Popover.Portal>

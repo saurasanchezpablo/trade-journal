@@ -1,4 +1,5 @@
 import { readVizTokens } from "@/components/charts/tokens";
+import { tr } from "@/lib/i18n";
 
 export interface ReviewDocument {
   title: string;
@@ -26,7 +27,10 @@ export async function buildReviewPdf(doc: ReviewDocument, fontBytes: ArrayBuffer
   ];
   if (missing.length)
     throw new Error(
-      `PDF font does not support these characters: ${missing.slice(0, 8).join(" ")}. Remove them for this export, or export a PNG review.`,
+      tr(
+        "PDF font does not support these characters: {characters}. Remove them for this export, or export a PNG review.",
+        { characters: missing.slice(0, 8).join(" ") },
+      ),
     );
   pdf.setTitle(doc.title);
   pdf.setCreator("Trade Journal");
@@ -80,7 +84,7 @@ export async function buildReviewPdf(doc: ReviewDocument, fontBytes: ArrayBuffer
 }
 export async function exportPdf(doc: ReviewDocument) {
   const response = await fetch("/fonts/NotoSans-Regular.ttf");
-  if (!response.ok) throw new Error("Could not load the PDF font.");
+  if (!response.ok) throw new Error(tr("Could not load the PDF font."));
   const bytes = await buildReviewPdf(doc, await response.arrayBuffer());
   return [
     {
@@ -97,7 +101,7 @@ export async function exportPng(doc: ReviewDocument) {
   const t = readVizTokens();
   const canvas = document.createElement("canvas"),
     ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Image export is unavailable in this browser.");
+  if (!ctx) throw new Error(tr("Image export is unavailable in this browser."));
   canvas.width = 1200;
   ctx.font = "24px Arial";
   const lines: string[] = [];
@@ -136,7 +140,7 @@ export async function exportPng(doc: ReviewDocument) {
     chunk.forEach((line, j) => ctx.fillText(line, 80, 244 + j * 38));
     const blob = await new Promise<Blob>((resolve, reject) =>
       canvas.toBlob(
-        (b) => (b ? resolve(b) : reject(new Error("Image export failed."))),
+        (b) => (b ? resolve(b) : reject(new Error(tr("Image export failed.")))),
         "image/png",
       ),
     );

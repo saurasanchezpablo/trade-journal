@@ -5,6 +5,7 @@ import { SectionCard } from "@/components/section-card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { openChartAlerts, type OpenChartAlerts as Choices } from "@/lib/alert-preferences";
+import { useT } from "@/components/i18n";
 
 const KINDS: { key: "lines" | "zones" | "indicators"; label: string }[] = [
   { key: "lines", label: "Price crosses a horizontal line, ray or trend line" },
@@ -17,6 +18,7 @@ const KINDS: { key: "lines" | "zones" | "indicators"; label: string }[] = [
  * page and as a browser notification when allowed. Remembered per browser.
  */
 export function OpenChartAlerts() {
+  const t = useT();
   const [choices, setChoices] = useState<Choices>(() => openChartAlerts.read());
   const [permission, setPermission] = useState<NotificationPermission | "unsupported">("default");
   useEffect(() => {
@@ -31,8 +33,8 @@ export function OpenChartAlerts() {
   return (
     <SectionCard
       id="alerts-open-chart"
-      title="While a chart is open"
-      summary={choices.on ? "On in this browser" : "Off in this browser"}
+      title={t("While a chart is open")}
+      summary={choices.on ? t("On in this browser") : t("Off in this browser")}
       contentClassName="space-y-3"
     >
       <label className="flex items-start gap-2 text-sm">
@@ -42,10 +44,11 @@ export function OpenChartAlerts() {
           onCheckedChange={(checked) => change({ on: checked === true })}
         />
         <span>
-          Alert me on the Charts page while it is open and live
+          {t("Alert me on the Charts page while it is open and live")}
           <span className="block text-xs text-muted-foreground">
-            In this browser only (also the On/Off switch of the chart&apos;s Alerts card). Indicator
-            alerts only run here, never in the background.
+            {t(
+              "In this browser only (also the On/Off switch of the chart's Alerts card). Indicator alerts only run here, never in the background.",
+            )}
           </span>
         </span>
       </label>
@@ -57,13 +60,13 @@ export function OpenChartAlerts() {
               disabled={!choices.on}
               onCheckedChange={(checked) => change({ [kind.key]: checked === true })}
             />
-            {kind.label}
+            {t(kind.label)}
           </label>
         ))}
       </fieldset>
       {permission === "default" && (
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-          The page can also show them as browser notifications.
+          {t("The page can also show them as browser notifications.")}
           <Button
             type="button"
             size="sm"
@@ -72,13 +75,13 @@ export function OpenChartAlerts() {
               void Notification.requestPermission().then((answer) => setPermission(answer))
             }
           >
-            Allow notifications
+            {t("Allow notifications")}
           </Button>
         </div>
       )}
       {permission === "denied" && (
         <p className="text-xs text-muted-foreground">
-          Browser notifications are blocked for this site, so these show on the page only.
+          {t("Browser notifications are blocked for this site, so these show on the page only.")}
         </p>
       )}
     </SectionCard>

@@ -19,6 +19,7 @@ import { NOT_A_NUMBER, parseDecimalInput } from "@/lib/number-input";
 import { fmtMoney } from "@/lib/utils";
 import { formatTimestamp } from "@/lib/timezone";
 import { MonetaryValue, MonetaryField } from "@/components/privacy";
+import { useI18n } from "@/components/i18n";
 
 interface AccountRow {
   id: string;
@@ -56,6 +57,7 @@ const failureMessage = (error: unknown, fallback: string) =>
   error instanceof Error ? error.message : fallback;
 
 function Accounts() {
+  const { t, tx } = useI18n();
   const { data, error, refresh } = useApi<{ accounts: AccountRow[]; timeZone?: string }>(
     "/api/accounts",
   );
@@ -73,7 +75,7 @@ function Accounts() {
     try {
       await run();
     } catch (cause) {
-      alert(failureMessage(cause, fallback));
+      alert(failureMessage(cause, t(fallback)));
       refresh();
     }
   };
@@ -86,10 +88,17 @@ function Accounts() {
       }>(id, { action: "sync" });
       if (outcome.skipped > 0)
         alert(
-          `Sync finished with ${outcome.inserted} new fills. ${outcome.skipped} broker record(s) were skipped: ${outcome.skippedReasons.join(" ")}`,
+          t(
+            "Sync finished with {inserted} new fills. {skipped} broker record(s) were skipped: {reasons}",
+            {
+              inserted: outcome.inserted,
+              skipped: outcome.skipped,
+              reasons: outcome.skippedReasons.join(" "),
+            },
+          ),
         );
     } catch (error) {
-      alert(error instanceof Error ? error.message : "Sync failed");
+      alert(error instanceof Error ? error.message : t("Sync failed"));
     } finally {
       setSyncing(null);
     }
@@ -101,20 +110,20 @@ function Accounts() {
       <div className="grid gap-3 p-4 md:grid-cols-2">
         {error && (
           <div role="alert" className="col-span-full space-y-2 text-sm text-destructive">
-            <p>Could not load your accounts: {error}</p>
+            <p>{t("Could not load your accounts: {error}", { error })}</p>
             <Button variant="outline" onClick={refresh}>
-              Try again
+              {t("Try again")}
             </Button>
           </div>
         )}
         {!data && !error && (
           <p className="col-span-full py-16 text-center text-sm text-muted-foreground">
-            Loading accounts…
+            {t("Loading accounts…")}
           </p>
         )}
         {data?.accounts.length === 0 && (
           <p className="col-span-full py-16 text-center text-sm text-muted-foreground">
-            No accounts yet. Create one on the Import page.
+            {t("No accounts yet. Create one on the Import page.")}
           </p>
         )}
         {data?.accounts.map((account) => (
@@ -123,7 +132,7 @@ function Accounts() {
               <CardTitle className="min-w-0 flex-1 text-base font-semibold normal-case tracking-normal text-foreground">
                 <span className="block break-words">{account.name}</span>
                 <Badge variant="secondary" className="mt-1.5 mr-2">
-                  {account.kind}
+                  {tx("account kind", account.kind)}
                 </Badge>
                 {account.broker && (
                   <span className="text-xs font-normal text-muted-foreground">
@@ -139,7 +148,7 @@ function Accounts() {
                     className="h-8 w-8"
                     disabled={syncing === account.id}
                     onClick={() => void sync(account.id)}
-                    title="Sync now"
+                    title={t("Sync now")}
                   >
                     <RefreshCw className={syncing === account.id ? "animate-spin" : undefined} />
                   </Button>
@@ -148,7 +157,7 @@ function Accounts() {
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8"
-                  title={account.archivedAt ? "Unarchive" : "Archive"}
+                  title={account.archivedAt ? t("Unarchive") : t("Archive")}
                   onClick={() =>
                     void attempt("Could not update the account.", () =>
                       action(account.id, {
@@ -163,10 +172,14 @@ function Accounts() {
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                  title="Delete account"
+                  title={t("Delete account")}
                   onClick={async () => {
                     if (
-                      confirm(`Delete "${account.name}" and ALL its trades? This cannot be undone.`)
+                      confirm(
+                        t('Delete "{name}" and ALL its trades? This cannot be undone.', {
+                          name: account.name,
+                        }),
+                      )
                     ) {
                       await attempt("Could not delete the account.", async () => {
                         await postJson(`/api/accounts/${account.id}`, undefined, "DELETE");
@@ -182,15 +195,19 @@ function Accounts() {
             <CardContent className="space-y-3">
               {account.snapshot && (
                 <div className="text-sm">
-                  Broker equity:{" "}
+                  {t("Broker equity:")}{" "}
                   <span className="tnum font-medium">
                     <MonetaryValue>
                       {accountMoney(account.snapshot.equity, account.currency)}
                     </MonetaryValue>
                   </span>
                   <span className="ml-2 text-xs text-muted-foreground">
-                    {account.snapshot.positions.length} open positions · synced{" "}
-                    {account.lastSyncAt ? formatTimestamp(account.lastSyncAt, timeZone) : "never"}
+                    {t("{count} open positions · synced {when}", {
+                      count: account.snapshot.positions.length,
+                      when: account.lastSyncAt
+                        ? formatTimestamp(account.lastSyncAt, timeZone)
+                        : t("never"),
+                    })}
                   </span>
                 </div>
               )}
@@ -200,7 +217,7 @@ function Accounts() {
                     htmlFor={`initial-balance-${account.id}`}
                     className="text-xs text-muted-foreground"
                   >
-                    Initial balance (anchors drawdown %)
+                    {t("Initial balance (anchors drawdown %)")}
                   </label>
                   <MonetaryField>
                     <Input
@@ -215,7 +232,7 @@ function Accounts() {
                           input.value = account.initialBalance
                             ? String(account.initialBalance)
                             : "";
-                          alert(NOT_A_NUMBER);
+                          alert(t(NOT_A_NUMBER));
                           return;
                         }
                         if ((value ?? 0) === account.initialBalance) return;
@@ -227,7 +244,9 @@ function Accounts() {
                           );
                         } catch (error) {
                           alert(
-                            error instanceof Error ? error.message : "Could not save the balance.",
+                            error instanceof Error
+                              ? error.message
+                              : t("Could not save the balance."),
                           );
                         }
                         refresh();
@@ -240,7 +259,7 @@ function Accounts() {
                     htmlFor={`profit-calc-${account.id}`}
                     className="text-xs text-muted-foreground"
                   >
-                    Profit calculation
+                    {t("Profit calculation")}
                   </label>
                   <Select
                     value={account.profitCalcMethod}
@@ -261,7 +280,7 @@ function Accounts() {
                     <SelectContent>
                       <SelectItem value="fifo">FIFO</SelectItem>
                       <SelectItem value="lifo">LIFO</SelectItem>
-                      <SelectItem value="wavg">Weighted average</SelectItem>
+                      <SelectItem value="wavg">{t("Weighted average")}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -271,34 +290,44 @@ function Accounts() {
                   variant="outline"
                   size="sm"
                   onClick={async () => {
-                    if (confirm(`Clear ALL trades from "${account.name}"? The account stays.`)) {
+                    if (
+                      confirm(
+                        t('Clear ALL trades from "{name}"? The account stays.', {
+                          name: account.name,
+                        }),
+                      )
+                    ) {
                       await attempt("Could not clear the account.", () =>
                         action(account.id, { action: "clear" }),
                       );
                     }
                   }}
                 >
-                  Clear trades
+                  {t("Clear trades")}
                 </Button>
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={async () => {
                     const others = data.accounts.filter((candidate) => candidate.id !== account.id);
-                    if (others.length === 0) return alert("No other account to transfer into.");
+                    if (others.length === 0) return alert(t("No other account to transfer into."));
                     const target = prompt(
-                      `Transfer all data into which account?\n${others.map((candidate, index) => `${index + 1}. ${candidate.name}`).join("\n")}\n\nEnter a number:`,
+                      t("Transfer all data into which account?\n{list}\n\nEnter a number:", {
+                        list: others
+                          .map((candidate, index) => `${index + 1}. ${candidate.name}`)
+                          .join("\n"),
+                      }),
                     );
                     const chosen = others[Number(target) - 1];
                     if (target !== null && !chosen)
-                      return alert("Enter one of the listed numbers.");
+                      return alert(t("Enter one of the listed numbers."));
                     if (chosen)
                       await attempt("Could not transfer the data.", () =>
                         action(account.id, { action: "transfer", toAccountId: chosen.id }),
                       );
                   }}
                 >
-                  Transfer data
+                  {t("Transfer data")}
                 </Button>
               </div>
             </CardContent>

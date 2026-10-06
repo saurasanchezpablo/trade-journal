@@ -3,6 +3,7 @@
 import { Check, SlidersHorizontal } from "lucide-react";
 import { RESOLUTIONS, type Resolution } from "@/lib/market-data";
 import { toggleTimeframe } from "@/lib/chart-timeframes";
+import { useT } from "./i18n";
 import { Button } from "./ui/button";
 import {
   DropdownMenu,
@@ -23,12 +24,13 @@ export function TimeframeBar({
   onChange: (resolution: Resolution) => void;
   onShownChange: (shown: Resolution[]) => void;
 }) {
+  const t = useT();
   // The current size stays reachable even if it was removed from the bar.
   const sizes = shown.includes(value) ? shown : [...shown, value];
   return (
     <div
       role="radiogroup"
-      aria-label="Candle size"
+      aria-label={t("Candle size")}
       className="flex items-center rounded-md border p-0.5"
     >
       {(Object.keys(RESOLUTIONS) as Resolution[])
@@ -54,14 +56,14 @@ export function TimeframeBar({
             size="icon"
             variant="ghost"
             className="size-7"
-            aria-label="Choose candle sizes"
+            aria-label={t("Choose candle sizes")}
           >
             <SlidersHorizontal className="size-3.5" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-44">
           <p className="px-2 pb-1 pt-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            Show on the bar
+            {t("Show on the bar")}
           </p>
           {(Object.keys(RESOLUTIONS) as Resolution[]).map((resolution) => (
             <DropdownMenuItem

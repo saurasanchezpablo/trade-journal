@@ -34,7 +34,7 @@ import { PrivacyToggle } from "./privacy";
 import { ThemeToggle } from "./theme";
 import { SignOutButton } from "./sign-out";
 import { UpdateNotice } from "./update-notice";
-import { useT } from "./i18n";
+import { useI18n } from "./i18n";
 import { PageTransition } from "./page-transition";
 import { Button } from "./ui/button";
 import { HoverHint } from "./ui/tooltip";
@@ -105,7 +105,7 @@ function NavLink({
 }
 
 export function Shell({ children }: { children: React.ReactNode }) {
-  const t = useT();
+  const { t, tx } = useI18n();
   const pathname = usePathname();
   const search = useSearchParams();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -178,7 +178,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         <NavLink
           key={href}
           href={href === "/prop-firms" ? href : filterQuery.size ? `${href}?${filterQuery}` : href}
-          label={t(label)}
+          label={tx("nav", label)}
           icon={icon}
           collapsed={collapsed}
           active={href === "/" ? pathname === "/" : pathname.startsWith(href)}

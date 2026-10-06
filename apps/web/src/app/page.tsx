@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense, useState } from "react";
+import { Fragment, Suspense, useState, type ReactNode } from "react";
 import type {
   CalendarMonth,
   DayStats,
@@ -30,6 +30,7 @@ import {
   Trophy,
 } from "lucide-react";
 import { FilterBar, useFilters } from "@/components/filter-bar";
+import { useI18n } from "@/components/i18n";
 import { AddTradeDialog } from "@/components/add-trade-dialog";
 import { DashboardLayout } from "@/components/dashboard-layout";
 import { MonetaryValue } from "@/components/privacy";
@@ -80,12 +81,13 @@ export default function DashboardPage() {
 }
 
 function Dashboard() {
+  const { t } = useI18n();
   const { query } = useFilters();
   const { data, loading, error, refresh } = useApi<StatsPayload>(`/api/stats?${query}`);
 
   return (
     <>
-      <FilterBar title="Dashboard" actions={<AddTradeDialog onSaved={refresh} />} />
+      <FilterBar title={t("Dashboard")} actions={<AddTradeDialog onSaved={refresh} />} />
       <DashboardContent
         data={data}
         loading={loading}
@@ -110,20 +112,21 @@ function DashboardContent({
   refresh: () => void;
   query: string;
 }) {
+  const { t, tn, tx, intl } = useI18n();
   if (loading && !data) return <DashboardSkeleton />;
   if (!data)
     return (
       <div>
         <div className="space-y-3 p-4">
           <p role="alert" className="text-sm text-destructive">
-            {error ?? "Could not load the dashboard."}
+            {error ?? t("Could not load the dashboard.")}
           </p>
           <button
             type="button"
             className="rounded-md border px-3 py-2 text-sm hover:bg-accent"
             onClick={refresh}
           >
-            Try again
+            {t("Try again")}
           </button>
         </div>
       </div>
@@ -136,7 +139,7 @@ function DashboardContent({
     return query ? (
       <div>
         <p className="p-12 text-center text-sm text-muted-foreground">
-          No trades match these filters. Clear or adjust Filters to see more results.
+          {t("No trades match these filters. Clear or adjust Filters to see more results.")}
         </p>
       </div>
     ) : (
@@ -146,8 +149,10 @@ function DashboardContent({
     return (
       <div className="p-4">
         <p className="rounded-lg border p-4 text-sm">
-          These accounts use different currencies ({currencies.join(", ")}). Select accounts with
-          the same currency in Filters to compare monetary results.
+          {t(
+            "These accounts use different currencies ({currencies}). Select accounts with the same currency in Filters to compare monetary results.",
+            { currencies: currencies.join(", ") },
+          )}
         </p>
       </div>
     );
@@ -191,9 +196,9 @@ function DashboardContent({
             content: (
               <Card className="h-full">
                 <StatHeader
-                  title="Net P&L"
+                  title={t("Net P&L")}
                   icon={CircleDollarSign}
-                  hint="Realized profit and loss net of fees, over the selected range."
+                  hint={t("Realized profit and loss net of fees, over the selected range.")}
                 />
                 <CardContent>
                   <Pnl
@@ -209,15 +214,24 @@ function DashboardContent({
                       )}
                     >
                       {weekDelta >= 0 ? "▲" : "▼"}{" "}
-                      <MonetaryValue>
-                        {fmtMoney(Math.abs(weekDelta), currency).replace("+", "")}
-                      </MonetaryValue>{" "}
-                      vs prior 7d
+                      {withNodes(t("{amount} vs prior 7d"), {
+                        amount: (
+                          <MonetaryValue>
+                            {fmtMoney(Math.abs(weekDelta), currency).replace("+", "")}
+                          </MonetaryValue>
+                        ),
+                      })}
                     </div>
                   )}
                   <div className="mt-1 text-xs text-muted-foreground">
-                    {m.closedTrades} closed trades ·{" "}
-                    <MonetaryValue>{fmtMoney(m.fees, currency)}</MonetaryValue> fees
+                    {withNodes(
+                      tn(
+                        m.closedTrades,
+                        "{count} closed trade · {fees} fees",
+                        "{count} closed trades · {fees} fees",
+                      ),
+                      { fees: <MonetaryValue>{fmtMoney(m.fees, currency)}</MonetaryValue> },
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -231,16 +245,16 @@ function DashboardContent({
             content: (
               <Card className="h-full">
                 <StatHeader
-                  title="Trade win %"
+                  title={t("Trade win %")}
                   icon={Target}
-                  hint="Winning trades divided by all closed trades, including breakevens."
+                  hint={t("Winning trades divided by all closed trades, including breakevens.")}
                 />
                 <CardContent className="flex items-center justify-between gap-2">
-                  <Gauge value={m.winRate} label="Trade win rate" />
+                  <Gauge value={m.winRate} label={t("Trade win rate")} />
                   <div className="space-y-0.5 text-xs text-muted-foreground">
-                    <div>{m.wins} W</div>
-                    <div>{m.breakevens} BE</div>
-                    <div>{m.losses} L</div>
+                    <div>{t("{count} W", { count: m.wins })}</div>
+                    <div>{t("{count} BE", { count: m.breakevens })}</div>
+                    <div>{t("{count} L", { count: m.losses })}</div>
                   </div>
                 </CardContent>
               </Card>
@@ -254,9 +268,9 @@ function DashboardContent({
             content: (
               <Card className="h-full">
                 <StatHeader
-                  title="Profit factor"
+                  title={t("Profit factor")}
                   icon={Scale}
-                  hint="Gross profit ÷ gross loss. Above 1 means the wins outweigh the losses."
+                  hint={t("Gross profit ÷ gross loss. Above 1 means the wins outweigh the losses.")}
                 />
                 <CardContent>
                   <div className="text-3xl font-semibold tracking-tight tnum">
@@ -267,7 +281,7 @@ function DashboardContent({
                         : fmtNumber(m.profitFactor)}
                   </div>
                   <div className="mt-1 text-xs text-muted-foreground">
-                    gross profit ÷ gross loss
+                    {t("gross profit ÷ gross loss")}
                   </div>
                 </CardContent>
               </Card>
@@ -281,13 +295,15 @@ function DashboardContent({
             content: (
               <Card className="h-full">
                 <StatHeader
-                  title="Day win %"
+                  title={t("Day win %")}
                   icon={CalendarCheck2}
-                  hint="Green trading days ÷ all trading days in the selected range."
+                  hint={t("Green trading days ÷ all trading days in the selected range.")}
                 />
                 <CardContent className="flex items-center justify-between gap-2">
-                  <Gauge value={m.dayWinRate} label="Day win rate" />
-                  <div className="text-xs text-muted-foreground">{m.tradingDays} days</div>
+                  <Gauge value={m.dayWinRate} label={t("Day win rate")} />
+                  <div className="text-xs text-muted-foreground">
+                    {tn(m.tradingDays, "{count} day", "{count} days")}
+                  </div>
                 </CardContent>
               </Card>
             ),
@@ -300,9 +316,11 @@ function DashboardContent({
             content: (
               <Card className="h-full">
                 <StatHeader
-                  title="Avg win / loss"
+                  title={t("Avg win / loss")}
                   icon={ArrowUpDown}
-                  hint="Average winning trade ÷ average losing trade. The bar shows the two to scale."
+                  hint={t(
+                    "Average winning trade ÷ average losing trade. The bar shows the two to scale.",
+                  )}
                 />
                 <CardContent>
                   <div className="text-3xl font-semibold tracking-tight tnum">
@@ -312,7 +330,7 @@ function DashboardContent({
                     <div
                       className="journal-progress-visual mt-2 flex h-1.5 gap-0.5"
                       role="img"
-                      aria-label="Average win vs average loss, to scale"
+                      aria-label={t("Average win vs average loss, to scale")}
                     >
                       <span
                         className="rounded-full bg-profit"
@@ -324,22 +342,26 @@ function DashboardContent({
                     </div>
                   )}
                   <div className="mt-1 text-xs text-muted-foreground">
-                    <span className="text-profit">
-                      {m.avgWin === null ? (
-                        "–"
-                      ) : (
-                        <MonetaryValue>{fmtMoney(m.avgWin, currency)}</MonetaryValue>
-                      )}
-                    </span>
-                    {" avg win · "}
-                    <span className="text-loss">
-                      {m.avgLoss === null ? (
-                        "–"
-                      ) : (
-                        <MonetaryValue>{fmtMoney(-m.avgLoss, currency)}</MonetaryValue>
-                      )}
-                    </span>
-                    {" avg loss"}
+                    {withNodes(t("{win} avg win · {loss} avg loss"), {
+                      win: (
+                        <span className="text-profit">
+                          {m.avgWin === null ? (
+                            "–"
+                          ) : (
+                            <MonetaryValue>{fmtMoney(m.avgWin, currency)}</MonetaryValue>
+                          )}
+                        </span>
+                      ),
+                      loss: (
+                        <span className="text-loss">
+                          {m.avgLoss === null ? (
+                            "–"
+                          ) : (
+                            <MonetaryValue>{fmtMoney(-m.avgLoss, currency)}</MonetaryValue>
+                          )}
+                        </span>
+                      ),
+                    })}
                   </div>
                 </CardContent>
               </Card>
@@ -356,8 +378,9 @@ function DashboardContent({
                   <div className="flex min-w-0 items-center gap-1">
                     <CardTitle>Edge Score</CardTitle>
                     <HelpHint heading="Edge Score">
-                      A 0–100 score combining win rate, profit factor, average win/loss, drawdown,
-                      recovery, and consistency. Requires at least five closed trades.
+                      {t(
+                        "A 0–100 score combining win rate, profit factor, average win/loss, drawdown, recovery, and consistency. Requires at least five closed trades.",
+                      )}
                     </HelpHint>
                   </div>
                   <span className="text-2xl font-semibold tracking-tight tnum">
@@ -372,16 +395,18 @@ function DashboardContent({
                 <CardContent className="dashboard-visual-card-content">
                   {edgeScore.score === null ? (
                     <p className="py-8 text-center text-sm text-muted-foreground">
-                      Needs 5+ closed trades. The formula is open:{" "}
-                      <a
-                        className="underline"
-                        href="https://github.com/LuxAlgo/trade-journal/blob/main/docs/edge-score.md"
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        read it
-                      </a>
-                      .
+                      {withNodes(t("Needs 5+ closed trades. The formula is open: {link}."), {
+                        link: (
+                          <a
+                            className="underline"
+                            href="https://github.com/LuxAlgo/trade-journal/blob/main/docs/edge-score.md"
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            {t("read it")}
+                          </a>
+                        ),
+                      })}
                     </p>
                   ) : (
                     <EdgeRadar components={edgeScore.components} height="100%" />
@@ -398,10 +423,11 @@ function DashboardContent({
             content: (
               <Card className="dashboard-visual-card h-full">
                 <CardHeader className="flex-row items-center justify-between">
-                  <CardTitle>Daily net cumulative P&L</CardTitle>
-                  <HelpHint heading="Cumulative P&L">
-                    Running total of net profit and loss over the selected period. The drawdown bars
-                    below show declines from the running equity peak.
+                  <CardTitle>{t("Daily net cumulative P&L")}</CardTitle>
+                  <HelpHint heading={t("Cumulative P&L")}>
+                    {t(
+                      "Running total of net profit and loss over the selected period. The drawdown bars below show declines from the running equity peak.",
+                    )}
                   </HelpHint>
                 </CardHeader>
                 <CardContent>
@@ -424,10 +450,11 @@ function DashboardContent({
             content: (
               <Card className="dashboard-visual-card h-full">
                 <CardHeader className="flex-row items-center justify-between">
-                  <CardTitle>Net daily P&L</CardTitle>
-                  <HelpHint heading="Daily P&L">
-                    Net profit or loss for each trading day. Bars above zero are profitable; bars
-                    below zero are losses.
+                  <CardTitle>{t("Net daily P&L")}</CardTitle>
+                  <HelpHint heading={t("Daily P&L")}>
+                    {t(
+                      "Net profit or loss for each trading day. Bars above zero are profitable; bars below zero are losses.",
+                    )}
                   </HelpHint>
                 </CardHeader>
                 <CardContent className="dashboard-visual-card-content">
@@ -450,7 +477,7 @@ function DashboardContent({
                 <CardHeader className="flex-row items-center justify-between">
                   <CardTitle>
                     {new Date(Date.UTC(data.calendar.year, data.calendar.month - 1)).toLocaleString(
-                      "en-US",
+                      intl,
                       { month: "long", year: "numeric", timeZone: "UTC" },
                     )}
                   </CardTitle>
@@ -458,7 +485,7 @@ function DashboardContent({
                     href={`/calendar?${query}`}
                     className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
                   >
-                    Full calendar
+                    {t("Full calendar")}
                   </Link>
                 </CardHeader>
                 <CardContent>
@@ -475,20 +502,22 @@ function DashboardContent({
             content: (
               <Card className="h-full">
                 <CardHeader>
-                  <CardTitle>Activity</CardTitle>
+                  <CardTitle>{t("Activity")}</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <Tabs defaultValue="recent">
                     <TabsList className="h-8">
                       <TabsTrigger value="recent" className="text-xs">
-                        Recent trades
+                        {t("Recent trades")}
                       </TabsTrigger>
                       <TabsTrigger value="open" className="text-xs">
-                        Open positions
+                        {t("Open positions")}
                       </TabsTrigger>
                     </TabsList>
                     <TabsContent value="recent" className="space-y-1">
-                      {data.recentTrades.length === 0 && <Empty label="No closed trades yet" />}
+                      {data.recentTrades.length === 0 && (
+                        <Empty label={t("No closed trades yet")} />
+                      )}
                       {data.recentTrades.map((trade) => (
                         <Link
                           key={trade.key}
@@ -505,7 +534,7 @@ function DashboardContent({
                                     : "secondary"
                               }
                             >
-                              {trade.status.toUpperCase()}
+                              {statusLabel(trade.status, tx).toUpperCase()}
                             </Badge>
                             {trade.symbol}
                           </span>
@@ -519,14 +548,18 @@ function DashboardContent({
                       ))}
                     </TabsContent>
                     <TabsContent value="open" className="space-y-1">
-                      {data.openPositions.length === 0 && <Empty label="Flat: no open positions" />}
+                      {data.openPositions.length === 0 && (
+                        <Empty label={t("Flat: no open positions")} />
+                      )}
                       {data.openPositions.map((position) => (
                         <div
                           key={position.key}
                           className="dashboard-activity-row flex items-center justify-between rounded-md px-2 py-1.5 text-sm"
                         >
                           <span className="flex items-center gap-2">
-                            <Badge variant="secondary">{position.direction.toUpperCase()}</Badge>
+                            <Badge variant="secondary">
+                              {directionLabel(position.direction, t).toUpperCase()}
+                            </Badge>
                             {position.symbol}
                           </span>
                           <span className="tnum text-xs text-muted-foreground">
@@ -549,9 +582,9 @@ function DashboardContent({
             content: (
               <Card className="h-full">
                 <StatHeader
-                  title="Max drawdown"
+                  title={t("Max drawdown")}
                   icon={TrendingDown}
-                  hint="Largest peak-to-trough drop of the cumulative P&L curve."
+                  hint={t("Largest peak-to-trough drop of the cumulative P&L curve.")}
                 />
                 <CardContent>
                   <div className="text-xl font-semibold tnum text-loss">
@@ -559,9 +592,10 @@ function DashboardContent({
                   </div>
                   <div className="mt-1 text-xs text-muted-foreground">
                     {m.maxDrawdownPct === null
-                      ? "set an initial balance for %"
+                      ? t("set an initial balance for %")
                       : fmtPercent(m.maxDrawdownPct)}
-                    {m.recoveryFactor !== null && ` · recovery ${fmtNumber(m.recoveryFactor)}x`}
+                    {m.recoveryFactor !== null &&
+                      ` · ${t("recovery {value}x", { value: fmtNumber(m.recoveryFactor) })}`}
                   </div>
                 </CardContent>
               </Card>
@@ -575,20 +609,25 @@ function DashboardContent({
             content: (
               <Card className="h-full">
                 <StatHeader
-                  title="Streaks"
+                  title={t("Streaks")}
                   icon={Flame}
-                  hint="Current run of consecutive wins (W) or losses (L), with the best and worst runs."
+                  hint={t(
+                    "Current run of consecutive wins (W) or losses (L), with the best and worst runs.",
+                  )}
                 />
                 <CardContent>
                   <div className="text-xl font-semibold tnum">
                     {m.currentStreak > 0
-                      ? `${m.currentStreak}W`
+                      ? t("{count}W", { count: m.currentStreak })
                       : m.currentStreak < 0
-                        ? `${-m.currentStreak}L`
+                        ? t("{count}L", { count: -m.currentStreak })
                         : "–"}
                   </div>
                   <div className="mt-1 text-xs text-muted-foreground">
-                    best {m.maxWinStreak}W · worst {m.maxLossStreak}L
+                    {t("best {best}W · worst {worst}L", {
+                      best: m.maxWinStreak,
+                      worst: m.maxLossStreak,
+                    })}
                   </div>
                 </CardContent>
               </Card>
@@ -602,9 +641,11 @@ function DashboardContent({
             content: (
               <Card className="h-full">
                 <StatHeader
-                  title="Expectancy / trade"
+                  title={t("Expectancy / trade")}
                   icon={Sigma}
-                  hint="Average net P&L per closed trade: what one more trade is worth on your numbers."
+                  hint={t(
+                    "Average net P&L per closed trade: what one more trade is worth on your numbers.",
+                  )}
                 />
                 <CardContent>
                   {m.expectancy === null ? (
@@ -618,8 +659,13 @@ function DashboardContent({
                   )}
                   <div className="mt-1 text-xs text-muted-foreground">
                     {m.avgRealizedR !== null && m.tradesWithRisk > 0
-                      ? `avg ${fmtNumber(m.avgRealizedR)}R over ${m.tradesWithRisk} risk-tagged trades`
-                      : "tag stop-losses to unlock R multiples"}
+                      ? tn(
+                          m.tradesWithRisk,
+                          "avg {r}R over {count} risk-tagged trade",
+                          "avg {r}R over {count} risk-tagged trades",
+                          { r: fmtNumber(m.avgRealizedR) },
+                        )
+                      : t("tag stop-losses to unlock R multiples")}
                   </div>
                 </CardContent>
               </Card>
@@ -633,14 +679,14 @@ function DashboardContent({
             content: (
               <Card className="h-full">
                 <StatHeader
-                  title="Avg duration"
+                  title={t("Avg duration")}
                   icon={Timer}
-                  hint="Average time from first entry fill to final exit."
+                  hint={t("Average time from first entry fill to final exit.")}
                 />
                 <CardContent>
                   <div className="text-xl font-semibold tnum">{fmtDuration(m.avgDurationMs)}</div>
                   <div className="mt-1 text-xs text-muted-foreground">
-                    winners vs losers in Reports
+                    {t("winners vs losers in Reports")}
                   </div>
                 </CardContent>
               </Card>
@@ -654,9 +700,9 @@ function DashboardContent({
             content: (
               <Card className="h-full">
                 <StatHeader
-                  title="Best / worst day"
+                  title={t("Best / worst day")}
                   icon={Trophy}
-                  hint="Highest and lowest single-day net P&L in the selected range."
+                  hint={t("Highest and lowest single-day net P&L in the selected range.")}
                 />
                 <CardContent className="space-y-1">
                   {bestDay && (
@@ -693,10 +739,11 @@ function DashboardContent({
             content: (
               <Card className="h-full">
                 <CardHeader className="flex-row items-center justify-between">
-                  <CardTitle>Trade time performance</CardTitle>
-                  <HelpHint heading="Trade time performance">
-                    Trades grouped by their opening hour. The upper chart shows net P&L; the lower
-                    chart shows trade count.
+                  <CardTitle>{t("Trade time performance")}</CardTitle>
+                  <HelpHint heading={t("Trade time performance")}>
+                    {t(
+                      "Trades grouped by their opening hour. The upper chart shows net P&L; the lower chart shows trade count.",
+                    )}
                   </HelpHint>
                 </CardHeader>
                 <CardContent>
@@ -718,6 +765,34 @@ function DashboardContent({
   );
 }
 
+/** A translated sentence with React nodes in its `{name}` slots (a link, a private amount). */
+function withNodes(text: string, nodes: Record<string, ReactNode>): ReactNode {
+  return text.split(/(\{\w+\})/).map((part, index) => {
+    const name = /^\{(\w+)\}$/.exec(part)?.[1];
+    return (
+      <Fragment key={index}>{name !== undefined && name in nodes ? nodes[name] : part}</Fragment>
+    );
+  });
+}
+
+const STATUS_LABELS: Record<string, string> = {
+  win: "Win",
+  loss: "Loss",
+  breakeven: "Breakeven",
+  open: "Open",
+};
+
+/** A trade status chip's word ("win" → "Win"), or the raw status when it is unknown. */
+function statusLabel(status: string, tx: (context: string, text: string) => string) {
+  const label = STATUS_LABELS[status];
+  return label ? tx("status", label) : status;
+}
+
+/** A position's side ("long" → "Long"), or the raw value when it is unknown. */
+function directionLabel(direction: string, t: (text: string) => string) {
+  return direction === "long" ? t("Long") : direction === "short" ? t("Short") : direction;
+}
+
 /** Stat-tile header: quiet label left, metric icon with an explainer right. */
 function StatHeader({
   title,
@@ -728,11 +803,12 @@ function StatHeader({
   hint: string;
   icon: React.ComponentType<{ className?: string }>;
 }) {
+  const { t } = useI18n();
   return (
     <CardHeader className="flex-row items-center justify-between space-y-0">
       <CardTitle>{title}</CardTitle>
       <Tooltip>
-        <TooltipTrigger className="cursor-help" aria-label={`About ${title}`}>
+        <TooltipTrigger className="cursor-help" aria-label={t("About {title}", { title })}>
           <Icon className="h-3.5 w-3.5 text-muted-foreground/70" />
         </TooltipTrigger>
         <TooltipContent>
@@ -749,6 +825,7 @@ function Empty({ label }: { label: string }) {
 }
 
 function EmptyState() {
+  const { t } = useI18n();
   const [loadingDemo, setLoadingDemo] = useState(false);
   const [demoError, setDemoError] = useState("");
   const loadDemo = async () => {
@@ -758,31 +835,32 @@ function EmptyState() {
       await postJson("/api/demo", {});
       window.location.reload();
     } catch (error) {
-      setDemoError(error instanceof Error ? error.message : "Could not load the demo data.");
+      setDemoError(error instanceof Error ? error.message : t("Could not load the demo data."));
       setLoadingDemo(false);
     }
   };
   return (
     <div>
       <div className="flex flex-col items-center justify-center gap-3 px-4 py-24 text-center">
-        <h2 className="text-xl font-semibold">Your journal is empty</h2>
+        <h2 className="text-xl font-semibold">{t("Your journal is empty")}</h2>
         <p className="max-w-md text-sm text-muted-foreground">
-          Connect a broker for automatic sync, upload a statement from 10+ platforms (including your
-          TradeZella export), or add trades manually.
+          {t(
+            "Connect a broker for automatic sync, upload a statement from 10+ platforms (including your TradeZella export), or add trades manually.",
+          )}
         </p>
         <div className="flex flex-wrap items-center justify-center gap-2">
           <Link
             href="/import"
             className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
           >
-            Import your first trades
+            {t("Import your first trades")}
           </Link>
           <button
             onClick={loadDemo}
             disabled={loadingDemo}
             className="rounded-md border px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
           >
-            {loadingDemo ? "Loading…" : "Load demo data"}
+            {loadingDemo ? t("Loading…") : t("Load demo data")}
           </button>
         </div>
         {demoError && (
@@ -791,7 +869,7 @@ function EmptyState() {
           </p>
         )}
         <p className="text-xs text-muted-foreground">
-          Demo data lands in its own account; delete it anytime under Accounts.
+          {t("Demo data lands in its own account; delete it anytime under Accounts.")}
         </p>
       </div>
     </div>

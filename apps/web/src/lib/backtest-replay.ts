@@ -7,6 +7,7 @@ import {
   type Resolution,
 } from "./market-data";
 import type { SessionSettings } from "./backtest-session";
+import { tr, trx } from "./i18n";
 
 /**
  * The pure parts of a replay backtest's page: what the chart shows at a higher timeframe
@@ -69,6 +70,12 @@ export interface ChartMark {
   exit: boolean;
 }
 
+/** A pending order's chart label: side and order type, then its size. */
+const ORDER_LEVELS: Record<"long" | "short", Record<"market" | "limit" | "stop", string>> = {
+  long: { market: "Buy market {qty}", limit: "Buy limit {qty}", stop: "Buy stop {qty}" },
+  short: { market: "Sell market {qty}", limit: "Sell limit {qty}", stop: "Sell stop {qty}" },
+};
+
 /**
  * The position's entry, stop and target, pending orders, and every revealed fill: `through`
  * is where the revealed candles end (the next candle's open), so a fill there is not yet shown.
@@ -85,7 +92,7 @@ export function chartOverlays(
       price: position.entryPrice,
       from: position.entryTime,
       kind: "entry",
-      text: `${position.side === "long" ? "Long" : "Short"} ${position.qty}`,
+      text: tr(position.side === "long" ? "Long {qty}" : "Short {qty}", { qty: position.qty }),
     });
     if (position.stop !== null)
       levels.push({
@@ -93,7 +100,7 @@ export function chartOverlays(
         price: position.stop,
         from: position.entryTime,
         kind: "stop",
-        text: "Stop",
+        text: trx("chart level", "Stop"),
       });
     if (position.target !== null)
       levels.push({
@@ -101,7 +108,7 @@ export function chartOverlays(
         price: position.target,
         from: position.entryTime,
         kind: "target",
-        text: "Target",
+        text: tr("Target"),
       });
   }
   for (const order of state.orders)
@@ -110,7 +117,7 @@ export function chartOverlays(
       price: order.price,
       from: order.placedAt,
       kind: "order",
-      text: `${order.side === "long" ? "Buy" : "Sell"} ${order.type} ${order.qty}`,
+      text: tr(ORDER_LEVELS[order.side][order.type], { qty: order.qty }),
     });
   const marks: ChartMark[] = [];
   for (const trade of state.trades) {
@@ -120,7 +127,7 @@ export function chartOverlays(
         time: trade.entryTime,
         price: trade.entryPrice,
         side: trade.side,
-        text: trade.side === "long" ? "Buy" : "Sell",
+        text: tr(trade.side === "long" ? "Buy" : "Sell"),
         exit: false,
       });
     if (trade.exitTime < through)
@@ -130,7 +137,11 @@ export function chartOverlays(
         price: trade.exitPrice,
         side: trade.side,
         text:
-          trade.exitReason === "stop" ? "Stop" : trade.exitReason === "target" ? "Target" : "Exit",
+          trade.exitReason === "stop"
+            ? trx("chart level", "Stop")
+            : trade.exitReason === "target"
+              ? tr("Target")
+              : tr("Exit"),
         exit: true,
       });
   }
@@ -140,7 +151,7 @@ export function chartOverlays(
       time: position.entryTime,
       price: position.entryPrice,
       side: position.side,
-      text: position.side === "long" ? "Buy" : "Sell",
+      text: tr(position.side === "long" ? "Buy" : "Sell"),
       exit: false,
     });
   return { levels, marks };

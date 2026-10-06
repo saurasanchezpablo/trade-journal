@@ -6,9 +6,11 @@ import { postAiStream } from "@/lib/ai-stream";
 import { Markdown } from "./rich-editor";
 import { Button } from "./ui/button";
 import { SectionCard } from "./section-card";
+import { useI18n } from "./i18n";
 
 /** An AI review of a week of journal days: trades, plan grades and your Keep/Fix lessons. */
 export function WeeklyReview({ timeZone }: { timeZone: string }) {
+  const { t } = useI18n();
   // Today in the journal's time zone (which loads after the page) until you pick a week.
   const [picked, setEnd] = useState<string | null>(null);
   const end = picked ?? dayKeyOf(new Date().toISOString(), timeZone);
@@ -37,7 +39,7 @@ export function WeeklyReview({ timeZone }: { timeZone: string }) {
       if (!request.signal.aborted) setReview(result);
     } catch (cause) {
       if (!request.signal.aborted)
-        setError(cause instanceof Error ? cause.message : "Could not write the review.");
+        setError(cause instanceof Error ? cause.message : t("Could not write the review."));
     } finally {
       if (!request.signal.aborted) setBusy(false);
     }
@@ -45,12 +47,12 @@ export function WeeklyReview({ timeZone }: { timeZone: string }) {
   return (
     <SectionCard
       id="journal-weekly-review"
-      title="Weekly review"
+      title={t("Weekly review")}
       contentClassName="space-y-2 text-sm"
     >
       <div className="flex flex-wrap items-center gap-2">
         <label className="flex items-center gap-2 text-xs text-muted-foreground">
-          Week ending
+          {t("Week ending")}
           <input
             type="date"
             value={end}
@@ -65,7 +67,7 @@ export function WeeklyReview({ timeZone }: { timeZone: string }) {
           disabled={busy}
           onClick={() => void write()}
         >
-          {busy ? "Writing…" : "Write the review"}
+          {busy ? t("Writing…") : t("Write the review")}
         </Button>
         {review && (
           <Button
@@ -74,13 +76,14 @@ export function WeeklyReview({ timeZone }: { timeZone: string }) {
             variant="ghost"
             onClick={() => void navigator.clipboard?.writeText(review.review)}
           >
-            Copy
+            {t("Copy")}
           </Button>
         )}
       </div>
       <p className="text-xs text-muted-foreground">
-        Uses the week&apos;s trades (all accounts), your plan grades and trade links, and the Keep
-        and Fix lists in your day notes.
+        {t(
+          "Uses the week's trades (all accounts), your plan grades and trade links, and the Keep and Fix lists in your day notes.",
+        )}
       </p>
       {error && (
         <p role="alert" className="text-destructive">
@@ -90,7 +93,7 @@ export function WeeklyReview({ timeZone }: { timeZone: string }) {
       {busy && writing && (
         <article
           className="rounded-md border p-3"
-          aria-label="Review being written"
+          aria-label={t("Review being written")}
           aria-live="polite"
         >
           <Markdown externalImages="ask">{writing}</Markdown>
@@ -99,7 +102,7 @@ export function WeeklyReview({ timeZone }: { timeZone: string }) {
       {review && !busy && (
         <article
           className="rounded-md border p-3"
-          aria-label={`Review of ${review.from} to ${review.to}`}
+          aria-label={t("Review of {from} to {to}", { from: review.from, to: review.to })}
         >
           <Markdown externalImages="ask">{review.review}</Markdown>
         </article>

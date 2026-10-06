@@ -7,11 +7,17 @@ import { CalendarDays } from "lucide-react";
 import { Input } from "./input";
 import { Button } from "./button";
 import { formatDateInput, parseDateInput } from "@/lib/date-input";
+import { useI18n, useT } from "@/components/i18n";
 
 // The calendar is loaded on demand, not in every page's initial filter-bar bundle.
 const Calendar = dynamic(() => import("./calendar").then((module) => module.Calendar), {
-  loading: () => <div role="status" aria-label="Loading calendar" className="h-[300px]" />,
+  loading: () => <CalendarLoading />,
 });
+
+function CalendarLoading() {
+  const t = useT();
+  return <div role="status" aria-label={t("Loading calendar")} className="h-[300px]" />;
+}
 
 export function DatePicker({
   value,
@@ -28,6 +34,7 @@ export function DatePicker({
   max?: string;
   disabled?: boolean;
 }) {
+  const { locale, t } = useI18n();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(value);
   const [invalid, setInvalid] = useState(false);
@@ -79,7 +86,9 @@ export function DatePicker({
             <button
               type="button"
               disabled={disabled}
-              aria-label={`Choose ${label.toLowerCase()} date`}
+              aria-label={t("Choose {label} date", {
+                label: locale === "en" ? label.toLowerCase() : label,
+              })}
               className="absolute top-0 right-0 flex size-9 items-center justify-center rounded-r-md text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
             >
               <CalendarDays aria-hidden="true" className="size-4" />
@@ -87,15 +96,23 @@ export function DatePicker({
           </Popover.Trigger>
           {invalid && (
             <span id={errorId} role="alert" className="mt-1 block text-xs text-destructive">
-              Enter a valid date (YYYY-MM-DD){max ? ` on or before ${max}` : ""}
-              {min ? ` on or after ${min}` : ""}.
+              {max && min
+                ? t("Enter a valid date (YYYY-MM-DD) on or before {max} on or after {min}.", {
+                    max,
+                    min,
+                  })
+                : max
+                  ? t("Enter a valid date (YYYY-MM-DD) on or before {max}.", { max })
+                  : min
+                    ? t("Enter a valid date (YYYY-MM-DD) on or after {min}.", { min })
+                    : t("Enter a valid date (YYYY-MM-DD).")}
             </span>
           )}
         </span>
       </Popover.Anchor>
       <Popover.Portal>
         <Popover.Content
-          aria-label={`${label} calendar`}
+          aria-label={t("{label} calendar", { label })}
           align="start"
           sideOffset={8}
           collisionPadding={12}
@@ -111,7 +128,7 @@ export function DatePicker({
           />
           <div className="mt-3 flex items-center justify-between border-t pt-2">
             <Button variant="ghost" size="sm" disabled={!draft} onClick={() => select("")}>
-              Clear
+              {t("Clear")}
             </Button>
             <Button
               variant="ghost"
@@ -119,7 +136,7 @@ export function DatePicker({
               disabled={!allowed(today)}
               onClick={() => select(today)}
             >
-              Today
+              {t("Today")}
             </Button>
           </div>
         </Popover.Content>

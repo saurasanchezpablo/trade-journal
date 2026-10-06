@@ -2,12 +2,14 @@
 
 import { useApi } from "@/lib/use-api";
 import type { UpdateStatus } from "@/server/update-check";
+import { useT } from "./i18n";
 
 /**
  * A quiet line in the sidebar when a newer release of the journal is published: no popup,
  * nothing to dismiss, a link to the release and its notes. Nothing shows otherwise.
  */
 export function UpdateNotice() {
+  const t = useT();
   const { data } = useApi<UpdateStatus>("/api/update");
   if (!data?.available || !data.url) return null;
   return (
@@ -17,9 +19,11 @@ export function UpdateNotice() {
         target="_blank"
         rel="noreferrer"
         className="text-primary underline-offset-2 hover:underline"
-        title={`${data.name ?? data.version} is available: see what is new`}
+        title={t("{release} is available: see what is new", {
+          release: data.name ?? data.version ?? "",
+        })}
       >
-        A new update is available
+        {t("A new update is available")}
       </a>
     </div>
   );

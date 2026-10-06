@@ -8,6 +8,7 @@ import { MonetaryField } from "./privacy";
 import { ChevronDown, CircleHelp } from "lucide-react";
 import { HoverHint } from "./ui/tooltip";
 import { DatePicker } from "./ui/date-picker";
+import { useI18n, useT } from "./i18n";
 const FIELD_HINTS: Record<string, string> = {
   From: "First included date. Closed trades use their closing day; open trades use their opening day.",
   To: "Last included date. Dates follow the journal time zone.",
@@ -25,16 +26,20 @@ const FIELD_HINTS: Record<string, string> = {
   "Minutes held": "Time between opening and closing a trade, measured in minutes.",
 };
 export const fieldClass = "h-9 w-full min-w-0 rounded-md border bg-background px-2 text-sm";
+/** A labelled filter field. `label` may be the English text: it is translated here. */
 export function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  const t = useT();
+  const shown = t(label);
+  const hint = FIELD_HINTS[label.split(" · ")[0]!];
   return (
     <label className="journal-filter-field grid min-w-0 gap-1 text-xs text-muted-foreground">
       <span className="flex items-center gap-1.5">
-        {label}
-        {FIELD_HINTS[label.split(" · ")[0]!] && (
-          <HoverHint heading={label} content={FIELD_HINTS[label.split(" · ")[0]!]}>
+        {shown}
+        {hint && (
+          <HoverHint heading={shown} content={t(hint)}>
             <span
               tabIndex={0}
-              aria-label={`About ${label}`}
+              aria-label={t("About {label}", { label: shown })}
               className="inline-flex cursor-help rounded-sm text-muted-foreground/70 outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <CircleHelp aria-hidden="true" className="h-3 w-3" />
@@ -53,6 +58,7 @@ export function FilterFields({
   value: AnalysisFilters;
   onChange: (v: AnalysisFilters) => void;
 }) {
+  const { t, tx } = useI18n();
   const { data: accounts } = useApi<{
     accounts: { id: string; name: string; archivedAt: string | null }[];
   }>("/api/accounts");
@@ -67,12 +73,12 @@ export function FilterFields({
           <DatePicker
             value={value[key] ?? ""}
             onValueChange={(next) => set(key, next)}
-            label={label}
+            label={t(label)}
           />
         ) : (
           <input
             className={fieldClass}
-            aria-label={label}
+            aria-label={t(label)}
             type={type}
             step={type === "number" ? "any" : undefined}
             value={value[key] ?? ""}
@@ -90,7 +96,7 @@ export function FilterFields({
           value={value[key] ?? ""}
           onValueChange={(next) => set(key, next)}
         >
-          <option value="">All</option>
+          <option value="">{t("All")}</option>
           {choices.map(([v, l]) => (
             <option key={v} value={v}>
               {l}
@@ -115,29 +121,32 @@ export function FilterFields({
         {input("tag", "Required tags (comma-separated)")}
         {input("mistake", "Required mistakes")}
         {select("direction", "Direction", [
-          ["long", "Long"],
-          ["short", "Short"],
+          ["long", t("Long")],
+          ["short", t("Short")],
         ])}
         {select("status", "Outcome", [
-          ["closed", "All closed"],
-          ["open", "Open"],
-          ["win", "Win"],
-          ["loss", "Loss"],
-          ["breakeven", "Breakeven"],
+          ["closed", t("All closed")],
+          ["open", tx("status", "Open")],
+          ["win", tx("status", "Win")],
+          ["loss", tx("status", "Loss")],
+          ["breakeven", t("Breakeven")],
         ])}
         {select("reviewed", "Review status", [
-          ["yes", "Reviewed"],
-          ["no", "Unreviewed"],
+          ["yes", t("Reviewed")],
+          ["no", t("Unreviewed")],
         ])}
         {select(
           "assetClass",
           "Asset class",
-          ["equity", "futures", "forex", "option", "crypto", "cfd", "other"].map((v) => [v, v]),
+          ["equity", "futures", "forex", "option", "crypto", "cfd", "other"].map((v) => [
+            v,
+            tx("asset class", v),
+          ]),
         )}
       </div>
       <fieldset className="journal-filter-accounts rounded-lg border p-3">
         <legend className="px-1 text-xs text-muted-foreground">
-          Accounts · none selected means all
+          {t("Accounts · none selected means all")}
         </legend>
         <div className="flex flex-wrap gap-3">
           {accounts?.accounts
@@ -160,7 +169,7 @@ export function FilterFields({
       </fieldset>
       <details className="journal-filter-advanced">
         <summary className="flex cursor-pointer items-center justify-between gap-3 text-sm">
-          <span>Size, price, risk and time</span>
+          <span>{t("Size, price, risk and time")}</span>
           <ChevronDown aria-hidden="true" className="h-4 w-4 shrink-0 text-muted-foreground" />
         </summary>
         <div className="journal-filter-advanced-grid mt-3 grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 md:grid-cols-4">
@@ -196,7 +205,7 @@ export function FilterFields({
                   set("weekdays", [...days].join(","));
                 }}
               />
-              {day}
+              {tx("weekday", day)}
             </label>
           ))}
         </div>

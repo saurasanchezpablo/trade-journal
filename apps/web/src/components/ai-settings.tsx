@@ -16,8 +16,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { OptionSelect } from "./ui/option-select";
+import { useT } from "./i18n";
 
 export function AiSettings() {
+  const t = useT();
   const { data, error, loading, refresh } = useApi<AiSettingsPayload>("/api/settings");
   const [provider, setProvider] = useState<AiProvider>("anthropic");
   const [model, setModel] = useState(AI_DEFAULT_MODELS.anthropic);
@@ -56,10 +58,10 @@ export function AiSettings() {
         "PATCH",
       );
       setApiKey("");
-      setSaved(remove ? `${name} key removed.` : `${name} settings saved.`);
+      setSaved(remove ? t("{name} key removed.", { name }) : t("{name} settings saved.", { name }));
       refresh();
     } catch (cause) {
-      setFailure(cause instanceof Error ? cause.message : "Couldn’t save AI settings.");
+      setFailure(cause instanceof Error ? cause.message : t("Couldn’t save AI settings."));
     } finally {
       setBusy(false);
     }
@@ -68,23 +70,25 @@ export function AiSettings() {
   return (
     <Card id="ai-settings" className="scroll-mt-24">
       <CardHeader>
-        <CardTitle>AI (bring your own key)</CardTitle>
+        <CardTitle>{t("AI (bring your own key)")}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
         <p className="text-sm text-muted-foreground">
-          Use Anthropic, OpenAI or Google Gemini for recaps, trade critiques, and “ask your
-          journal”. Your key is encrypted at rest. AI requests go from your server directly to the
-          provider you select.
+          {t(
+            "Use Anthropic, OpenAI or Google Gemini for recaps, trade critiques, and “ask your journal”. Your key is encrypted at rest. AI requests go from your server directly to the provider you select.",
+          )}
         </p>
         {data && (
           <p className="text-xs text-muted-foreground">
-            Active provider: {AI_PROVIDER_NAMES[data.aiProvider]} ·{" "}
-            {data.aiConfigured ? "Key configured" : "Not configured"}
+            {t("Active provider: {provider} · {status}", {
+              provider: AI_PROVIDER_NAMES[data.aiProvider],
+              status: data.aiConfigured ? t("Key configured") : t("Not configured"),
+            })}
           </p>
         )}
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1">
-            <Label htmlFor="ai-provider">Provider</Label>
+            <Label htmlFor="ai-provider">{t("Provider")}</Label>
             <OptionSelect
               id="ai-provider"
               value={provider}
@@ -106,7 +110,7 @@ export function AiSettings() {
             </OptionSelect>
           </div>
           <div className="space-y-1">
-            <Label htmlFor="ai-model">Model ID</Label>
+            <Label htmlFor="ai-model">{t("Model ID")}</Label>
             <Input
               id="ai-model"
               value={model}
@@ -120,13 +124,16 @@ export function AiSettings() {
           </div>
         </div>
         <p className="text-xs text-muted-foreground">
-          Use a text model available to your provider account. Each provider keeps its own model and
-          key.
+          {t(
+            "Use a text model available to your provider account. Each provider keeps its own model and key.",
+          )}
           {provider === "google" &&
-            " On Gemini's free tier, Google may use what you send (your trades and notes) to improve its products, and people may review it; a key from a Cloud project with billing enabled keeps it out."}
+            ` ${t(
+              "On Gemini's free tier, Google may use what you send (your trades and notes) to improve its products, and people may review it; a key from a Cloud project with billing enabled keeps it out.",
+            )}`}
         </p>
         <div className="space-y-1">
-          <Label htmlFor="ai-api-key">{name} API key</Label>
+          <Label htmlFor="ai-api-key">{t("{name} API key", { name })}</Label>
           <Input
             id="ai-api-key"
             type="password"
@@ -136,16 +143,23 @@ export function AiSettings() {
               setApiKey(event.target.value);
               setSaved("");
             }}
-            placeholder={connection?.configured ? "Key configured" : AI_KEY_PLACEHOLDERS[provider]}
+            placeholder={
+              connection?.configured ? t("Key configured") : AI_KEY_PLACEHOLDERS[provider]
+            }
             autoComplete="off"
             spellCheck={false}
           />
           <p className="text-xs text-muted-foreground">
             {environment
-              ? `Using ${connection?.environmentKey ?? AI_KEY_ENVIRONMENT[provider][0]} from the server environment. Change or remove that variable on the server to update the key.`
+              ? t(
+                  "Using {variable} from the server environment. Change or remove that variable on the server to update the key.",
+                  {
+                    variable: connection?.environmentKey ?? AI_KEY_ENVIRONMENT[provider][0] ?? "",
+                  },
+                )
               : connection?.configured
-                ? "Leave blank to keep your saved key, or enter a replacement."
-                : "Add your API key, then save to use this provider."}
+                ? t("Leave blank to keep your saved key, or enter a replacement.")
+                : t("Add your API key, then save to use this provider.")}
           </p>
         </div>
         {(error || failure) && (
@@ -163,11 +177,11 @@ export function AiSettings() {
             disabled={disabled || !model.trim() || (!apiKey.trim() && !connection?.configured)}
             onClick={() => save()}
           >
-            {busy ? "Saving…" : "Save AI settings"}
+            {busy ? t("Saving…") : t("Save AI settings")}
           </Button>
           {connection?.source === "saved" && (
             <Button variant="outline" disabled={disabled} onClick={() => save(true)}>
-              Remove {name} key
+              {t("Remove {name} key", { name })}
             </Button>
           )}
         </div>

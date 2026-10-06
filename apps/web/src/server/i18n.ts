@@ -1,4 +1,11 @@
-import { isLocale, translate, translateCount, type Locale, type Vars } from "@/lib/i18n";
+import {
+  isLocale,
+  translate,
+  translateCount,
+  translateIn,
+  type Locale,
+  type Vars,
+} from "@/lib/i18n";
 import { getSetting, setSetting } from "./settings";
 
 /** The journal's language, one setting for every browser (Settings → Language). */
@@ -17,3 +24,5 @@ export function setLocale(locale: Locale) {
 export const serverT = (text: string, vars?: Vars) => translate(getLocale(), text, vars);
 export const serverTn = (count: number, one: string, other: string, vars?: Vars) =>
   translateCount(getLocale(), count, one, other, vars);
+export const serverTx = (context: string, text: string, vars?: Vars) =>
+  translateIn(getLocale(), context, text, vars);

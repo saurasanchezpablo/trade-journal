@@ -16,6 +16,7 @@ import {
 import { ArrowUpDown, Check, Columns3, Download, Tag, Trash2 } from "lucide-react";
 import { dayKeyOf, returnOnNotional, type TradeMetrics } from "@luxalgo/journal-core";
 import { FilterBar, useFilters } from "@/components/filter-bar";
+import { useI18n } from "@/components/i18n";
 import { Pnl } from "@/components/pnl";
 import { MonetaryValue } from "@/components/privacy";
 import { Badge } from "@/components/ui/badge";
@@ -62,6 +63,14 @@ const features = tableFeatures({
 
 const EMPTY_TRADES: TradeRow[] = [];
 
+/** The displayed word for a trade status (the API value stays as it is). */
+const STATUS_LABEL: Record<string, string> = {
+  open: "Open",
+  win: "Win",
+  loss: "Loss",
+  breakeven: "Breakeven",
+};
+
 export default function TradesPage() {
   return (
     <Suspense fallback={<Loading />}>
@@ -71,6 +80,7 @@ export default function TradesPage() {
 }
 
 function Trades() {
+  const { t, tn, tx } = useI18n();
   const { query } = useFilters();
   const { data, error, refresh } = useApi<{
     trades: TradeRow[];
@@ -102,7 +112,7 @@ function Trades() {
                   : false
             }
             onCheckedChange={(value) => table.toggleAllRowsSelected(value === true)}
-            aria-label="Select all matching trades"
+            aria-label={t("Select all matching trades")}
           />
         ),
         cell: ({ row }) => (
@@ -110,24 +120,26 @@ function Trades() {
             checked={row.getIsSelected()}
             onCheckedChange={(value) => row.toggleSelected(value === true)}
             onClick={(event) => event.stopPropagation()}
-            aria-label="Select trade"
+            aria-label={t("Select trade")}
           />
         ),
       },
       {
         id: "closedAt",
         accessorKey: "closedAt",
-        header: "Close date",
+        header: t("Close date"),
         cell: ({ getValue }) => (
           <span className="text-muted-foreground">
-            {getValue<string | null>() ? dayKeyOf(getValue<string>(), timeZone) : "open"}
+            {getValue<string | null>()
+              ? dayKeyOf(getValue<string>(), timeZone)
+              : tx("status", "Open").toLowerCase()}
           </span>
         ),
       },
       {
         id: "symbol",
         accessorKey: "symbol",
-        header: "Symbol",
+        header: t("Symbol"),
         cell: ({ row, getValue }) => (
           <span className="flex items-center gap-2 font-medium">
             {/* A real link, so keyboard users and new tabs reach the trade too. */}
@@ -138,19 +150,21 @@ function Trades() {
             >
               {getValue<string>()}
             </Link>
-            <span className="text-xs text-muted-foreground">{row.original.direction}</span>
+            <span className="text-xs text-muted-foreground">
+              {row.original.direction === "short" ? t("short") : t("long")}
+            </span>
           </span>
         ),
       },
       {
         id: "status",
         accessorKey: "status",
-        header: "Status",
+        header: t("Status"),
         cell: ({ getValue }) => {
           const status = getValue<string>();
           return (
             <Badge variant={status === "win" ? "profit" : status === "loss" ? "loss" : "secondary"}>
-              {status.toUpperCase()}
+              {tx("status", STATUS_LABEL[status] ?? status).toUpperCase()}
             </Badge>
           );
         },
@@ -158,13 +172,13 @@ function Trades() {
       {
         id: "quantity",
         accessorKey: "quantity",
-        header: "Volume",
+        header: t("Volume"),
         cell: ({ getValue }) => <span className="tnum">{fmtNumber(getValue<number>(), 4)}</span>,
       },
       {
         id: "avgEntry",
         accessorKey: "avgEntry",
-        header: "Entry",
+        header: t("Entry"),
         cell: ({ getValue }) => (
           <span className="tnum">
             <MonetaryValue>{fmtNumber(getValue<number>())}</MonetaryValue>
@@ -174,7 +188,7 @@ function Trades() {
       {
         id: "avgExit",
         accessorKey: "avgExit",
-        header: "Exit",
+        header: t("Exit"),
         cell: ({ getValue }) => (
           <span className="tnum">
             <MonetaryValue>
@@ -186,7 +200,7 @@ function Trades() {
       {
         id: "netPnl",
         accessorKey: "netPnl",
-        header: "Net P&L",
+        header: t("Net P&L"),
         cell: ({ getValue }) => <Pnl value={getValue<number>()} />,
       },
       {
@@ -196,13 +210,13 @@ function Trades() {
             ...row,
             contractMultiplier: row.contractMultiplier ?? undefined,
           }) ?? 0,
-        header: "Net ROI",
+        header: t("Net ROI"),
         cell: ({ getValue }) => <span className="tnum">{fmtPercent(getValue<number>(), 2)}</span>,
       },
       {
         id: "fees",
         accessorKey: "fees",
-        header: "Fees",
+        header: t("Fees"),
         cell: ({ getValue }) => (
           <span className="tnum text-muted-foreground">
             <MonetaryValue>{fmtMoney(getValue<number>())}</MonetaryValue>
@@ -212,7 +226,7 @@ function Trades() {
       {
         id: "durationMs",
         accessorKey: "durationMs",
-        header: "Duration",
+        header: t("Duration"),
         cell: ({ getValue }) => (
           <span className="text-muted-foreground">{fmtDuration(getValue<number | null>())}</span>
         ),
@@ -220,7 +234,7 @@ function Trades() {
       {
         id: "executionCount",
         accessorKey: "executionCount",
-        header: "Execs",
+        header: t("Execs"),
         cell: ({ getValue }) => (
           <span className="tnum text-muted-foreground">{getValue<number>()}</span>
         ),
@@ -229,7 +243,7 @@ function Trades() {
         id: "tags",
         accessorKey: "tags",
         enableSorting: false,
-        header: "Tags",
+        header: t("Tags"),
         cell: ({ getValue }) => (
           <span className="flex max-w-40 flex-wrap gap-1">
             {getValue<string[]>().map((tag) => (
@@ -243,7 +257,7 @@ function Trades() {
       {
         id: "rating",
         accessorKey: "rating",
-        header: "Rating",
+        header: t("Rating"),
         cell: ({ getValue }) => {
           const rating = getValue<number | null>();
           return (
@@ -256,7 +270,7 @@ function Trades() {
       {
         id: "reviewed",
         accessorKey: "reviewed",
-        header: "Reviewed",
+        header: t("Reviewed"),
         cell: ({ getValue }) =>
           getValue<boolean>() ? (
             <Check className="h-4 w-4 text-profit" />
@@ -265,7 +279,7 @@ function Trades() {
           ),
       },
     ],
-    [timeZone, query],
+    [timeZone, query, t, tx],
   );
 
   const table = useTable({
@@ -295,7 +309,7 @@ function Trades() {
       refresh();
       return true;
     } catch (cause) {
-      setBulkError(cause instanceof Error ? cause.message : "The action failed.");
+      setBulkError(cause instanceof Error ? cause.message : t("The action failed."));
       return false;
     } finally {
       setBulkBusy(false);
@@ -306,7 +320,7 @@ function Trades() {
   return (
     <div>
       <FilterBar
-        title="Trades"
+        title={t("Trades")}
         actions={
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" asChild>
@@ -317,7 +331,7 @@ function Trades() {
             </Button>
             <Button variant="outline" size="sm" onClick={() => setShowColumns((value) => !value)}>
               <Columns3 />
-              Columns
+              {t("Columns")}
             </Button>
           </div>
         }
@@ -327,16 +341,18 @@ function Trades() {
           <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 xl:grid-cols-4">
             <Card>
               <CardHeader>
-                <CardTitle>Net cumulative P&L</CardTitle>
+                <CardTitle>{t("Net cumulative P&L")}</CardTitle>
               </CardHeader>
               <CardContent>
                 <Pnl value={m.netPnl} className="text-xl font-semibold" />
-                <span className="ml-2 text-xs text-muted-foreground">{m.closedTrades} trades</span>
+                <span className="ml-2 text-xs text-muted-foreground">
+                  {tn(m.closedTrades, "{count} trade", "{count} trades")}
+                </span>
               </CardContent>
             </Card>
             <Card>
               <CardHeader>
-                <CardTitle>Profit factor</CardTitle>
+                <CardTitle>{t("Profit factor")}</CardTitle>
               </CardHeader>
               <CardContent>
                 <span className="text-xl font-semibold tnum">
@@ -350,7 +366,7 @@ function Trades() {
             </Card>
             <Card>
               <CardHeader>
-                <CardTitle>Trade win %</CardTitle>
+                <CardTitle>{t("Trade win %")}</CardTitle>
               </CardHeader>
               <CardContent>
                 <span className="text-xl font-semibold tnum">{fmtPercent(m.winRate)}</span>
@@ -358,7 +374,7 @@ function Trades() {
             </Card>
             <Card>
               <CardHeader>
-                <CardTitle>Avg win / loss</CardTitle>
+                <CardTitle>{t("Avg win / loss")}</CardTitle>
               </CardHeader>
               <CardContent>
                 <span className="text-xl font-semibold tnum">
@@ -393,7 +409,9 @@ function Trades() {
         {selectedKeys.length > 0 && (
           <Card>
             <CardContent className="flex flex-wrap items-center gap-2 py-2">
-              <span className="text-sm text-muted-foreground">{selectedKeys.length} selected</span>
+              <span className="text-sm text-muted-foreground">
+                {t("{count} selected", { count: selectedKeys.length })}
+              </span>
               <Button
                 variant="outline"
                 size="sm"
@@ -401,7 +419,7 @@ function Trades() {
                 onClick={() => void bulk("review")}
               >
                 <Check />
-                Mark reviewed
+                {t("Mark reviewed")}
               </Button>
               <Button
                 variant="outline"
@@ -409,14 +427,14 @@ function Trades() {
                 disabled={bulkBusy}
                 onClick={() => void bulk("unreview")}
               >
-                Unreview
+                {t("Unreview")}
               </Button>
               <div className="flex max-w-full flex-wrap items-center gap-1">
                 <Input
-                  aria-label="Tag to add"
+                  aria-label={t("Tag to add")}
                   value={tagInput}
                   onChange={(event) => setTagInput(event.target.value)}
-                  placeholder="tag"
+                  placeholder={t("tag")}
                   className="h-8 w-28 text-xs"
                 />
                 <Button
@@ -428,7 +446,7 @@ function Trades() {
                   }}
                 >
                   <Tag />
-                  Tag
+                  {tx("action", "Tag")}
                 </Button>
               </div>
               <Button
@@ -438,14 +456,18 @@ function Trades() {
                 onClick={() => {
                   if (
                     confirm(
-                      `Delete ${selectedKeys.length} trades and their executions? This cannot be undone.`,
+                      tn(
+                        selectedKeys.length,
+                        "Delete {count} trade and its executions? This cannot be undone.",
+                        "Delete {count} trades and their executions? This cannot be undone.",
+                      ),
                     )
                   )
                     void bulk("delete");
                 }}
               >
                 <Trash2 />
-                Delete
+                {t("Delete")}
               </Button>
               {bulkError && (
                 <p role="alert" className="basis-full text-sm text-destructive">
@@ -468,7 +490,7 @@ function Trades() {
           <div role="alert" className="space-y-2 text-sm text-destructive">
             <p>{error}</p>
             <Button variant="outline" onClick={refresh}>
-              Try again
+              {t("Try again")}
             </Button>
           </div>
         ) : !data ? (
@@ -531,9 +553,9 @@ function Trades() {
                         colSpan={columns.length}
                         className="py-16 text-center text-muted-foreground"
                       >
-                        No trades match these filters.{" "}
+                        {t("No trades match these filters.")}{" "}
                         <Link href="/import" className="underline">
-                          Import some
+                          {t("Import some")}
                         </Link>
                         .
                       </td>
@@ -545,9 +567,11 @@ function Trades() {
             {sortedRows.length > pageSize && (
               <div className="flex flex-wrap items-center justify-between gap-3 border-t px-4 py-3 text-xs text-muted-foreground">
                 <span>
-                  {currentPage * pageSize + 1}–
-                  {Math.min((currentPage + 1) * pageSize, sortedRows.length)} of{" "}
-                  {fmtNumber(sortedRows.length, 0)} trades
+                  {t("{from}–{to} of {total} trades", {
+                    from: currentPage * pageSize + 1,
+                    to: Math.min((currentPage + 1) * pageSize, sortedRows.length),
+                    total: fmtNumber(sortedRows.length, 0),
+                  })}
                 </span>
                 <div className="flex items-center gap-2">
                   <Button
@@ -556,10 +580,10 @@ function Trades() {
                     disabled={currentPage === 0}
                     onClick={() => setPage(currentPage - 1)}
                   >
-                    Previous
+                    {t("Previous")}
                   </Button>
                   <span>
-                    Page {currentPage + 1} of {pageCount}
+                    {t("Page {page} of {pages}", { page: currentPage + 1, pages: pageCount })}
                   </span>
                   <Button
                     variant="outline"
@@ -567,7 +591,7 @@ function Trades() {
                     disabled={currentPage + 1 === pageCount}
                     onClick={() => setPage(currentPage + 1)}
                   >
-                    Next
+                    {t("Next")}
                   </Button>
                 </div>
               </div>

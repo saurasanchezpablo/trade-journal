@@ -6,6 +6,10 @@ import { MonetaryValue } from "@/components/privacy";
 import { useApi } from "@/lib/use-api";
 import { formatTimestamp } from "@/lib/timezone";
 import { fmtNumber } from "@/lib/utils";
+import type { Vars } from "@/lib/i18n";
+import { useI18n } from "./i18n";
+
+type Translate = (text: string, vars?: Vars) => string;
 
 interface Fill {
   symbol: string;
@@ -24,15 +28,27 @@ interface Correction {
   at: string;
 }
 
-const describe = (fill: Fill, timeZone: string) =>
-  `${fill.side === "buy" ? "Buy" : "Sell"} ${fmtNumber(fill.quantity, 4)} ${fill.symbol} at ${fmtNumber(fill.price)}, ${formatTimestamp(fill.executedAt, timeZone)}`;
+const describe = (fill: Fill, timeZone: string, t: Translate) =>
+  t(
+    fill.side === "buy"
+      ? "Buy {quantity} {symbol} at {price}, {time}"
+      : "Sell {quantity} {symbol} at {price}, {time}",
+    {
+      quantity: fmtNumber(fill.quantity, 4),
+      symbol: fill.symbol,
+      price: fmtNumber(fill.price),
+      time: formatTimestamp(fill.executedAt, timeZone),
+    },
+  );
 
 /** What changed in an edited fill, field by field. */
-function changes(before: Fill, after: Fill, timeZone: string) {
+function changes(before: Fill, after: Fill, timeZone: string, t: Translate) {
+  const side = (value: Fill["side"]) => (value === "buy" ? t("Buy") : t("Sell")).toLowerCase();
   const out: { label: string; from: string; to: string; money?: boolean }[] = [];
   if (before.symbol !== after.symbol)
     out.push({ label: "symbol", from: before.symbol, to: after.symbol });
-  if (before.side !== after.side) out.push({ label: "side", from: before.side, to: after.side });
+  if (before.side !== after.side)
+    out.push({ label: "side", from: side(before.side), to: side(after.side) });
   if (before.quantity !== after.quantity)
     out.push({
       label: "quantity",
@@ -68,6 +84,7 @@ export function FillCorrections({
   /** Bumped after a save, to read the list again. */
   version: number;
 }) {
+  const { t, tn, tx } = useI18n();
   const { data, refresh } = useApi<{ corrections: Correction[] }>(
     `/api/trades/${encodeURIComponent(tradeKey)}/fills`,
   );
@@ -80,21 +97,25 @@ export function FillCorrections({
     <details className="rounded-md border px-3 py-2 text-xs">
       <summary className="flex cursor-pointer items-center gap-1.5 text-muted-foreground">
         <History className="size-3.5" aria-hidden="true" />
-        {list.length} correction{list.length === 1 ? "" : "s"} to these fills
+        {tn(list.length, "{count} correction to these fills", "{count} corrections to these fills")}
       </summary>
       <ul className="mt-2 space-y-1.5">
         {list.map((c) => (
           <li key={c.id}>
             <span className="text-muted-foreground">{formatTimestamp(c.at, timeZone)} · </span>
-            {c.action === "add" && c.after && <>Added: {describe(c.after, timeZone)}</>}
-            {c.action === "remove" && c.before && <>Removed: {describe(c.before, timeZone)}</>}
+            {c.action === "add" && c.after && (
+              <>{t("Added: {fill}", { fill: describe(c.after, timeZone, t) })}</>
+            )}
+            {c.action === "remove" && c.before && (
+              <>{t("Removed: {fill}", { fill: describe(c.before, timeZone, t) })}</>
+            )}
             {c.action === "edit" && c.before && c.after && (
               <>
-                Edited:{" "}
-                {changes(c.before, c.after, timeZone).map((change, i) => (
+                {t("Edited:")}{" "}
+                {changes(c.before, c.after, timeZone, t).map((change, i) => (
                   <span key={change.label}>
                     {i > 0 && ", "}
-                    {change.label}{" "}
+                    {tx("fill", change.label)}{" "}
                     {change.money ? (
                       <>
                         <MonetaryValue>{change.from}</MonetaryValue> →{" "}

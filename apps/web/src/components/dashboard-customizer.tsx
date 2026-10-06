@@ -27,6 +27,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useI18n } from "@/components/i18n";
 
 interface CardOption {
   id: string;
@@ -64,12 +65,13 @@ const cardIcons: Record<string, LucideIcon> = {
 };
 
 export function DashboardCustomizer(props: DashboardCustomizerProps) {
+  const { t } = useI18n();
   return (
     <Popover.Root open={props.open} onOpenChange={props.onOpenChange}>
       <Popover.Trigger asChild>
         <Button type="button" variant="outline" size="sm" className="dashboard-customize-trigger">
           <Settings2 />
-          Customize
+          {t("Customize")}
           <ChevronDown className="dashboard-customize-chevron" />
         </Button>
       </Popover.Trigger>
@@ -85,6 +87,7 @@ const CustomizerPanel = forwardRef<HTMLDivElement, DashboardCustomizerProps>(
     { widgets, hidden, onVisibilityChange, onShowAll, onRestore },
     forwardedRef,
   ) {
+    const { t, tn } = useI18n();
     const titleId = useId();
     const [query, setQuery] = useState("");
     const searchRef = useRef<HTMLInputElement>(null);
@@ -93,7 +96,7 @@ const CustomizerPanel = forwardRef<HTMLDivElement, DashboardCustomizerProps>(
     const [listHeight, setListHeight] = useState<number>();
     const [highlight, setHighlight] = useState<{ top: number; height: number } | null>(null);
     const matches = widgets.filter((widget) =>
-      widget.label.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()),
+      t(widget.label).toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()),
     );
 
     useLayoutEffect(() => {
@@ -145,15 +148,15 @@ const CustomizerPanel = forwardRef<HTMLDivElement, DashboardCustomizerProps>(
         }}
       >
         <div className="dashboard-customize-heading">
-          <h2 id={titleId}>Dashboard cards</h2>
+          <h2 id={titleId}>{t("Dashboard cards")}</h2>
           <span className="dashboard-customize-count">
-            {widgets.length - hidden.length} visible
+            {t("{count} visible", { count: widgets.length - hidden.length })}
           </span>
           <Popover.Close asChild>
             <button
               type="button"
               className="dashboard-customize-icon-button"
-              aria-label="Close customization"
+              aria-label={t("Close customization")}
             >
               <X size={14} />
             </button>
@@ -164,8 +167,8 @@ const CustomizerPanel = forwardRef<HTMLDivElement, DashboardCustomizerProps>(
           <input
             ref={searchRef}
             type="text"
-            aria-label="Find dashboard cards"
-            placeholder="Find a card…"
+            aria-label={t("Find dashboard cards")}
+            placeholder={t("Find a card…")}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={(event) => {
@@ -179,7 +182,7 @@ const CustomizerPanel = forwardRef<HTMLDivElement, DashboardCustomizerProps>(
             <button
               type="button"
               className="dashboard-customize-icon-button"
-              aria-label="Clear card search"
+              aria-label={t("Clear card search")}
               onClick={() => {
                 setQuery("");
                 searchRef.current?.focus();
@@ -240,7 +243,7 @@ const CustomizerPanel = forwardRef<HTMLDivElement, DashboardCustomizerProps>(
                   type="button"
                   role="switch"
                   aria-checked={visible}
-                  aria-label={`Show ${widget.label}`}
+                  aria-label={t("Show {card}", { card: t(widget.label) })}
                   data-card-toggle
                   className="dashboard-customize-option"
                   style={{ "--option-index": Math.min(index, 7) } as CSSProperties}
@@ -251,7 +254,7 @@ const CustomizerPanel = forwardRef<HTMLDivElement, DashboardCustomizerProps>(
                   <span className="dashboard-customize-card-icon" aria-hidden="true">
                     <Icon size={15} strokeWidth={1.7} />
                   </span>
-                  <span className="dashboard-customize-label">{widget.label}</span>
+                  <span className="dashboard-customize-label">{t(widget.label)}</span>
                   <span className="dashboard-customize-switch" aria-hidden="true">
                     <span />
                   </span>
@@ -261,26 +264,29 @@ const CustomizerPanel = forwardRef<HTMLDivElement, DashboardCustomizerProps>(
             {matches.length === 0 && (
               <div className="dashboard-customize-empty">
                 <SearchX size={22} aria-hidden="true" />
-                <p>No matching cards</p>
+                <p>{t("No matching cards")}</p>
                 <button type="button" onClick={() => setQuery("")}>
-                  Clear search
+                  {t("Clear search")}
                 </button>
               </div>
             )}
           </div>
         </div>
         <div className="dashboard-customize-footer">
-          <button type="button" onClick={onRestore} aria-label="Restore default layout">
+          <button type="button" onClick={onRestore} aria-label={t("Restore default layout")}>
             <RotateCcw size={13} aria-hidden="true" />
-            Reset layout
+            {t("Reset layout")}
           </button>
           <button type="button" onClick={onShowAll} disabled={hidden.length === 0}>
-            Show all cards
+            {t("Show all cards")}
           </button>
         </div>
         <span role="status" className="sr-only">
-          {matches.length} {matches.length === 1 ? "card" : "cards"} found.{" "}
-          {widgets.length - hidden.length} of {widgets.length} visible.
+          {tn(matches.length, "{count} card found.", "{count} cards found.")}{" "}
+          {t("{visible} of {total} visible.", {
+            visible: widgets.length - hidden.length,
+            total: widgets.length,
+          })}
         </span>
       </Popover.Content>
     );

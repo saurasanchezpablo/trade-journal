@@ -22,6 +22,7 @@ import { AiNotice } from "./ai-notice";
 import { MonetaryValue } from "./privacy";
 import { SectionCard } from "./section-card";
 import { JournalChat } from "./journal-chat";
+import { useI18n } from "./i18n";
 
 interface State {
   period: Period;
@@ -42,12 +43,29 @@ interface Suggestion {
 const METRICS = Object.keys(GOAL_METRICS) as GoalMetric[];
 
 function Value({ metric, value }: { metric: GoalMetric; value: number | null }) {
-  const text = formatMeasure(metric, value);
+  const { t } = useI18n();
+  // "n/a" and "no losses" are words; numbers read the same in every language.
+  const text = t(formatMeasure(metric, value));
   return GOAL_METRICS[metric].unit === "money" ? (
     <MonetaryValue>{text}</MonetaryValue>
   ) : (
     <>{text}</>
   );
+}
+
+/** A period's name in the journal's language ("September 2026", "Q3 2026"). */
+function usePeriodLabel() {
+  const { t, intl } = useI18n();
+  return (p: Period) => {
+    const month = /^(\d{4})-(\d{2})$/.exec(p.id);
+    if (p.kind === "month" && month)
+      return new Date(Date.UTC(Number(month[1]), Number(month[2]) - 1, 1)).toLocaleDateString(
+        intl,
+        { month: "long", year: "numeric", timeZone: "UTC" },
+      );
+    const quarter = /^(\d{4})-Q([1-4])$/.exec(p.id);
+    return quarter ? t("Q{quarter} {year}", { quarter: quarter[2]!, year: quarter[1]! }) : p.label;
+  };
 }
 
 /** The last periods and the next one, newest first. */
@@ -68,6 +86,8 @@ function periodChoices(kind: PeriodKind, today: string): Period[] {
  * next period's, and write the review as a chat you can follow up on.
  */
 export function PeriodReviews({ timeZone }: { timeZone: string }) {
+  const { t } = useI18n();
+  const labelOf = usePeriodLabel();
   const today = dayKeyOf(new Date().toISOString(), timeZone);
   const [kind, setKind] = useState<PeriodKind>("month");
   const choices = useMemo(() => periodChoices(kind, today), [kind, today]);
@@ -105,7 +125,7 @@ export function PeriodReviews({ timeZone }: { timeZone: string }) {
       setSaved(await postJson<State>("/api/goals", { kind, period: period.id, ...goal }));
       return true;
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not add the goal");
+      setError(cause instanceof Error ? cause.message : t("Could not add the goal"));
       return false;
     }
   };
@@ -114,7 +134,7 @@ export function PeriodReviews({ timeZone }: { timeZone: string }) {
     try {
       setSaved(await postJson<State>("/api/goals", { id, kind, period: period.id }, "DELETE"));
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not remove the goal");
+      setError(cause instanceof Error ? cause.message : t("Could not remove the goal"));
     }
   };
   const suggest = async () => {
@@ -129,27 +149,38 @@ export function PeriodReviews({ timeZone }: { timeZone: string }) {
       if (currentScope.current === asked) setSuggested({ scope: asked, goals });
     } catch (cause) {
       if (currentScope.current === asked)
-        setAiError(cause instanceof Error ? cause.message : "No suggestions");
+        setAiError(cause instanceof Error ? cause.message : t("No suggestions"));
     } finally {
       setBusy(false);
     }
   };
   const describe = (g: Pick<Goal, "metric" | "comparator" | "target" | "text">) =>
     g.metric && g.target !== null && g.comparator
-      ? `${GOAL_METRICS[g.metric].label} ${g.comparator === "atLeast" ? "at least" : "at most"} `
+      ? `${t(g.comparator === "atLeast" ? "{metric} at least" : "{metric} at most", {
+          metric: t(GOAL_METRICS[g.metric].label),
+        })} `
       : "";
 
   const met = state?.goals.filter((g) => g.status === "met").length ?? 0;
+  const label = labelOf(period);
   return (
     <SectionCard
       id="journal-period-reviews"
-      title="Monthly and quarterly reviews"
-      summary={state ? `${period.label}: ${met} of ${state.goals.length} goals met` : undefined}
+      title={t("Monthly and quarterly reviews")}
+      summary={
+        state
+          ? t("{period}: {met} of {total} goals met", {
+              period: label,
+              met,
+              total: state.goals.length,
+            })
+          : undefined
+      }
       contentClassName="space-y-3 text-sm"
     >
       <div className="flex flex-wrap items-center gap-2">
         <select
-          aria-label="Review period kind"
+          aria-label={t("Review period kind")}
           value={kind}
           onChange={(e) => {
             const next = e.target.value as PeriodKind;
@@ -159,11 +190,11 @@ export function PeriodReviews({ timeZone }: { timeZone: string }) {
           }}
           className="h-8 rounded-md border bg-background px-2 text-sm"
         >
-          <option value="month">Month</option>
-          <option value="quarter">Quarter</option>
+          <option value="month">{t("Month")}</option>
+          <option value="quarter">{t("Quarter")}</option>
         </select>
         <select
-          aria-label="Review period"
+          aria-label={t("Review period")}
           value={period.id}
           onChange={(e) => {
             setPeriodId(e.target.value);
@@ -173,24 +204,26 @@ export function PeriodReviews({ timeZone }: { timeZone: string }) {
         >
           {choices.map((p) => (
             <option key={p.id} value={p.id}>
-              {p.label}
+              {labelOf(p)}
             </option>
           ))}
         </select>
         <span className="text-xs text-muted-foreground">
-          {period.from} to {period.to}, all accounts
+          {t("{from} to {to}, all accounts", { from: period.from, to: period.to })}
         </span>
       </div>
 
       <div className="space-y-2">
         <h3 className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
-          Goals
+          {t("Goals")}
         </h3>
         {state && state.goals.length === 0 && (
-          <p className="text-xs text-muted-foreground">No goals for {period.label} yet.</p>
+          <p className="text-xs text-muted-foreground">
+            {t("No goals for {period} yet.", { period: label })}
+          </p>
         )}
         {state && state.goals.length > 0 && (
-          <ul className="divide-y rounded-md border" aria-label="Goals">
+          <ul className="divide-y rounded-md border" aria-label={t("Goals")}>
             {state.goals.map((g) => (
               <li key={g.id} className="flex flex-wrap items-center gap-2 px-3 py-2">
                 <Badge
@@ -199,12 +232,12 @@ export function PeriodReviews({ timeZone }: { timeZone: string }) {
                   }
                 >
                   {g.status === "met"
-                    ? "MET"
+                    ? t("MET")
                     : g.status === "missed"
-                      ? "MISSED"
+                      ? t("MISSED")
                       : g.metric
-                        ? "NO DATA"
-                        : "WRITTEN"}
+                        ? t("NO DATA")
+                        : t("WRITTEN")}
                 </Badge>
                 <span className="min-w-0 flex-1">
                   {describe(g)}
@@ -212,7 +245,7 @@ export function PeriodReviews({ timeZone }: { timeZone: string }) {
                   {g.metric && (
                     <span className="text-muted-foreground">
                       {" "}
-                      · now <Value metric={g.metric} value={g.value} />
+                      · {t("now")} <Value metric={g.metric} value={g.value} />
                     </span>
                   )}
                   {g.text && (
@@ -226,7 +259,7 @@ export function PeriodReviews({ timeZone }: { timeZone: string }) {
                   variant="ghost"
                   size="icon"
                   className="h-7 w-7"
-                  aria-label="Remove goal"
+                  aria-label={t("Remove goal")}
                   onClick={() => void remove(g.id)}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
@@ -258,44 +291,44 @@ export function PeriodReviews({ timeZone }: { timeZone: string }) {
           }}
         >
           <select
-            aria-label="Goal metric"
+            aria-label={t("Goal metric")}
             value={metric}
             onChange={(e) => setMetric(e.target.value as GoalMetric | "")}
             className="h-8 rounded-md border bg-background px-2 text-sm"
           >
             {METRICS.map((m) => (
               <option key={m} value={m}>
-                {GOAL_METRICS[m].label}
+                {t(GOAL_METRICS[m].label)}
               </option>
             ))}
-            <option value="">Written goal</option>
+            <option value="">{t("Written goal")}</option>
           </select>
           {metric && (
             <>
               <select
-                aria-label="Goal comparison"
+                aria-label={t("Goal comparison")}
                 value={comparator}
                 onChange={(e) => setComparator(e.target.value as "atLeast" | "atMost")}
                 className="h-8 rounded-md border bg-background px-2 text-sm"
               >
-                <option value="atLeast">at least</option>
-                <option value="atMost">at most</option>
+                <option value="atLeast">{t("at least")}</option>
+                <option value="atMost">{t("at most")}</option>
               </select>
               <input
-                aria-label="Goal target"
+                aria-label={t("Goal target")}
                 inputMode="decimal"
                 value={target}
                 onChange={(e) => setTarget(e.target.value)}
-                placeholder={percent ? "60 (%)" : "target"}
+                placeholder={percent ? "60 (%)" : t("target")}
                 className="h-8 w-24 rounded-md border bg-background px-2 text-sm"
               />
             </>
           )}
           <input
-            aria-label="Goal note"
+            aria-label={t("Goal note")}
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder={metric ? "why (optional)" : "No trades in the first 15 minutes"}
+            placeholder={metric ? t("why (optional)") : t("No trades in the first 15 minutes")}
             className="h-8 min-w-40 flex-1 rounded-md border bg-background px-2 text-sm"
           />
           <Button
@@ -305,7 +338,7 @@ export function PeriodReviews({ timeZone }: { timeZone: string }) {
             disabled={metric ? !target.trim() || !Number.isFinite(Number(target)) : !text.trim()}
           >
             <Plus />
-            Add goal
+            {t("Add goal")}
           </Button>
           <Button
             type="button"
@@ -315,13 +348,13 @@ export function PeriodReviews({ timeZone }: { timeZone: string }) {
             onClick={() => void suggest()}
           >
             <Sparkles />
-            {busy ? "Thinking…" : "Suggest goals"}
+            {busy ? t("Thinking…") : t("Suggest goals")}
           </Button>
         </form>
         {suggestions && (
-          <ul className="space-y-1.5" aria-label="Suggested goals">
+          <ul className="space-y-1.5" aria-label={t("Suggested goals")}>
             {suggestions.length === 0 && (
-              <li className="text-xs text-muted-foreground">No suggestions this time.</li>
+              <li className="text-xs text-muted-foreground">{t("No suggestions this time.")}</li>
             )}
             {suggestions.map((s, i) => (
               <li
@@ -344,7 +377,7 @@ export function PeriodReviews({ timeZone }: { timeZone: string }) {
                     )
                   }
                 >
-                  Add
+                  {t("Add")}
                 </Button>
               </li>
             ))}
@@ -367,13 +400,13 @@ export function PeriodReviews({ timeZone }: { timeZone: string }) {
       {state && (
         <details className="rounded-md border px-3 py-2">
           <summary className="cursor-pointer text-xs text-muted-foreground">
-            {period.label} against {state.previous.label}
+            {t("{period} against {previous}", { period: label, previous: labelOf(state.previous) })}
           </summary>
           <table className="mt-2 w-full text-xs">
             <tbody>
               {METRICS.map((m) => (
                 <tr key={m} className="border-t">
-                  <td className="py-1 pr-2">{GOAL_METRICS[m].label}</td>
+                  <td className="py-1 pr-2">{t(GOAL_METRICS[m].label)}</td>
                   <td className="tnum py-1 pr-2 text-right">
                     <Value metric={m} value={state.measures[m]} />
                   </td>
@@ -390,14 +423,19 @@ export function PeriodReviews({ timeZone }: { timeZone: string }) {
       <JournalChat
         key={`${kind}:${period.id}:${timeZone}`}
         target={{ kind: "journal", filters: { from: period.from, to: period.to }, timeZone }}
-        placeholder={`Ask about ${period.label}`}
+        placeholder={t("Ask about {period}", { period: label })}
         starter={{
-          label: `Write the ${kind === "month" ? "monthly" : "quarterly"} review`,
-          display: `${kind === "month" ? "Monthly" : "Quarterly"} review for ${period.label}`,
+          label: kind === "month" ? t("Write the monthly review") : t("Write the quarterly review"),
+          display:
+            kind === "month"
+              ? t("Monthly review for {period}", { period: label })
+              : t("Quarterly review for {period}", { period: label }),
           url: "/api/ai/period-review",
           body: { kind, period: period.id, timeZone },
         }}
-        intro="The review measures each goal and compares with the period before; follow-ups keep its dates."
+        intro={t(
+          "The review measures each goal and compares with the period before; follow-ups keep its dates.",
+        )}
       />
     </SectionCard>
   );

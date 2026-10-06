@@ -8,6 +8,7 @@ import { postJson } from "@/lib/use-api";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { SectionCard } from "./section-card";
+import { useI18n } from "./i18n";
 
 interface Result {
   mode: "meaning" | "words";
@@ -18,21 +19,26 @@ interface Result {
 const KIND = { day: "DAY", trade: "TRADE", note: "NOTE" } as const;
 
 function Hits({ result }: { result: Result }) {
+  const { t } = useI18n();
   return (
     <div className="space-y-1.5">
       <p className="text-xs text-muted-foreground">
-        {result.note ?? (result.mode === "meaning" ? "Searched by meaning." : "Searched by words.")}
+        {result.note
+          ? t(result.note)
+          : result.mode === "meaning"
+            ? t("Searched by meaning.")
+            : t("Searched by words.")}
       </p>
       {result.results.length === 0 ? (
-        <p className="text-xs text-muted-foreground">Nothing close enough in your notes.</p>
+        <p className="text-xs text-muted-foreground">{t("Nothing close enough in your notes.")}</p>
       ) : (
-        <ul className="divide-y rounded-md border" aria-label="Search results">
+        <ul className="divide-y rounded-md border" aria-label={t("Search results")}>
           {result.results.map((hit) => (
             <li key={`${hit.kind}-${hit.id}`} className="space-y-0.5 px-3 py-2">
               <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="secondary">{KIND[hit.kind]}</Badge>
+                <Badge variant="secondary">{t(KIND[hit.kind])}</Badge>
                 <Link href={hit.url} className="text-sm underline-offset-4 hover:underline">
-                  {hit.title}
+                  {hitTitle(hit, t)}
                 </Link>
               </div>
               <p className="whitespace-pre-wrap text-xs text-muted-foreground">{hit.snippet}</p>
@@ -44,8 +50,16 @@ function Hits({ result }: { result: Result }) {
   );
 }
 
+/** A hit's title: the server names days and untitled notes in English; note titles stay. */
+function hitTitle(hit: SearchHit, t: (text: string, vars?: Record<string, string>) => string) {
+  if (hit.title === "Untitled note") return t("Untitled note");
+  const day = /^Day (\d{4}-\d{2}-\d{2})$/.exec(hit.title);
+  return hit.kind === "day" && day ? t("Day {date}", { date: day[1]! }) : hit.title;
+}
+
 /** Search every note (day, trade and notebook) by meaning, or by words without embeddings. */
 export function NoteSearch() {
+  const { t } = useI18n();
   const [query, setQuery] = useState("");
   const [result, setResult] = useState<Result | null>(null);
   const [busy, setBusy] = useState(false);
@@ -57,7 +71,7 @@ export function NoteSearch() {
     try {
       setResult(await postJson<Result>("/api/notes-search", { query }));
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Search failed");
+      setError(cause instanceof Error ? cause.message : t("Search failed"));
     } finally {
       setBusy(false);
     }
@@ -65,7 +79,7 @@ export function NoteSearch() {
   return (
     <SectionCard
       id="journal-note-search"
-      title="Search your notes"
+      title={t("Search your notes")}
       contentClassName="space-y-2 text-sm"
     >
       <form
@@ -76,20 +90,21 @@ export function NoteSearch() {
         }}
       >
         <input
-          aria-label="Search your notes"
+          aria-label={t("Search your notes")}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Times I froze after a stop-out"
+          placeholder={t("Times I froze after a stop-out")}
           className="h-9 min-w-0 flex-1 rounded-md border bg-background px-3 text-sm"
         />
         <Button type="submit" size="sm" disabled={busy || !query.trim()}>
           <Search />
-          {busy ? "Searching…" : "Search"}
+          {busy ? t("Searching…") : t("Search")}
         </Button>
       </form>
       <p className="text-xs text-muted-foreground">
-        With OpenAI or Gemini as your AI provider, notes are matched by meaning (passages are sent
-        once to the provider to be indexed); otherwise by words, on this server only.
+        {t(
+          "With OpenAI or Gemini as your AI provider, notes are matched by meaning (passages are sent once to the provider to be indexed); otherwise by words, on this server only.",
+        )}
       </p>
       {error && (
         <p role="alert" className="text-xs text-destructive">
@@ -109,6 +124,7 @@ export function SimilarPast({
   similarTo: { date: string } | { tradeKey: string };
   label: string;
 }) {
+  const { t } = useI18n();
   const [result, setResult] = useState<Result | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -118,7 +134,7 @@ export function SimilarPast({
     try {
       setResult(await postJson<Result>("/api/notes-search", { similarTo, limit: 5 }));
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Search failed");
+      setError(cause instanceof Error ? cause.message : t("Search failed"));
     } finally {
       setBusy(false);
     }
@@ -127,7 +143,7 @@ export function SimilarPast({
     <div className="space-y-2">
       <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => void find()}>
         <History />
-        {busy ? "Looking…" : label}
+        {busy ? t("Looking…") : label}
       </Button>
       {error && (
         <p role="alert" className="text-xs text-destructive">

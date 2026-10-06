@@ -14,9 +14,10 @@ import {
   type ChartTrade,
   type OverlayOptions,
 } from "@/lib/chart-overlays";
-import { eventSummary, type EconomicEvent } from "@/lib/economic-calendar";
+import type { EconomicEvent } from "@/lib/economic-calendar";
+import { tr, trn, trx } from "@/lib/i18n";
 import { MARKET_SESSIONS, sessionEvents } from "@/lib/market-sessions";
-import { zoneStatsTracker, zoneSummary, type SrZone, type ZoneStats } from "@/lib/sr-zones";
+import { zoneStatsTracker, type SrZone, type ZoneStats } from "@/lib/sr-zones";
 import { fmtMoney, fmtNumber } from "@/lib/utils";
 import { JOURNAL_OVERLAYS_TYPE } from "./vela-view-limits";
 
@@ -60,17 +61,22 @@ const IMPACT_GLYPH = {
   Low: { color: "#94a3b8", shape: "circle" as const },
   Holiday: { color: "#64748b", shape: "square" as const },
 };
-const GROUPS: MarkGroup[] = [
-  { id: "trades", label: "My trades" },
-  { id: "trades-open", label: "Open positions", parent: "trades" },
-  { id: "trades-closed", label: "Closed trades", parent: "trades" },
-  { id: "missed", label: "Missed trades" },
-  { id: "sessions", label: "Market sessions" },
-  ...MARKET_SESSIONS.map((s) => ({ id: `session-${s.id}`, label: s.label, parent: "sessions" })),
-  { id: "economic", label: "Economic calendar" },
+/** The timeline's groups, in the journal's language. */
+const groups = (): MarkGroup[] => [
+  { id: "trades", label: tr("My trades") },
+  { id: "trades-open", label: tr("Open positions"), parent: "trades" },
+  { id: "trades-closed", label: tr("Closed trades"), parent: "trades" },
+  { id: "missed", label: tr("Missed trades") },
+  { id: "sessions", label: tr("Market sessions") },
+  ...MARKET_SESSIONS.map((s) => ({
+    id: `session-${s.id}`,
+    label: tr(s.label),
+    parent: "sessions",
+  })),
+  { id: "economic", label: tr("Economic calendar") },
   ...(["High", "Medium", "Low", "Holiday"] as const).map((impact) => ({
     id: `economic-${impact}`,
-    label: impact === "Holiday" ? "Bank holidays" : `${impact} impact`,
+    label: impact === "Holiday" ? tr("Bank holidays") : tr(`${impact} impact`),
     parent: "economic",
   })),
 ];
@@ -112,8 +118,38 @@ const resultColor = (t: ChartTrade) =>
         ? COLORS.loss
         : COLORS.even;
 const resultWord = (t: ChartTrade) =>
-  t.status === "open" ? "OPEN" : t.status === "win" ? "WIN" : t.status === "loss" ? "LOSS" : "EVEN";
-const tradeTitle = (t: ChartTrade) => `${t.symbol} ${t.direction.toUpperCase()} · ${resultWord(t)}`;
+  t.status === "open"
+    ? tr("OPEN")
+    : t.status === "win"
+      ? tr("WIN")
+      : t.status === "loss"
+        ? tr("LOSS")
+        : tr("EVEN");
+const missedTitle = (m: ChartMissedTrade) =>
+  tr(m.direction === "long" ? "Missed long" : "Missed short");
+/** An economic event's tooltip (`eventSummary` in the journal's language). */
+const eventText = (e: EconomicEvent) =>
+  [
+    `${e.currency} · ${e.title}`,
+    e.impact === "Holiday" ? tr("Bank holiday") : tr(`${e.impact} impact`),
+    e.forecast ? tr("Forecast {value}", { value: e.forecast }) : "",
+    e.previous ? tr("Previous {value}", { value: e.previous }) : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+const directionWord = (direction: "long" | "short") => tr(direction === "long" ? "LONG" : "SHORT");
+const tradeTitle = (t: ChartTrade) =>
+  `${t.symbol} ${directionWord(t.direction)} · ${resultWord(t)}`;
+/** A zone's label on the chart: "Support 1.2–1.3 · 3 touches · holding". */
+const zoneText = (zone: SrZone, stats: ZoneStats, format: (n: number) => string) => {
+  const role = stats.role === "support" ? tr("Support") : tr("Resistance");
+  const touches = trn(stats.touches, "{count} touch", "{count} touches");
+  const status = trx(
+    "zone",
+    stats.status === "broken" ? "broken" : stats.status === "testing" ? "testing" : "holding",
+  );
+  return `${zone.label ? `${zone.label} · ` : ""}${role} ${format(zone.low)}–${format(zone.high)} · ${touches} · ${status}`;
+};
 
 let seq = 0;
 
@@ -145,7 +181,7 @@ export function createChartOverlays(
     const lines: DrawingLine[] = [];
     const ink = dark() ? "#f4f4f2" : "#0b0b0b";
     for (const t of trades) {
-      const tip = `${tradeTitle(t)}${t.account ? ` · ${t.account}` : ""} · click to open`;
+      const tip = `${tradeTitle(t)}${t.account ? ` · ${t.account}` : ""} · ${tr("click to open")}`;
       t.fills.forEach((fill, i) =>
         labels.push(
           label({
@@ -156,9 +192,9 @@ export function createChartOverlays(
             style: fill.side === "buy" ? "triangleup" : "triangledown",
             color: fill.side === "buy" ? COLORS.buy : COLORS.sell,
             textColor: ink,
-            text: `${fill.side === "buy" ? "B" : "S"} ${fmtNumber(fill.quantity, 4)}`,
+            text: `${trx("fill", fill.side === "buy" ? "B" : "S")} ${fmtNumber(fill.quantity, 4)}`,
             size: "tiny",
-            tooltip: `${fill.side.toUpperCase()} ${fill.quantity} @ ${fill.price} · ${tip}`,
+            tooltip: `${tr(fill.side === "buy" ? "BUY" : "SELL")} ${fill.quantity} @ ${fill.price} · ${tip}`,
           }),
         ),
       );
@@ -214,7 +250,15 @@ export function createChartOverlays(
             style: sideFor(opened),
             color: COLORS.open,
             textColor: "#ffffff",
-            text: `OPEN ${t.direction.toUpperCase()} ${fmtNumber(t.openQuantity, 4)} @ ${state.privacy ? "•••" : fmtNumber(t.avgEntry)}`,
+            text: tr(
+              t.direction === "long"
+                ? "OPEN LONG {quantity} @ {price}"
+                : "OPEN SHORT {quantity} @ {price}",
+              {
+                quantity: fmtNumber(t.openQuantity, 4),
+                price: state.privacy ? "•••" : fmtNumber(t.avgEntry),
+              },
+            ),
             tooltip: tip,
           }),
         );
@@ -267,8 +311,8 @@ export function createChartOverlays(
           style: "diamond",
           color: COLORS.missed,
           textColor: COLORS.missed,
-          text: `MISSED ${m.direction.toUpperCase()}`,
-          tooltip: `Missed ${m.direction} @ ${m.entry}${m.notes ? ` · ${m.notes.slice(0, 120)}` : ""} · click to open`,
+          text: tr(m.direction === "long" ? "MISSED LONG" : "MISSED SHORT"),
+          tooltip: `${missedTitle(m)} @ ${m.entry}${m.notes ? ` · ${m.notes.slice(0, 120)}` : ""} · ${tr("click to open")}`,
         }),
       );
       for (const [kind, price] of [
@@ -317,7 +361,7 @@ export function createChartOverlays(
         borderColor: `rgba(${rgb}, ${faded ? 0.35 : 0.7})`,
         borderWidth: 1,
         borderStyle: faded ? "dotted" : "dashed",
-        text: zoneSummary(zone, s, (n) => fmtNumber(n)),
+        text: zoneText(zone, s, (n) => fmtNumber(n)),
         textColor: dark() ? "#e5e5e5" : "#171717",
         textSize: "small",
         hAlign: "left",
@@ -397,7 +441,7 @@ export function createChartOverlays(
         id: `trade:${t.key}`,
         time,
         title: tradeTitle(t),
-        tooltip: `${tradeTitle(t)}${state.privacy || t.status === "open" ? "" : ` ${fmtMoney(t.netPnl, t.currency)}`} · click to open`,
+        tooltip: `${tradeTitle(t)}${state.privacy || t.status === "open" ? "" : ` ${fmtMoney(t.netPnl, t.currency)}`} · ${tr("click to open")}`,
         group: t.status === "open" ? "trades-open" : "trades-closed",
         glyph: { shape: "circle", color: resultColor(t), letter: resultWord(t)[0] },
       });
@@ -407,10 +451,10 @@ export function createChartOverlays(
         out.push({
           id: `missed:${m.id}`,
           time: Date.parse(m.observedAt),
-          title: `Missed ${m.direction}`,
-          tooltip: `Missed ${m.direction}${m.entry !== null ? ` @ ${m.entry}` : ""} · click to open`,
+          title: missedTitle(m),
+          tooltip: `${missedTitle(m)}${m.entry !== null ? ` @ ${m.entry}` : ""} · ${tr("click to open")}`,
           group: "missed",
-          glyph: { shape: "diamond", color: COLORS.missed, letter: "M" },
+          glyph: { shape: "diamond", color: COLORS.missed, letter: trx("glyph", "M") },
         });
     const first = bars[0]?.time;
     const last = bars.at(-1)?.time;
@@ -420,8 +464,15 @@ export function createChartOverlays(
         out.push({
           id: `session:${e.id}`,
           time: e.time,
-          title: `${session.label} ${e.kind === "open" ? "opens" : "closes"}`,
-          tooltip: `${session.label} ${e.kind === "open" ? "opens" : "closes"} (${session[e.kind]} local)`,
+          title: tr(e.kind === "open" ? "{session} opens" : "{session} closes", {
+            session: tr(session.label),
+          }),
+          tooltip: tr(
+            e.kind === "open"
+              ? "{session} opens ({time} local)"
+              : "{session} closes ({time} local)",
+            { session: tr(session.label), time: session[e.kind] },
+          ),
           group: `session-${e.session}`,
           glyph: {
             shape: e.kind === "open" ? "square" : "circle",
@@ -439,23 +490,23 @@ export function createChartOverlays(
           id: `econ:${e.id}`,
           time: e.time,
           title: `${e.currency} · ${e.title}`,
-          tooltip: eventSummary(e),
+          tooltip: eventText(e),
           group: `economic-${e.impact}`,
           glyph: { ...IMPACT_GLYPH[e.impact], letter: e.currency.slice(0, 2) },
           content: {
             panel: {
               items: [
-                { type: "field", label: "Impact", value: e.impact },
+                { type: "field", label: tr("Impact"), value: trx("impact", e.impact) },
                 {
                   type: "field",
-                  label: "Time",
+                  label: tr("Time"),
                   value: new Date(e.time).toLocaleString([], { timeZoneName: "short" }),
                 },
                 ...(e.forecast
-                  ? [{ type: "field" as const, label: "Forecast", value: e.forecast }]
+                  ? [{ type: "field" as const, label: tr("Forecast"), value: e.forecast }]
                   : []),
                 ...(e.previous
-                  ? [{ type: "field" as const, label: "Previous", value: e.previous }]
+                  ? [{ type: "field" as const, label: tr("Previous"), value: e.previous }]
                   : []),
               ],
             },
@@ -468,7 +519,7 @@ export function createChartOverlays(
 
   vela.registerNativeIndicator({
     type,
-    title: "Journal overlays",
+    title: tr("Journal overlays"),
     paneHint: "price",
     overlay: true,
     legend: false,
@@ -495,7 +546,7 @@ export function createChartOverlays(
       },
     }),
   });
-  for (const group of GROUPS) instance.marks.defineGroup(group);
+  for (const group of groups()) instance.marks.defineGroup(group);
   instance.addNativeIndicator(type);
 
   // ── Clicks: marks open their record; price markers are hit-tested ──

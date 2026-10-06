@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Vela } from "@luxalgo/vela";
 import type { VelaWorkspace, VelaWorkspaceOptions } from "@luxalgo/vela/workspace";
 import { VELA_TIMEFRAME } from "@/lib/chart-analysis";
+import { tr } from "@/lib/i18n";
 import type { ChartScript } from "@/lib/chart-indicators";
 import {
   baselineSymbols,
@@ -23,7 +24,7 @@ import { clipOffscreenDashes } from "./vela-dash-fix";
 import { keepDrawingsOverSeries } from "./vela-depth-fix";
 import { applyPatternFixes } from "./vela-pattern-fixes";
 import { limitChartView } from "./vela-view-limits";
-import { attachSymbolSearch } from "./workspace-symbol-search";
+import { attachSymbolSearch, localizeSymbolRow } from "./workspace-symbol-search";
 
 /** Saved at most this often while you work; a page you leave saves at once. */
 const SAVE_DELAY_MS = 1500;
@@ -75,7 +76,7 @@ async function register() {
     id: "journal-back",
     target: "topbar",
     align: "left",
-    label: "Back to the journal",
+    label: tr("Back to the journal"),
     icon: "journal-back",
     iconOnly: true,
     run: () => handlers.exit(),
@@ -85,7 +86,7 @@ async function register() {
   registerWidgetAction({
     id: "journal-time-link",
     target: "topbar",
-    label: "Link the time window: scrolling or zooming one chart moves the others",
+    label: tr("Link the time window: scrolling or zooming one chart moves the others"),
     icon: "journal-time-unlink",
     iconOnly: true,
     when: () => !handlers.timeLinked(),
@@ -94,7 +95,7 @@ async function register() {
   registerWidgetAction({
     id: "journal-time-unlink",
     target: "topbar",
-    label: "Time window linked: click to scroll and zoom each chart on its own",
+    label: tr("Time window linked: click to scroll and zoom each chart on its own"),
     icon: "journal-time-link",
     iconOnly: true,
     when: () => handlers.timeLinked(),
@@ -103,7 +104,7 @@ async function register() {
   registerWidgetAction({
     id: "journal-open",
     target: "topbar",
-    label: "Open the active chart in Charts (trades, zones, analyses)",
+    label: tr("Open the active chart in Charts (trades, zones, analyses)"),
     icon: "journal-open",
     iconOnly: true,
     run: () => handlers.openInCharts(),
@@ -111,7 +112,7 @@ async function register() {
   registerWidgetAction({
     id: "journal-fullscreen",
     target: "topbar",
-    label: "Full screen",
+    label: tr("Full screen"),
     icon: "journal-fullscreen",
     iconOnly: true,
     run: () => handlers.fullscreen(),
@@ -119,7 +120,7 @@ async function register() {
   registerWidgetAction({
     id: "journal-start-over",
     target: "context:body",
-    label: "Start the workspace over",
+    label: tr("Start the workspace over"),
     run: () => handlers.startOver(),
   });
 }
@@ -193,13 +194,19 @@ export function ChartWorkspace(props: ChartWorkspaceProps) {
           .then(async (response) => {
             if (!response.ok) {
               const body = (await response.json().catch(() => ({}))) as { error?: string };
-              throw new Error(body.error ?? `Saving failed (${response.status}).`);
+              throw new Error(
+                body.error
+                  ? tr(body.error)
+                  : tr("Saving failed ({status}).", { status: response.status }),
+              );
             }
           })
           .catch((cause: unknown) => {
             if (!leaving)
               workspace?.toast(
-                `The workspace was not saved: ${cause instanceof Error ? cause.message : "network error"}`,
+                tr("The workspace was not saved: {reason}", {
+                  reason: cause instanceof Error ? cause.message : tr("network error"),
+                }),
                 "error",
               );
           }));
@@ -260,10 +267,12 @@ export function ChartWorkspace(props: ChartWorkspaceProps) {
             // The picker's starting rows for this source (searches are added as you type).
             return Object.assign(provider, {
               listSymbols: async () =>
-                baselineSymbols([source], [], recentSymbols.read()).map((row) => ({
-                  ticker: row.ticker,
-                  description: row.description,
-                })),
+                baselineSymbols([source], [], recentSymbols.read())
+                  .map(localizeSymbolRow)
+                  .map((row) => ({
+                    ticker: row.ticker,
+                    description: row.description,
+                  })),
             });
           },
         ]),
@@ -277,7 +286,12 @@ export function ChartWorkspace(props: ChartWorkspaceProps) {
         timeframes: Object.values(VELA_TIMEFRAME),
         providers,
         engines: { pine: makeEngine },
-        indicators: workspaceIndicators(scripts),
+        // Names stay as written (the workspace re-creates indicators by name); the picker's
+        // groups read in the journal's language.
+        indicators: workspaceIndicators(scripts).map((item) => ({
+          ...item,
+          category: tr(item.category),
+        })),
         timezone: timeZone,
         theme: dark() ? "dark" : "light",
         live: true,
@@ -388,7 +402,9 @@ export function ChartWorkspace(props: ChartWorkspaceProps) {
       handlers.linkTime = (on) => {
         ws.sync.set("viewport", on);
         ws.refreshActions();
-        ws.toast(on ? "Time window linked across the charts." : "Each chart scrolls on its own.");
+        ws.toast(
+          on ? tr("Time window linked across the charts.") : tr("Each chart scrolls on its own."),
+        );
       };
       // The button shows the link a saved workspace comes back with.
       ws.refreshActions();
@@ -397,7 +413,7 @@ export function ChartWorkspace(props: ChartWorkspaceProps) {
         const cell = ws.active;
         const parsed = parseWorkspaceSymbol(cell.symbol, sources);
         if (!parsed) {
-          ws.toast("This chart's symbol is not from one of the journal's sources.", "error");
+          ws.toast(tr("This chart's symbol is not from one of the journal's sources."), "error");
           return;
         }
         latest.current.onOpenInCharts({
@@ -416,7 +432,9 @@ export function ChartWorkspace(props: ChartWorkspaceProps) {
       handlers.startOver = () => {
         if (
           window.confirm(
-            "Start the workspace over? Its layout, charts, drawings and indicators are removed.",
+            tr(
+              "Start the workspace over? Its layout, charts, drawings and indicators are removed.",
+            ),
           )
         ) {
           // Nothing more is saved from this workspace.
@@ -429,7 +447,9 @@ export function ChartWorkspace(props: ChartWorkspaceProps) {
       cleanup();
       if (!disposed)
         setError(
-          `The workspace could not start${cause instanceof Error && cause.message ? `: ${cause.message}` : "."}`,
+          cause instanceof Error && cause.message
+            ? tr("The workspace could not start: {reason}", { reason: cause.message })
+            : tr("The workspace could not start."),
         );
     });
     return () => {

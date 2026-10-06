@@ -2,10 +2,15 @@
 
 import { DayPicker, type DayPickerProps } from "react-day-picker";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { es } from "react-day-picker/locale/es";
+import { useI18n } from "@/components/i18n";
 
 export function Calendar(props: DayPickerProps) {
+  const { locale } = useI18n();
   return (
     <DayPicker
+      // Month and weekday names, and the navigation labels, in the journal's language.
+      {...(locale === "es" ? { locale: es } : {})}
       showOutsideDays
       fixedWeeks
       className="journal-date-calendar"

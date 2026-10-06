@@ -28,6 +28,7 @@ import {
 import { SortableContext, sortableKeyboardCoordinates, useSortable } from "@dnd-kit/sortable";
 import { ArrowLeft, ArrowRight, GripVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useI18n } from "@/components/i18n";
 import { DashboardCustomizer } from "@/components/dashboard-customizer";
 import { DashboardSavedLayouts } from "@/components/dashboard-saved-layouts";
 import {
@@ -73,6 +74,7 @@ const dropAnimation = {
 };
 
 export function DashboardLayout({ widgets }: { widgets: Widget[] }) {
+  const { t, tn } = useI18n();
   const idsKey = JSON.stringify(widgets.map((widget) => widget.id));
   const ids = useMemo(() => JSON.parse(idsKey) as string[], [idsKey]);
   const initial = useMemo(() => normalizeArrangement(null, ids), [ids]);
@@ -125,7 +127,7 @@ export function DashboardLayout({ widgets }: { widgets: Widget[] }) {
           const next = { current: normalizeArrangement(null, ids), layouts: {} };
           stateRef.current = next;
           setState(next);
-          setError("Saved dashboard preferences could not be read. All cards are shown.");
+          setError(t("Saved dashboard preferences could not be read. All cards are shown."));
         }
         setReady(true);
       });
@@ -140,7 +142,7 @@ export function DashboardLayout({ widgets }: { widgets: Widget[] }) {
 
   function update(
     change: (previous: DashboardPreferences) => DashboardPreferences,
-    message = "Layout saved",
+    message = t("Layout saved"),
   ) {
     const next = change(stateRef.current);
     captureLayout();
@@ -153,7 +155,7 @@ export function DashboardLayout({ widgets }: { widgets: Widget[] }) {
       return true;
     } catch {
       setFeedback("");
-      setError("Your layout changed, but could not be saved in this browser.");
+      setError(t("Your layout changed, but could not be saved in this browser."));
       return false;
     }
   }
@@ -185,7 +187,10 @@ export function DashboardLayout({ widgets }: { widgets: Widget[] }) {
     wide: 10,
     full: 15,
   });
-  const label = (id: string | number) => byId.get(String(id))?.label ?? "Card";
+  const label = (id: string | number) => {
+    const card = byId.get(String(id))?.label;
+    return card ? t(card) : t("Card");
+  };
 
   function move(from: string, to: string) {
     update(
@@ -193,7 +198,7 @@ export function DashboardLayout({ widgets }: { widgets: Widget[] }) {
         ...previous,
         current: moveDashboardCard(normalizeArrangement(previous.current, ids), from, to),
       }),
-      `${label(from)} moved. Layout saved.`,
+      t("{card} moved. Layout saved.", { card: label(from) }),
     );
   }
   function moveBy(id: string, delta: number) {
@@ -253,7 +258,7 @@ export function DashboardLayout({ widgets }: { widgets: Widget[] }) {
       if (JSON.stringify(next) !== JSON.stringify(stateRef.current.current))
         update(
           (previous) => ({ ...previous, current: next }),
-          `${label(active.id)} moved. Layout saved.`,
+          t("{card} moved. Layout saved.", { card: label(active.id) }),
         );
       clearDrag();
     } else {
@@ -266,12 +271,14 @@ export function DashboardLayout({ widgets }: { widgets: Widget[] }) {
         ...previous,
         current: { ...normalizeArrangement(previous.current, ids), hidden: [] },
       }),
-      "All cards are shown. Layout saved.",
+      t("All cards are shown. Layout saved."),
     );
   }
 
   if (!ready)
-    return <div className="p-4 text-sm text-muted-foreground">Loading dashboard layout…</div>;
+    return (
+      <div className="p-4 text-sm text-muted-foreground">{t("Loading dashboard layout…")}</div>
+    );
 
   return (
     <div className="space-y-3 p-4">
@@ -287,7 +294,7 @@ export function DashboardLayout({ widgets }: { widgets: Widget[] }) {
                   ...previous,
                   current: normalizeArrangement(previous.layouts[name], ids),
                 }),
-                `${name} loaded`,
+                t("{name} loaded", { name }),
               )
             }
             onSave={(name) =>
@@ -299,12 +306,12 @@ export function DashboardLayout({ widgets }: { widgets: Widget[] }) {
                     [name]: normalizeArrangement(previous.current, ids),
                   },
                 }),
-                `${name} saved`,
+                t("{name} saved", { name }),
               )
             }
           />
           <span className="text-xs text-muted-foreground">
-            {visible.length} of {widgets.length} cards
+            {t("{visible} of {total} cards", { visible: visible.length, total: widgets.length })}
           </span>
           <span role="status" className="sr-only">
             {feedback}
@@ -333,7 +340,7 @@ export function DashboardLayout({ widgets }: { widgets: Widget[] }) {
           onRestore={() =>
             update(
               (previous) => ({ ...previous, current: initial }),
-              "Original card order restored. All cards are shown.",
+              t("Original card order restored. All cards are shown."),
             )
           }
         />
@@ -341,10 +348,14 @@ export function DashboardLayout({ widgets }: { widgets: Widget[] }) {
       {hiddenCount > 0 && (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm">
           <span>
-            {hiddenCount} {hiddenCount === 1 ? "card is" : "cards are"} hidden in this layout.
+            {tn(
+              hiddenCount,
+              "{count} card is hidden in this layout.",
+              "{count} cards are hidden in this layout.",
+            )}
           </span>
           <Button type="button" size="sm" variant="outline" onClick={showAll}>
-            Show all cards
+            {t("Show all cards")}
           </Button>
         </div>
       )}
@@ -355,7 +366,7 @@ export function DashboardLayout({ widgets }: { widgets: Widget[] }) {
       )}
       {visible.length === 0 && (
         <p className="py-8 text-center text-sm text-muted-foreground">
-          All cards are hidden. Choose Show all cards to restore them.
+          {t("All cards are hidden. Choose Show all cards to restore them.")}
         </p>
       )}
       <DndContext
@@ -376,20 +387,28 @@ export function DashboardLayout({ widgets }: { widgets: Widget[] }) {
         onDragCancel={cancelDrag}
         accessibility={{
           screenReaderInstructions: {
-            draggable:
+            draggable: t(
               "Press Space or Enter to pick up a card. Use the arrow keys to move, then Space or Enter to drop. Press Escape to cancel.",
+            ),
           },
           announcements: {
-            onDragStart: ({ active }) => `Picked up ${label(active.id)}.`,
+            onDragStart: ({ active }) => t("Picked up {card}.", { card: label(active.id) }),
             onDragOver: ({ active, over }) =>
               over
-                ? `${label(active.id)} is over ${label(over.id)}.`
-                : "Outside the cards. Drop here to cancel.",
+                ? t("{card} is over {target}.", {
+                    card: label(active.id),
+                    target: label(over.id),
+                  })
+                : t("Outside the cards. Drop here to cancel."),
             onDragEnd: ({ active, over }) =>
               over
-                ? `${label(active.id)} placed at position ${visible.indexOf(String(active.id)) + 1} of ${visible.length}.`
-                : "Move cancelled.",
-            onDragCancel: () => "Move cancelled. Layout unchanged.",
+                ? t("{card} placed at position {position} of {total}.", {
+                    card: label(active.id),
+                    position: visible.indexOf(String(active.id)) + 1,
+                    total: visible.length,
+                  })
+                : t("Move cancelled."),
+            onDragCancel: () => t("Move cancelled. Layout unchanged."),
           },
         }}
       >
@@ -446,6 +465,8 @@ function SortableCard({
   last: boolean;
   onMove(delta: number): void;
 }) {
+  const { t } = useI18n();
+  const card = t(widget.label);
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, isDragging } = useSortable({
     id: widget.id,
     disabled: exiting,
@@ -460,7 +481,7 @@ function SortableCard({
       data-exiting={exiting || undefined}
       aria-hidden={exiting || undefined}
       inert={exiting || undefined}
-      aria-label={widget.label}
+      aria-label={card}
       className="dashboard-grid-card relative flex min-w-0 flex-col rounded-xl"
       style={
         {
@@ -481,8 +502,9 @@ function SortableCard({
           variant="ghost"
           {...attributes}
           {...listeners}
-          aria-label={`Rearrange ${widget.label}`}
-          title={`Drag to rearrange ${widget.label}`}
+          data-dashboard-handle
+          aria-label={t("Rearrange {card}", { card })}
+          title={t("Drag to rearrange {card}", { card })}
           className="absolute left-1.5 top-3 z-[1] h-6 w-5 touch-none cursor-grab text-muted-foreground/60 hover:text-foreground active:cursor-grabbing"
         >
           <GripVertical className="h-3.5 w-3.5" />
@@ -493,14 +515,14 @@ function SortableCard({
             data-dashboard-move-controls
             className="mt-1 flex items-center justify-end gap-1 rounded border bg-card px-1 py-0.5 text-xs"
           >
-            <span className="mr-auto pl-1 text-muted-foreground">Move card</span>
+            <span className="mr-auto pl-1 text-muted-foreground">{t("Move card")}</span>
             <Button
               type="button"
               size="icon"
               variant="ghost"
               className="h-6 w-6"
               disabled={first}
-              aria-label={`Move ${widget.label} earlier`}
+              aria-label={t("Move {card} earlier", { card })}
               onClick={() => onMove(-1)}
             >
               <ArrowLeft className="h-3 w-3" />
@@ -511,7 +533,7 @@ function SortableCard({
               variant="ghost"
               className="h-6 w-6"
               disabled={last}
-              aria-label={`Move ${widget.label} later`}
+              aria-label={t("Move {card} later", { card })}
               onClick={() => onMove(1)}
             >
               <ArrowRight className="h-3 w-3" />

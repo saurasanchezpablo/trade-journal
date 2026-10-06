@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { BacktestTrade } from "@luxalgo/journal-core";
 import { Pnl } from "@/components/pnl";
+import { useI18n, useT } from "@/components/i18n";
 import { MonetaryValue } from "@/components/privacy";
 import { formatTimestamp } from "@/lib/timezone";
 import { fmtMoney, fmtNumber } from "@/lib/utils";
@@ -15,14 +16,15 @@ const REASONS: Record<BacktestTrade["exitReason"], string> = {
 };
 
 function Note({ value, onSave }: { value: string; onSave: (note: string) => void }) {
+  const t = useT();
   const [draft, setDraft] = useState(value);
   useEffect(() => setDraft(value), [value]);
   return (
     <input
-      aria-label="Trade note"
+      aria-label={t("Trade note")}
       className="w-full min-w-40 rounded border border-transparent bg-transparent px-1 py-0.5 text-xs hover:border-input focus:border-input focus:outline-none"
       value={draft}
-      placeholder="Add a note"
+      placeholder={t("Add a note")}
       maxLength={2000}
       onChange={(event) => setDraft(event.target.value)}
       onBlur={() => draft !== value && onSave(draft)}
@@ -45,7 +47,9 @@ export function TradesTable({
   timeZone: string;
   onNote: (id: string, note: string) => void;
 }) {
-  if (!trades.length) return <p className="text-sm text-muted-foreground">No closed trades yet.</p>;
+  const { t, tx } = useI18n();
+  if (!trades.length)
+    return <p className="text-sm text-muted-foreground">{t("No closed trades yet.")}</p>;
   const when = (time: number) =>
     formatTimestamp(new Date(time).toISOString(), timeZone).slice(0, 16);
   return (
@@ -67,7 +71,7 @@ export function TradesTable({
               "Note",
             ].map((label) => (
               <th key={label} className="whitespace-nowrap py-1.5 pr-3 font-normal">
-                {label}
+                {tx("backtest column", label)}
               </th>
             ))}
           </tr>
@@ -79,7 +83,7 @@ export function TradesTable({
               <td
                 className={`py-1.5 pr-3 font-medium ${trade.side === "long" ? "text-profit" : "text-loss"}`}
               >
-                {trade.side === "long" ? "Long" : "Short"}
+                {t(trade.side === "long" ? "Long" : "Short")}
               </td>
               <td className="whitespace-nowrap py-1.5 pr-3">
                 {when(trade.entryTime)}
@@ -96,13 +100,15 @@ export function TradesTable({
                 </span>
               </td>
               <td className="py-1.5 pr-3">
-                {REASONS[trade.exitReason]}
+                {tx("exit reason", REASONS[trade.exitReason])}
                 {trade.ambiguous && (
                   <span
                     className="ml-1 text-muted-foreground"
-                    title="The candle reached both levels (or the entry and a level); the same-candle rule decided."
+                    title={t(
+                      "The candle reached both levels (or the entry and a level); the same-candle rule decided.",
+                    )}
                   >
-                    · candle rule
+                    · {t("candle rule")}
                   </span>
                 )}
               </td>

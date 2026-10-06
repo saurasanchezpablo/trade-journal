@@ -1,3 +1,4 @@
+import { serverT } from "@/server/i18n";
 import { handler, ok } from "@/server/api";
 import { deliver } from "@/server/background-alerts/delivery";
 
@@ -6,8 +7,8 @@ export const POST = handler(async () =>
   ok({
     delivered: await deliver(
       {
-        title: "Test alert",
-        body: "Alerts from the journal reach this device.",
+        title: serverT("Test alert"),
+        body: serverT("Alerts from the journal reach this device."),
         tag: "alert-test",
         url: "/alerts",
       },

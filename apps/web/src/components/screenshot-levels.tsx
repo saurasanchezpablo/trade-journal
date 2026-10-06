@@ -3,9 +3,11 @@
 import { useState } from "react";
 import { ImageUp, Sparkles } from "lucide-react";
 import { fmtPrice } from "@/lib/analysis-text";
+import { tr } from "@/lib/i18n";
 import { postJson } from "@/lib/use-api";
 import { Button } from "./ui/button";
 import { AiNotice } from "./ai-notice";
+import { useI18n } from "./i18n";
 
 interface ReadLevel {
   kind: "line" | "zone";
@@ -24,14 +26,14 @@ async function asDataUrl(file: Blob): Promise<string> {
   const url = await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(new Error("Could not read the picture."));
+    reader.onerror = () => reject(new Error(tr("Could not read the picture.")));
     reader.readAsDataURL(file);
   });
   if (file.size <= MAX_BYTES * 0.7 && /^data:image\/(png|jpeg|webp);/.test(url)) return url;
   const image = new Image();
   await new Promise((resolve, reject) => {
     image.onload = resolve;
-    image.onerror = () => reject(new Error("That file is not a picture the browser can open."));
+    image.onerror = () => reject(new Error(tr("That file is not a picture the browser can open.")));
     image.src = url;
   });
   const scale = Math.min(1, 2000 / Math.max(image.width, image.height));
@@ -57,6 +59,7 @@ export function ScreenshotLevels({
   disabled?: boolean;
   onAdd: (lines: { price: number; label: string }[], zones: ReadLevel[]) => void;
 }) {
+  const { t, tx } = useI18n();
   const [picture, setPicture] = useState<string | null>(null);
   const [levels, setLevels] = useState<ReadLevel[] | null>(null);
   const [chosen, setChosen] = useState<Set<number>>(new Set());
@@ -71,7 +74,7 @@ export function ScreenshotLevels({
     try {
       setPicture(await asDataUrl(file));
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not read the picture.");
+      setError(cause instanceof Error ? cause.message : t("Could not read the picture."));
     }
   };
   const readLevels = async () => {
@@ -95,7 +98,7 @@ export function ScreenshotLevels({
         ),
       );
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not read levels");
+      setError(cause instanceof Error ? cause.message : t("Could not read levels"));
     } finally {
       setBusy(false);
     }
@@ -132,7 +135,7 @@ export function ScreenshotLevels({
       <div className="flex flex-wrap items-center gap-2">
         <label className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md border px-3 text-xs hover:bg-accent">
           <ImageUp className="size-3.5" aria-hidden />
-          Levels from a screenshot
+          {t("Levels from a screenshot")}
           <input
             type="file"
             accept="image/png,image/jpeg,image/webp"
@@ -149,18 +152,18 @@ export function ScreenshotLevels({
             onClick={() => void readLevels()}
           >
             <Sparkles />
-            {busy ? "Reading…" : "Read the levels"}
+            {busy ? t("Reading…") : t("Read the levels")}
           </Button>
         )}
       </div>
       <p className="text-[11px] text-muted-foreground">
-        Choose or paste a chart picture; it is sent to your AI provider to read its levels.
+        {t("Choose or paste a chart picture; it is sent to your AI provider to read its levels.")}
       </p>
       {picture && !levels && (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={picture}
-          alt="Screenshot to read"
+          alt={t("Screenshot to read")}
           className="max-h-40 rounded border object-contain"
         />
       )}
@@ -174,14 +177,17 @@ export function ScreenshotLevels({
       {levels && (
         <div
           className="space-y-1.5 rounded-md border border-dashed p-2 text-xs"
-          aria-label="Levels read"
+          aria-label={t("Levels read")}
         >
           {mismatch && (
             <p className="text-muted-foreground">
-              The picture shows {shown}, not {symbol}: check the prices fit this chart.
+              {t("The picture shows {shown}, not {symbol}: check the prices fit this chart.", {
+                shown,
+                symbol,
+              })}
             </p>
           )}
-          {levels.length === 0 && <p>No horizontal levels found in the picture.</p>}
+          {levels.length === 0 && <p>{t("No horizontal levels found in the picture.")}</p>}
           {levels.map((l, i) => (
             <label key={i} className="flex items-start gap-2">
               <input
@@ -201,20 +207,21 @@ export function ScreenshotLevels({
                 <span className="tnum font-medium">
                   {l.kind === "line"
                     ? fmtPrice(l.low)
-                    : `${fmtPrice(l.low)} to ${fmtPrice(l.high)}`}
+                    : t("{low} to {high}", { low: fmtPrice(l.low), high: fmtPrice(l.high) })}
                 </span>{" "}
-                {l.kind === "zone" ? "zone" : "line"}
+                {l.kind === "zone" ? tx("level", "zone") : tx("level", "line")}
                 {l.label ? `, ${l.label}` : ""}
                 <span className="text-muted-foreground">
                   {" "}
-                  · {l.confidence} confidence{l.doubt ? ` · ${l.doubt}` : ""}
+                  · {t(`${l.confidence} confidence`)}
+                  {l.doubt ? ` · ${l.doubt}` : ""}
                 </span>
               </span>
             </label>
           ))}
           {levels.length > 0 && (
             <Button type="button" size="sm" variant="outline" disabled={!chosen.size} onClick={add}>
-              Add {chosen.size} to the chart
+              {t("Add {count} to the chart", { count: chosen.size })}
             </Button>
           )}
         </div>

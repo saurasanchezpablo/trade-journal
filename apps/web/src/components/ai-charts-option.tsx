@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { analysisEditPath } from "@/lib/chart-analysis";
+import { tr } from "@/lib/i18n";
+import { useI18n } from "./i18n";
 
 /** A chart analysis an AI review looked at, as the recap and critique routes report it. */
 export interface AiAnalysisUsed {
@@ -42,37 +44,43 @@ export function AiChartsToggle({
   checked: boolean;
   onChange: (value: boolean) => void;
 }) {
+  const { t } = useI18n();
   return (
     <label
       className="flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground"
-      title="Chart analyses embedded in the notes or assigned to the day, with their snapshots as images"
+      title={t(
+        "Chart analyses embedded in the notes or assigned to the day, with their snapshots as images",
+      )}
     >
       <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
-      Include linked chart analyses
+      {t("Include linked chart analyses")}
     </label>
   );
 }
 
 export function AiChartsUsed({ analyses }: { analyses: AiAnalysisUsed[] | undefined }) {
+  const { t } = useI18n();
   if (!analyses?.length) return null;
   return (
     <p className="text-xs text-muted-foreground">
-      Checked against {analyses.length === 1 ? "chart" : "charts"}:{" "}
+      {analyses.length === 1 ? t("Checked against chart:") : t("Checked against charts:")}{" "}
       {analyses.map((a, i) => (
         <span key={a.id}>
           {i > 0 && ", "}
           <Link href={analysisEditPath(a.id)} className="underline">
             {a.label}
           </Link>
-          {!a.image && " (no snapshot)"}
+          {!a.image && ` ${t("(no snapshot)")}`}
         </span>
       ))}
     </p>
   );
 }
 
-/** A markdown line naming the analyses a recap used, for the saved note. */
+/** A markdown line naming the analyses a recap used, for the saved note (in its language). */
 export const analysesUsedMarkdown = (analyses: AiAnalysisUsed[] | undefined) =>
   analyses?.length
-    ? `_Checked against: ${analyses.map((a) => a.label.replace(/[\\`*_{}[\]<>#]/g, "")).join(", ")}_\n\n`
+    ? `_${tr("Checked against: {charts}", {
+        charts: analyses.map((a) => a.label.replace(/[\\`*_{}[\]<>#]/g, "")).join(", "),
+      })}_\n\n`
     : "";

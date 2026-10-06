@@ -1,5 +1,6 @@
 import type { IndicatorHandle, Vela } from "@luxalgo/vela";
 import { declaredTitle, type IndicatorRef, type StoredIndicator } from "@/lib/chart-indicators";
+import { tr } from "@/lib/i18n";
 
 /** An indicator on the chart as the panel shows it: what is saved, plus its last error. */
 export interface ChartIndicator extends StoredIndicator {
@@ -15,7 +16,7 @@ export interface IndicatorAlert {
 export type RunResult = { ok: true; id: string } | { ok: false; error: string };
 
 const errorText = (error: unknown) =>
-  error instanceof Error ? error.message : typeof error === "string" ? error : "Script error.";
+  error instanceof Error ? error.message : typeof error === "string" ? error : tr("Script error.");
 
 let counter = 0;
 const indicatorId = () => `ind-${Date.now().toString(36)}${(counter += 1).toString(36)}`;
@@ -97,7 +98,7 @@ export function createIndicatorBridge(
     }),
     instance.on("alert", (alert) =>
       hooks.onAlert({
-        indicator: alert.indicator ?? "Indicator",
+        indicator: alert.indicator ?? tr("Indicator"),
         message: alert.message,
         time: alert.time,
       }),

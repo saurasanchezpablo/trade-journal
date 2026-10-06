@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useState } from "react";
+import { useT } from "./i18n";
 import { Input } from "./ui/input";
 
 interface Match {
@@ -30,6 +31,7 @@ export function SymbolSearchInput({
   dataset: string;
   searchable: boolean;
 }) {
+  const t = useT();
   const listId = useId();
   const [matches, setMatches] = useState<Match[]>([]);
   const [engaged, setEngaged] = useState(false);
@@ -60,7 +62,7 @@ export function SymbolSearchInput({
       <Input
         id={id}
         value={value}
-        placeholder={searchable ? "Search: BTC" : "AAPL"}
+        placeholder={searchable ? t("Search: BTC") : "AAPL"}
         autoCapitalize="characters"
         autoComplete="off"
         list={searchable ? listId : undefined}

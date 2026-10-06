@@ -15,6 +15,8 @@ import { newId, nowIso } from "../ids";
 import { alertEvents, alertWatches, alertsDb } from "./store";
 import { deliver, type AlertNotification, type DeliveryMeta } from "./delivery";
 import { logFailure } from "./log";
+import { setActiveLocale } from "@/lib/i18n";
+import { getLocale } from "../i18n";
 
 /**
  * Background alerts: the server keeps watching the line and zone alerts of analyses you
@@ -309,11 +311,18 @@ export class AlertEngine {
     const now = this.deps.now();
     const ready = (key: string) => now - (watch.alertedAt.get(key) ?? 0) > COOLDOWN_MS;
     const fired: { message: AlertMessage; kind: "lines" | "zones" }[] = [];
+    // Alert wording follows the journal's language, read once an alert is about to fire.
+    let spoken = false;
+    const speak = () => {
+      if (!spoken) setActiveLocale(getLocale());
+      spoken = true;
+    };
     for (const event of zoneEvents(watch.zones, previous.close, close, watch.origins)) {
       const zone = watch.zones.find((z) => z.id === event.zoneId);
       const key = `zone-${event.zoneId}-${event.kind}`;
       if (!zone || !ready(key)) continue;
       watch.alertedAt.set(key, now);
+      speak();
       fired.push({
         message: zoneAlert(watch.analysisId, watch.symbol, event, zone, watch.plan),
         kind: "zones",
@@ -322,6 +331,7 @@ export class AlertEngine {
     for (const hit of lineCrossings(watch.lines, previous, { time, close }, watch.sides)) {
       if (!ready(hit.drawingId)) continue;
       watch.alertedAt.set(hit.drawingId, now);
+      speak();
       const line = watch.lines.find((l) => l.id === hit.drawingId);
       fired.push({
         message: lineAlert(

@@ -25,6 +25,7 @@ import {
 import { AiNotice } from "./ai-notice";
 import { Markdown } from "./rich-editor";
 import { usePrivacy } from "./privacy";
+import { useI18n } from "./i18n";
 
 /** What a chat is about. A trade's chat uses the trade's account as its scope. */
 export type ChatTarget =
@@ -47,8 +48,8 @@ const listUrl = (target: ChatTarget) => {
   return `/api/ai/chat?${params}`;
 };
 
-const formatWhen = (iso: string, timeZone: string) =>
-  new Date(iso).toLocaleString(undefined, {
+const formatWhen = (iso: string, timeZone: string, locale: string) =>
+  new Date(iso).toLocaleString(locale, {
     month: "short",
     day: "numeric",
     hour: "2-digit",
@@ -65,7 +66,7 @@ export function JournalChat({
   target,
   suggestions = [],
   seed,
-  placeholder = "Ask a question about your trades",
+  placeholder,
   intro,
   openId,
   starter,
@@ -80,6 +81,7 @@ export function JournalChat({
   /** A first turn another route writes (such as a period review), shown as a button. */
   starter?: { label: string; display: string; url: string; body: Record<string, unknown> } | null;
 }) {
+  const { t, tn, intl } = useI18n();
   const privateMode = usePrivacy();
   const history = useApi<{ conversations: Conversation[] }>(listUrl(target));
   const [active, setActive] = useState<Conversation | null>(null);
@@ -139,14 +141,15 @@ export function JournalChat({
           messages?: ChatMessage[];
           error?: string;
         };
-        if (!response.ok || !body.conversation) throw new Error(body.error ?? "Could not open it");
+        if (!response.ok || !body.conversation)
+          throw new Error(body.error ? t(body.error) : t("Could not open it"));
         if (!current()) return;
         setActive(body.conversation);
         setMessages(body.messages ?? []);
         setShowHistory(false);
       } catch (cause) {
         if (current())
-          setError(cause instanceof Error ? cause.message : "Could not open the conversation");
+          setError(cause instanceof Error ? cause.message : t("Could not open the conversation"));
       } finally {
         if (current()) setLoadingId(null);
       }
@@ -170,14 +173,18 @@ export function JournalChat({
       });
       if (!response.ok) {
         const body = (await response.json().catch(() => ({}))) as { error?: string };
-        throw new Error(body.error ?? `Request failed (${response.status})`);
+        throw new Error(
+          body.error ? t(body.error) : t("Request failed ({status})", { status: response.status }),
+        );
       }
       if (!mounted.current) return;
       if (active?.id === conversation.id) startNew();
     } catch (cause) {
       if (mounted.current)
         setRemoveError(
-          `Could not delete the chat: ${cause instanceof Error ? cause.message : "the request failed."}`,
+          t("Could not delete the chat: {reason}", {
+            reason: cause instanceof Error ? cause.message : t("the request failed."),
+          }),
         );
     } finally {
       if (mounted.current) history.refresh();
@@ -262,7 +269,7 @@ export function JournalChat({
             break;
           case "error":
             if (event.saved) setMessages((m) => [...m, event.saved!]);
-            setError(event.message);
+            setError(t(event.message));
             break;
         }
       });
@@ -283,7 +290,7 @@ export function JournalChat({
             },
           ]);
       } else {
-        setError(cause instanceof Error ? cause.message : "AI request failed");
+        setError(cause instanceof Error ? cause.message : t("AI request failed"));
         if (!accepted) {
           // Refused before anything was saved: take the question back.
           setMessages((m) => m.filter((x) => x.id !== pending.id && x.id !== "pending-seed"));
@@ -319,7 +326,9 @@ export function JournalChat({
             onClick={() => setShowHistory((v) => !v)}
           >
             <History />
-            Saved chats{conversations.length ? ` (${conversations.length})` : ""}
+            {conversations.length
+              ? t("Saved chats ({count})", { count: conversations.length })
+              : t("Saved chats")}
           </Button>
           <Button
             type="button"
@@ -329,7 +338,7 @@ export function JournalChat({
             onClick={startNew}
           >
             <Plus />
-            New chat
+            {t("New chat")}
           </Button>
         </div>
       </div>
@@ -341,9 +350,9 @@ export function JournalChat({
       )}
 
       {showHistory && (
-        <div className="rounded-md border" role="region" aria-label="Saved chats">
+        <div className="rounded-md border" role="region" aria-label={t("Saved chats")}>
           {conversations.length === 0 ? (
-            <p className="p-3 text-xs text-muted-foreground">No saved chats yet.</p>
+            <p className="p-3 text-xs text-muted-foreground">{t("No saved chats yet.")}</p>
           ) : (
             <ul className="max-h-64 divide-y overflow-y-auto">
               {conversations.map((c) => (
@@ -358,11 +367,12 @@ export function JournalChat({
                       {loadingId === c.id && (
                         <Loader2 className="mr-1 inline h-3 w-3 animate-spin" aria-hidden />
                       )}
-                      {privateMode ? "Chat" : c.title}
+                      {privateMode ? t("Chat") : c.title}
                     </span>
                     <span className="block truncate text-xs text-muted-foreground">
-                      {formatWhen(c.updatedAt, target.timeZone)} · {c.messages ?? 0} messages ·{" "}
-                      {c.scopeLabel}
+                      {formatWhen(c.updatedAt, target.timeZone, intl)} ·{" "}
+                      {tn(c.messages ?? 0, "{count} message", "{count} messages")} ·{" "}
+                      {t(c.scopeLabel)}
                     </span>
                   </button>
                   <Button
@@ -373,8 +383,10 @@ export function JournalChat({
                     // Privacy mode hides the title, also from screen readers.
                     aria-label={
                       privateMode
-                        ? `Delete chat from ${formatWhen(c.updatedAt, target.timeZone)}`
-                        : `Delete chat ${c.title}`
+                        ? t("Delete chat from {when}", {
+                            when: formatWhen(c.updatedAt, target.timeZone, intl),
+                          })
+                        : t("Delete chat {title}", { title: c.title })
                     }
                     onClick={() => void remove(c)}
                   >
@@ -389,9 +401,12 @@ export function JournalChat({
 
       {active && (
         <p className="text-xs text-muted-foreground">
-          Scope: {active.scopeLabel}
-          {outOfScope &&
-            ". This chat keeps the scope it started with; start a new chat to use the current filters."}
+          {outOfScope
+            ? t(
+                "Scope: {scope}. This chat keeps the scope it started with; start a new chat to use the current filters.",
+                { scope: t(active.scopeLabel) },
+              )
+            : t("Scope: {scope}", { scope: t(active.scopeLabel) })}
         </p>
       )}
 
@@ -422,7 +437,7 @@ export function JournalChat({
         }}
       >
         <textarea
-          aria-label={active ? "Ask a follow-up" : "Ask your journal a question"}
+          aria-label={active ? t("Ask a follow-up") : t("Ask your journal a question")}
           value={input}
           rows={1}
           onChange={(event) => setInput(event.target.value)}
@@ -432,18 +447,20 @@ export function JournalChat({
               void send(input);
             }
           }}
-          placeholder={active ? "Ask a follow-up" : placeholder}
+          placeholder={
+            active ? t("Ask a follow-up") : (placeholder ?? t("Ask a question about your trades"))
+          }
           className="min-h-9 flex-1 resize-y rounded-md border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         />
         {busy ? (
           <Button type="button" variant="outline" onClick={() => abort.current?.abort()}>
             <Square />
-            Stop
+            {t("Stop")}
           </Button>
         ) : (
           <Button type="submit" disabled={!input.trim()}>
             {active ? <Send /> : <Sparkles />}
-            {active ? "Send" : "Ask"}
+            {active ? t("Send") : t("Ask")}
           </Button>
         )}
       </form>
@@ -481,22 +498,23 @@ export function JournalChat({
 }
 
 function ToolChips({ tools }: { tools: { label: string; ok: boolean | null }[] }) {
+  const { t } = useI18n();
   if (!tools.length) return null;
   return (
-    <ul className="flex flex-wrap gap-1.5" aria-label="Journal lookups">
+    <ul className="flex flex-wrap gap-1.5" aria-label={t("Journal lookups")}>
       {tools.map((tool, index) => (
         <li
           key={index}
           className="inline-flex items-center gap-1 rounded-full border bg-muted/40 px-2 py-0.5 text-[11px] text-muted-foreground"
         >
           {tool.ok === null ? (
-            <Loader2 className="h-3 w-3 animate-spin" aria-label="Looking up" />
+            <Loader2 className="h-3 w-3 animate-spin" aria-label={t("Looking up")} />
           ) : tool.ok ? (
-            <Check className="h-3 w-3" aria-label="Done" />
+            <Check className="h-3 w-3" aria-label={t("Done")} />
           ) : (
-            <CircleAlert className="h-3 w-3" aria-label="Failed" />
+            <CircleAlert className="h-3 w-3" aria-label={t("Failed")} />
           )}
-          {tool.label}
+          {t(tool.label)}
         </li>
       ))}
     </ul>
@@ -504,27 +522,28 @@ function ToolChips({ tools }: { tools: { label: string; ok: boolean | null }[] }
 }
 
 function Message({ message, privateMode }: { message: ChatMessage; privateMode: boolean }) {
+  const { t } = useI18n();
   if (message.role === "user")
     return (
       <div className="flex justify-end">
         <p className="max-w-[85%] whitespace-pre-wrap rounded-lg bg-muted px-3 py-2 text-sm">
-          {privateMode ? "Question hidden in privacy mode" : message.content}
+          {privateMode ? t("Question hidden in privacy mode") : message.content}
         </p>
       </div>
     );
   return (
-    <article className="space-y-2" aria-label="Answer">
+    <article className="space-y-2" aria-label={t("Answer")}>
       <ToolChips tools={message.tools} />
       <div className="text-sm leading-relaxed">
         {privateMode ? (
-          <p className="text-muted-foreground">Answer hidden in privacy mode.</p>
+          <p className="text-muted-foreground">{t("Answer hidden in privacy mode.")}</p>
         ) : (
           <Markdown externalImages="ask">{message.content}</Markdown>
         )}
       </div>
       {message.status !== "done" && (
         <p className="text-xs text-muted-foreground">
-          {message.status === "stopped" ? "Stopped" : "Cut short by an error"}
+          {message.status === "stopped" ? t("Stopped") : t("Cut short by an error")}
         </p>
       )}
     </article>
@@ -532,13 +551,14 @@ function Message({ message, privateMode }: { message: ChatMessage; privateMode: 
 }
 
 function DraftMessage({ draft, privateMode }: { draft: Draft; privateMode: boolean }) {
+  const { t } = useI18n();
   return (
-    <article className="space-y-2" aria-label="Answer being written">
+    <article className="space-y-2" aria-label={t("Answer being written")}>
       <ToolChips tools={draft.tools} />
       {draft.text ? (
         <div className="text-sm leading-relaxed">
           {privateMode ? (
-            <p className="text-muted-foreground">Answer hidden in privacy mode.</p>
+            <p className="text-muted-foreground">{t("Answer hidden in privacy mode.")}</p>
           ) : (
             <Markdown externalImages="ask">{draft.text}</Markdown>
           )}
@@ -546,7 +566,7 @@ function DraftMessage({ draft, privateMode }: { draft: Draft; privateMode: boole
       ) : (
         <p className="flex items-center gap-2 text-xs text-muted-foreground">
           <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
-          {draft.tools.length ? "Looking through your journal…" : "Thinking…"}
+          {draft.tools.length ? t("Looking through your journal…") : t("Thinking…")}
         </p>
       )}
     </article>
