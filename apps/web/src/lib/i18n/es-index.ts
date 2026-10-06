@@ -4,6 +4,8 @@ import common from "./common";
 import dashboardReports from "./dashboard-reports";
 import features from "./features";
 import journalAi from "./journal-ai";
+import propAlerts from "./prop-alerts";
+import reports from "./reports";
 import server from "./server";
 import shellSettings from "./shell-settings";
 import trades from "./trades";
@@ -16,10 +18,12 @@ export const ES: Readonly<Record<string, string>> = {
   ...common,
   ...shellSettings,
   ...dashboardReports,
+  ...reports,
   ...trades,
   ...charts,
   ...chartTools,
   ...journalAi,
   ...features,
+  ...propAlerts,
   ...server,
 };
