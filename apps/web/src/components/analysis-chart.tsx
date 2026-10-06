@@ -600,6 +600,8 @@ export function AnalysisChart({
       instance.setTheme(theme);
       applyLook(instance);
       applyDrawingPrefs(instance, appearanceRef.current);
+      // Kept through every load from here on (see applyPrecision).
+      applyPrecision(instance, appearanceRef.current.decimals);
       instance.drawings.fromJSON(liftDrawingDepth(markLegacyFibs(markLegacyPatterns(drawings))));
       applyLayers(instance, layersRef.current);
       publish(instance);
@@ -727,11 +729,6 @@ export function AnalysisChart({
         }),
         instance.on("load:end", ({ bars: loaded }) => {
           if (!loaded) history.current.loading = false;
-          // A market switch resets the axis precision; put the chosen one back.
-          setTimeout(() => {
-            if (chart.current === instance)
-              applyPrecision(instance, appearanceRef.current.decimals);
-          }, 0);
         }),
         instance.on("viewport:changed", ({ from, to }) => {
           // Scrolling near the oldest candle loads more, like any trading chart.
@@ -1427,14 +1424,30 @@ function applyTextDefaults(
   } else instance.drawings.update(drawing.id, { text });
 }
 
-/** Tick size for the price axis: Vela's renderer takes it directly. */
+type PrecisionPort = { setPricePrecision?: (tick: number | undefined) => void };
+/** The price decimals chosen for each chart, as a tick size (undefined = automatic). */
+const chosenTicks = new WeakMap<PrecisionPort, { tick: number | undefined }>();
+
+/**
+ * Tick size for the price axis: Vela's renderer takes it directly. After every load Vela
+ * sets the symbol's own tick size, which the journal's sources don't provide, so it clears
+ * it; and it does so again when its asynchronous symbol lookup lands, which can be after
+ * any re-apply here. So the renderer's setter is wrapped once per chart: a clearing call
+ * keeps the chosen decimals, a real tick size from a source still wins.
+ */
 function applyPrecision(instance: Vela, decimals: number | undefined) {
-  const port = (
-    instance.renderer as unknown as {
-      renderer?: { setPricePrecision?: (tick: number | undefined) => void };
-    }
-  ).renderer;
-  port?.setPricePrecision?.(tickForDecimals(decimals));
+  const port = (instance.renderer as unknown as { renderer?: PrecisionPort }).renderer;
+  const set = port?.setPricePrecision;
+  if (!port || typeof set !== "function") return;
+  let chosen = chosenTicks.get(port);
+  if (!chosen) {
+    chosen = { tick: undefined };
+    chosenTicks.set(port, chosen);
+    const state = chosen;
+    port.setPricePrecision = (tick) => set.call(port, tick ?? state.tick);
+  }
+  chosen.tick = tickForDecimals(decimals);
+  port.setPricePrecision!(chosen.tick);
 }
 
 /** Vela keeps a per-tool "last used" style that seeds new drawings; it has no public

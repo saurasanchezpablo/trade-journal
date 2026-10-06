@@ -86,6 +86,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Fixed
 
+- A symbol's price decimals stay on the chart's price axis after the chart loads more candles or switches candle size (a late symbol lookup could reset them to automatic)
 - A replay rewound or restarted no longer shows fill labels from later in the trade: the labels follow the revealed candles
 - Net P&L in Reports and playbook adherence is signed, so a gain is not told apart by colour alone; the market estimates dataset picker asks for a choice instead of starting blank; the prop tracker's section buttons say which one is shown; removing a market data CSV asks first
 - Searching or switching folders in the Notebook while writing no longer reloads the open note with older text
