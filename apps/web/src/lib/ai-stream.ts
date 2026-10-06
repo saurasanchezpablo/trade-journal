@@ -1,4 +1,5 @@
 import { readNdjson } from "./ai-chat";
+import { tr } from "./i18n";
 
 type StreamEvent =
   | { type: "text"; delta: string }
@@ -36,7 +37,8 @@ export async function postAiStream<T>(
       failure = event.message;
     }
   });
-  if (failure) throw new Error(failure);
-  if (result === null) throw new Error("The answer was cut off. Try again.");
+  // The server writes its messages in English; shown in the journal's language.
+  if (failure) throw new Error(tr(failure));
+  if (result === null) throw new Error(tr("The answer was cut off. Try again."));
   return result;
 }

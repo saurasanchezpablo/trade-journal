@@ -28,6 +28,7 @@ import { postJson, useApi } from "@/lib/use-api";
 import { fmtMoney, fmtNumber, fmtPercent } from "@/lib/utils";
 import { clipOffscreenDashes } from "../vela-dash-fix";
 import { limitChartView } from "../vela-view-limits";
+import { PineAssistant } from "./pine-assistant";
 import { BacktestReportView } from "./backtest-report";
 
 const FIAT = new Set(["USD", "EUR", "GBP", "JPY", "CHF", "CAD", "AUD", "NZD"]);
@@ -80,9 +81,9 @@ export function StrategyTester() {
   const { t } = useI18n();
   const { timeZone } = useFilters();
   const { data } = useApi<{ connections: MarketConnection[] }>("/api/market-data/connections");
-  const { data: scripts } = useApi<{ scripts: { id: string; name: string; source: string }[] }>(
-    "/api/chart-scripts",
-  );
+  const { data: scripts, refresh: refreshScripts } = useApi<{
+    scripts: { id: string; name: string; source: string }[];
+  }>("/api/chart-scripts");
   const sources = (data?.connections ?? []).filter((c) => c.configured);
   const [provider, setProvider] = useState("");
   const chosen = provider || sources[0]?.id || "";
@@ -95,6 +96,8 @@ export function StrategyTester() {
   const [source, setSource] = useState(EXAMPLE_STRATEGIES[0]!.source);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  /** Why the last run of the script failed, for the AI to fix. */
+  const [failure, setFailure] = useState<string | null>(null);
   const [bars, setBars] = useState<MarketBar[] | null>(null);
   const [currency, setCurrency] = useState("USD");
   const [result, setResult] = useState<Result | null>(null);
@@ -110,6 +113,7 @@ export function StrategyTester() {
 
   const run = async () => {
     setError("");
+    setFailure(null);
     setResult(null);
     const start = zonedTime(from, timeZone);
     const end = zonedTime(to, timeZone);
@@ -301,6 +305,18 @@ export function StrategyTester() {
                   onChange={(e) => setSource(e.target.value)}
                 />
               </div>
+              <div className="sm:col-span-2 lg:col-span-4">
+                <PineAssistant
+                  current={source}
+                  failure={failure}
+                  onUse={(script) => {
+                    setSource(script);
+                    setFailure(null);
+                    setError("");
+                  }}
+                  onSaved={refreshScripts}
+                />
+              </div>
               {error && (
                 <p role="alert" className="text-sm text-destructive sm:col-span-2 lg:col-span-4">
                   {error}
@@ -324,7 +340,10 @@ export function StrategyTester() {
           source={source}
           onDone={(outcome) => {
             setBusy(false);
-            if ("error" in outcome) return setError(t(outcome.error));
+            if ("error" in outcome) {
+              setFailure(outcome.error);
+              return setError(t(outcome.error));
+            }
             const first = bars[0]!.close;
             const last = bars.at(-1)!.close;
             setResult({

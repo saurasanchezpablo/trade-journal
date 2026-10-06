@@ -83,6 +83,23 @@ shows its performance summary (the same report as replay, from its closed trades
 hold over the same candles, and the list of trades with each one's run-up and drawdown.
 Capital, sizing and commission are the script's own, set in its `strategy()` line.
 
+### Writing strategies with the AI
+
+**Ask the AI for a strategy** (under the code box, with an AI provider set in Settings):
+describe what you want and choose **Write a new strategy**, or **Change this script** to have
+the script in the box completed or changed (add a stop, only trade longs, a filter...). After
+a run that failed, **Fix the error** sends the script and its error to be repaired. The script
+appears as it is written, with a few lines on what it does and what to tune; it replaces the
+code box only with **Use this script**, and **Save to My scripts** keeps it with your saved
+scripts (named after its `strategy()` title). The AI writes Pine Script v5 within what this
+tester runs (built-in series, `ta.*`, inputs, `strategy.entry`, `strategy.exit`,
+`strategy.close`; no other symbols or timeframes). Check the code and the results: a
+strategy that does well on past candles can still lose money.
+
+Code: `lib/pine-ai.ts` (the prompt and reading the answer), `app/api/ai/pine-script/route.ts`
+(`POST { mode: create | edit | fix, request, current?, error? }`, streamed like the other AI
+answers, answering `{ script, notes }`), `components/backtest/pine-assistant.tsx`.
+
 ## Storage and code
 
 Sessions are one table, `backtest_sessions`, created on first use (`server/backtest/store.ts`);

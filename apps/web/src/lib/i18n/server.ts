@@ -76,6 +76,28 @@ const es: Record<string, string> = {
   "source muted": "fuente silenciada",
   // Language setting
   "Choose English or Spanish.": "Elige inglés o español.",
+  // AI failures (server/ai.ts), shown wherever an AI answer is asked for
+  "AI is not configured — add your Anthropic API key in Settings.":
+    "La IA no está configurada: añade tu clave de API de Anthropic en Ajustes.",
+  "AI is not configured — add your OpenAI API key in Settings.":
+    "La IA no está configurada: añade tu clave de API de OpenAI en Ajustes.",
+  "AI is not configured — add your Google Gemini API key in Settings.":
+    "La IA no está configurada: añade tu clave de API de Google Gemini en Ajustes.",
+  "AI authentication_error: check your provider key and permissions in Settings.":
+    "Error de autenticación de la IA: revisa la clave y los permisos del proveedor en Ajustes.",
+  "AI billing: check your provider account's credits and quota.":
+    "Facturación de la IA: revisa el crédito y la cuota de tu cuenta del proveedor.",
+  "AI rate limit: please try again shortly.":
+    "Límite de uso de la IA: inténtalo de nuevo en un momento.",
+  "AI model unavailable: check the model ID and your provider access in Settings.":
+    "Modelo de IA no disponible: revisa el ID del modelo y tu acceso al proveedor en Ajustes.",
+  "AI request failed. Check your provider settings or try again shortly.":
+    "La solicitud a la IA falló. Revisa los ajustes del proveedor o inténtalo de nuevo en un momento.",
+  "AI returned no text: the provider's safety filter blocked the answer.":
+    "La IA no devolvió texto: el filtro de seguridad del proveedor bloqueó la respuesta.",
+  "AI returned no text. Check the model or try again.":
+    "La IA no devolvió texto. Revisa el modelo o inténtalo de nuevo.",
+  "The answer was cut off. Try again.": "La respuesta se cortó. Inténtalo de nuevo.",
 };
 
 export default es;

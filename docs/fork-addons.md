@@ -126,7 +126,8 @@ structure and re-apply the fix; each one has a test that fails without it.
 - Backtesting (docs/backtesting.md): `packages/core/src/backtest.ts` (the fill engine and
   report), `lib/backtest-session.ts`, `lib/backtest-replay.ts`, `lib/backtest-strategies.ts`,
   `server/backtest/*` (its `backtest_sessions` table), `app/api/backtests/**`,
-  `app/backtest/**`, `components/backtest/*`.
+  `app/backtest/**`, `components/backtest/*`, `lib/pine-ai.ts`, `app/api/ai/pine-script/route.ts`,
+  test `pine-ai.test.ts`.
 - External analysis (docs/external-analysis.md): `lib/youtube.ts`, `lib/external-summary.ts`,
   `server/external-analysis/*` (its own tables; scheduler started from `instrumentation-node.ts`),
   `app/api/external/**`, `app/external/page.tsx`, components `external-summary-view.tsx` and

@@ -1,3 +1,4 @@
+import { tr } from "./i18n";
 import type { AnalysisFilters } from "@luxalgo/journal-core";
 
 /** Client-side view of the AI chat API (`/api/ai/chat`). */
@@ -51,7 +52,7 @@ export async function readNdjson<E>(
     let message = `Request failed (${response.status})`;
     try {
       const body = (await response.json()) as { error?: string };
-      if (body.error) message = body.error;
+      if (body.error) message = tr(body.error);
     } catch {
       // Not JSON: keep the status message.
     }

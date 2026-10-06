@@ -536,6 +536,36 @@ const es: Record<string, string> = {
   "Show the summary": "Mostrar el resumen",
   "In the note": "En la nota",
   "Add to note": "Añadir a la nota",
+  // AI strategy writer (components/backtest/pine-assistant.tsx, api/ai/pine-script)
+  "Ask the AI for a strategy": "Pide una estrategia a la IA",
+  "For example: buy when the 9 EMA crosses above the 21 EMA and RSI is above 50, stop 1.5 ATR below, target 2R; only long.":
+    "Por ejemplo: compra cuando la EMA 9 cruce por encima de la EMA 21 y el RSI esté por encima de 50, stop 1,5 ATR por debajo, objetivo 2R; solo largos.",
+  "Writing…": "Escribiendo…",
+  "Write a new strategy": "Escribir una estrategia nueva",
+  "Change or complete the script in the editor as you describe":
+    "Cambia o completa el script del editor como describas",
+  "Change this script": "Cambiar este script",
+  "Fix the error": "Corregir el error",
+  "The AI writes Pine Script v5 for this tester. Check the code and its results before trusting it: a strategy that looks good on past candles can still lose money.":
+    "La IA escribe Pine Script v5 para este probador. Revisa el código y sus resultados antes de fiarte: una estrategia que funciona bien en velas pasadas puede perder dinero igualmente.",
+  "This is not a Pine Script v5 strategy; it may not run.":
+    "Esto no es una estrategia de Pine Script v5; puede que no se ejecute.",
+  "Use this script": "Usar este script",
+  "Save to My scripts": "Guardar en Mis scripts",
+  Discard: "Descartar",
+  "AI strategy": "Estrategia de la IA",
+  'Saved to My scripts as "{name}".': 'Guardado en Mis scripts como "{name}".',
+  "Could not save the script.": "No se pudo guardar el script.",
+  "AI request failed.": "La solicitud a la IA falló.",
+  "The answer has no script. Try describing it differently.":
+    "La respuesta no trae ningún script. Prueba a describirlo de otra forma.",
+  "Describe what the strategy should do.": "Describe qué debe hacer la estrategia.",
+  "Choose create, edit or fix.": "Elige crear, cambiar o corregir.",
+  "Describe the strategy in at most 4,000 characters.":
+    "Describe la estrategia en 4.000 caracteres como máximo.",
+  "The script is too long to send.": "El script es demasiado largo para enviarlo.",
+  "The error message is too long.": "El mensaje de error es demasiado largo.",
+  "There is no script in the editor to change.": "No hay ningún script en el editor que cambiar.",
 };
 
 export default es;
