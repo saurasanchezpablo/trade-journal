@@ -16,6 +16,7 @@ import {
   ChevronDown,
   Crosshair,
   LayoutGrid,
+  ListOrdered,
   Pause,
   Play,
   Plus,
@@ -38,6 +39,8 @@ import {
   JOURNAL_TIME_ZONE,
   effectiveStyle,
   mergeStyle,
+  setWatched,
+  watchedSymbols,
   styleDiff,
   symbolPrefsKey,
   type ChartPreferences,
@@ -118,6 +121,9 @@ import { recentSymbols, type RecentSymbol } from "@/lib/recent-symbols";
 import { postJson, useApi } from "@/lib/use-api";
 import { cn, fmtNumber } from "@/lib/utils";
 import { BackgroundAlerts } from "@/components/background-alerts";
+import { WatchlistPanel } from "@/components/watchlist-panel";
+import { watchlistPreference } from "@/lib/watchlist";
+import { extraSymbolsFor, saveExtraSymbols } from "@/lib/chart-extra-symbols";
 import {
   openChartAlerts,
   readOpenChartAlerts,
@@ -158,36 +164,6 @@ interface Board {
   analysis: ChartAnalysis | null;
   /** Saved indicators with their current code (library or My indicators). */
   indicators: StoredIndicator[];
-}
-
-const EXTRA_SYMBOLS_KEY = "journal-chart-extra-symbols-v1";
-
-/** Journal symbols the user also wants on a chart (e.g. MES trades on an ES chart), per chart. */
-function extraSymbolsFor(chartKey: string): string {
-  try {
-    const map = JSON.parse(localStorage.getItem(EXTRA_SYMBOLS_KEY) ?? "{}") as Record<
-      string,
-      unknown
-    >;
-    const value = map[chartKey];
-    return typeof value === "string" ? value : "";
-  } catch {
-    return "";
-  }
-}
-
-function saveExtraSymbols(chartKey: string, value: string) {
-  try {
-    const map = JSON.parse(localStorage.getItem(EXTRA_SYMBOLS_KEY) ?? "{}") as Record<
-      string,
-      unknown
-    >;
-    if (value.trim()) map[chartKey] = value;
-    else delete map[chartKey];
-    localStorage.setItem(EXTRA_SYMBOLS_KEY, JSON.stringify(map));
-  } catch {
-    // Remembered for this page only.
-  }
 }
 
 /** A browser notification when allowed; the in-page alert log shows it either way. */
@@ -971,12 +947,14 @@ const ChartBoard = memo(function ChartBoard({
       }),
     [savePrefs, shell],
   );
-  const watchlist = Object.entries(prefs.symbols)
-    .filter(([, s]) => s.favorite)
-    .map(([key, s]) => {
-      const [provider = "", symbol = ""] = key.split("|");
-      return { key, provider, symbol, label: s.label, color: s.color };
-    });
+  const watchItems = watchedSymbols(prefs);
+  // The watchlist panel, shown unless hidden (per browser).
+  const [watchShown, setWatchShown] = useState(true);
+  useEffect(() => setWatchShown(watchlistPreference.read()), []);
+  const showWatchlist = (shown: boolean) => {
+    setWatchShown(shown);
+    watchlistPreference.write(shown);
+  };
   const symbolLabel = (provider: string, symbol: string) =>
     prefs.symbols[symbolPrefsKey(provider, symbol)]?.label || symbol;
 
@@ -1728,41 +1706,16 @@ const ChartBoard = memo(function ChartBoard({
                 <LayoutGrid /> {t("Workspace")}
               </Link>
             </Button>
+            <Button
+              type="button"
+              variant={watchShown ? "secondary" : "outline"}
+              aria-pressed={watchShown}
+              title={t("Show or hide the watchlist")}
+              onClick={() => showWatchlist(!watchShown)}
+            >
+              <ListOrdered /> {t("Watchlist")}
+            </Button>
           </form>
-        )}
-        {watchlist.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1" aria-label={t("Watchlist")}>
-            <Star aria-hidden="true" className="size-3.5 text-muted-foreground" />
-            {watchlist.map((item) => {
-              const current = board?.provider === item.provider && board.symbol === item.symbol;
-              return (
-                <Button
-                  key={item.key}
-                  type="button"
-                  size="sm"
-                  variant={current ? "secondary" : "outline"}
-                  className="h-7 gap-1.5 px-2"
-                  disabled={!available.some((a) => a.id === item.provider) || opening}
-                  title={t("{symbol} on {source}", {
-                    symbol: item.symbol,
-                    source: providerInfo(item.provider)?.name ?? item.provider,
-                  })}
-                  onClick={() => {
-                    if (!current) void openBoard({ provider: item.provider, symbol: item.symbol });
-                  }}
-                >
-                  {item.color && (
-                    <span
-                      aria-hidden="true"
-                      className="size-2.5 rounded-full"
-                      style={{ backgroundColor: item.color }}
-                    />
-                  )}
-                  <span className="font-medium">{item.label || item.symbol}</span>
-                </Button>
-              );
-            })}
-          </div>
         )}
         {recent.length > 0 && (
           <div className="flex flex-wrap items-center gap-1" aria-label={t("Recent symbols")}>
@@ -1836,16 +1789,7 @@ const ChartBoard = memo(function ChartBoard({
                 }
                 aria-pressed={Boolean(symbolPrefs?.favorite)}
                 className="text-muted-foreground hover:text-foreground"
-                onClick={() => {
-                  const key = symbolPrefsKey(board.provider, board.symbol);
-                  const own = { ...prefs.symbols[key] };
-                  if (own.favorite) delete own.favorite;
-                  else own.favorite = true;
-                  const symbols = { ...prefs.symbols };
-                  if (Object.keys(own).length) symbols[key] = own;
-                  else delete symbols[key];
-                  savePrefs({ ...prefs, symbols });
-                }}
+                onClick={() => savePrefs(setWatched(prefs, board, !symbolPrefs?.favorite))}
               >
                 <Star
                   className={cn("size-4", symbolPrefs?.favorite && "fill-current text-amber-500")}
@@ -2045,6 +1989,28 @@ const ChartBoard = memo(function ChartBoard({
       {slots &&
         createPortal(
           <>
+            {watchShown && (
+              <WatchlistPanel
+                items={watchItems}
+                sources={available}
+                current={board ? { ...board, dataset: board.dataset ?? null } : null}
+                onOpen={(item) => {
+                  if (
+                    board?.provider !== item.provider ||
+                    board.symbol !== item.symbol ||
+                    (board.dataset ?? null) !== item.dataset
+                  )
+                    void openBoard({
+                      provider: item.provider,
+                      dataset: item.dataset,
+                      symbol: item.symbol,
+                    });
+                }}
+                onAdd={(item) => savePrefs(setWatched(shell.prefs(), item, true))}
+                onRemove={(item) => savePrefs(setWatched(shell.prefs(), item, false))}
+                onHide={() => showWatchlist(false)}
+              />
+            )}
             <SectionCard
               id="chart-analysis"
               title={t("Analysis")}

@@ -138,8 +138,17 @@ Vela's workspace. The Charts page itself stays one chart with its analysis.
 - The workspace follows the journal's light or dark theme and starts in its display timezone
   (the clock at the bottom right changes it for the workspace).
 
-Journal trades, zones, plans and alerts stay on the Charts page: the workspace is for reading
-the market across symbols and candle sizes.
+- **The journal on every chart**, as on the Charts page (see
+  [Your trades on the chart](#your-trades-on-the-chart)): your trades (fills, entry to exit
+  with the result, open positions with stop and target), missed trades, market session opens
+  and closes and economic events, following each chart's symbol (with the extra journal
+  symbols set for it on the Charts page) and your switches under **On the chart**. Clicking a
+  trade or a missed trade opens it in a new tab, so the workspace stays. Zones, plans and an
+  analysis's alerts belong to a saved analysis and stay on the Charts page.
+
+The journal's marks are drawn by a hidden indicator, which the workspace never lists in its
+picker or object tree, saves with its state or removes with "remove indicators"
+(`components/workspace-overlays.ts`).
 
 Code: `app/charts/workspace/page.tsx` (loads what the workspace starts from),
 `components/chart-workspace.tsx` (mounts `VelaWorkspace` with the journal's sources, Pine
@@ -148,6 +157,25 @@ engines, chart fixes and topbar buttons, and saves its state), `components/works
 starting charts, checks), `server/chart-workspace/store.ts` (its `chart_workspaces` table) and
 `app/api/chart-workspace/route.ts` (`GET`, `PUT { state }` up to 4 MB, `DELETE`). Charts in a
 workspace share one provider per source, which keeps each symbol's latest candle apart.
+
+## Watchlist
+
+The **Watchlist** panel (top of the right column; the **Watchlist** button or its × hides it,
+remembered per browser) lists your starred symbols as TradingView does: name and source, last
+price, change and change % since the previous daily close, refreshed every 30 seconds while
+the page is visible. Click a row to open it on the chart; click a column to sort by it (again
+to reverse, a third time for the starred order). Star a symbol on its chart to add it (the
+market it is on, such as Bybit spot, is kept with it), or use **+** to add any symbol of a
+source you set up; the row's × removes it. Names and colour tags come from the symbol's
+settings (Appearance). At most 40 symbols get prices; candle files have none.
+
+Prices: `POST /api/market-data/quotes` `{ items: [{ provider, dataset?, symbol }] }` (at most 40) answers `{ quotes }` in order, each `{ ok, price, previousClose, change, changePct, time }`
+or `{ ok: false, error }`, from each symbol's last two daily candles. Answers are kept 15
+seconds for every page, at most four symbols are asked at once, one symbol that fails never
+fails the others, and only a source's own messages are shown. Code: `lib/watchlist.ts`,
+`server/market-data/quotes.ts` (with `server/market-data/latest.ts`, shared with the history
+route), `components/watchlist-panel.tsx`; the list is `watchedSymbols` / `setWatched` in
+`lib/chart-preferences.ts`.
 
 ## Drawings over the candles
 

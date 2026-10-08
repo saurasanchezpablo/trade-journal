@@ -12,6 +12,11 @@ import { tr } from "@/lib/i18n";
 import type { MarketConnection } from "@/lib/market-data";
 import { recentSymbols } from "@/lib/recent-symbols";
 import { useApi } from "@/lib/use-api";
+import { usePrivacy } from "@/components/privacy";
+import type { CalendarState, EconomicEvent } from "@/lib/economic-calendar";
+import { tradePath } from "@/lib/trade-links";
+
+const NO_EVENTS: EconomicEvent[] = [];
 
 export default function ChartWorkspacePage() {
   return (
@@ -35,6 +40,14 @@ function WorkspaceLoader() {
   const { data: scriptData, error: scriptError } = useApi<{ scripts: ChartScript[] }>(
     "/api/chart-scripts",
   );
+  const privacy = usePrivacy();
+  // The economic calendar, as the Charts page reads it: a year back and two weeks ahead.
+  const [calendarWindow] = useState(() => {
+    const hour = Math.floor(Date.now() / 3_600_000) * 3_600_000;
+    return `from=${hour - 366 * 86_400_000}&to=${hour + 14 * 86_400_000}`;
+  });
+  const { data: calendar } = useApi<CalendarState>(`/api/economic-events?${calendarWindow}`);
+  const events = calendar?.enabled ? calendar.events : NO_EVENTS;
   const [saved, setSaved] = useState<Saved | null>(null);
   const [generation, setGeneration] = useState(0);
   useEffect(() => {
@@ -129,6 +142,11 @@ function WorkspaceLoader() {
             if (target.tf) query.set("tf", target.tf);
             router.push(`/charts?${query}`);
           }}
+          events={events}
+          privacy={privacy}
+          // A record opens in a new tab: the workspace stays as it is.
+          onOpenTrade={(key) => window.open(tradePath(key), "_blank", "noopener")}
+          onOpenMissed={() => window.open("/missed", "_blank", "noopener")}
           onStartOver={() => {
             void fetch("/api/chart-workspace", { method: "DELETE" }).finally(() =>
               setGeneration((n) => n + 1),

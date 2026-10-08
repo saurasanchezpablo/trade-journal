@@ -49,7 +49,10 @@ export interface SymbolPrefs {
   label?: string;
   /** Colour tag in the watchlist. */
   color?: string;
+  /** In the watchlist (the star). */
   favorite?: boolean;
+  /** The source's market it is watched on (Bybit spot, Alpaca IEX…), when it has several. */
+  dataset?: string | null;
   /** Candle size a new chart of this symbol opens with. */
   resolution?: Resolution;
   /** Price decimals on the axis; absent = automatic. */
@@ -360,6 +363,12 @@ export function preferencesProblem(value: unknown): string | null {
     if (sym.color !== undefined && !isColor(sym.color)) return "A symbol colour is invalid.";
     if (sym.favorite !== undefined && typeof sym.favorite !== "boolean")
       return "A symbol setting is invalid.";
+    if (
+      sym.dataset !== undefined &&
+      sym.dataset !== null &&
+      !(typeof sym.dataset === "string" && /^[a-zA-Z0-9_-]{0,80}$/.test(sym.dataset))
+    )
+      return "A symbol setting is invalid.";
     if (sym.resolution !== undefined && !isResolution(sym.resolution))
       return "A symbol candle size is invalid.";
     if (
@@ -462,3 +471,53 @@ export function toolStyleOf(drawing: {
 
 export const sameToolStyle = (a: ToolStyle | undefined, b: ToolStyle) =>
   TOOL_FIELDS.every((key) => (a ?? {})[key] === b[key]);
+
+/** A symbol in the watchlist, with how it is shown. */
+export interface WatchedSymbol {
+  key: string;
+  provider: string;
+  dataset: string | null;
+  symbol: string;
+  label?: string;
+  color?: string;
+}
+
+/** The watchlist: starred symbols, in the order they were starred. */
+export function watchedSymbols(prefs: ChartPreferences): WatchedSymbol[] {
+  return Object.entries(prefs.symbols)
+    .filter(([, s]) => s.favorite)
+    .map(([key, s]) => {
+      const at = key.indexOf("|");
+      return {
+        key,
+        provider: at < 0 ? key : key.slice(0, at),
+        symbol: at < 0 ? "" : key.slice(at + 1),
+        dataset: s.dataset ?? null,
+        ...(s.label ? { label: s.label } : {}),
+        ...(s.color ? { color: s.color } : {}),
+      };
+    })
+    .filter((item) => item.provider && item.symbol);
+}
+
+/** Star or unstar a symbol (with the market it is watched on); other settings stay. */
+export function setWatched(
+  prefs: ChartPreferences,
+  item: { provider: string; dataset: string | null; symbol: string },
+  watched: boolean,
+): ChartPreferences {
+  const key = symbolPrefsKey(item.provider, item.symbol);
+  const own: SymbolPrefs = { ...prefs.symbols[key] };
+  if (watched) {
+    own.favorite = true;
+    if (item.dataset) own.dataset = item.dataset;
+    else delete own.dataset;
+  } else {
+    delete own.favorite;
+    delete own.dataset;
+  }
+  const symbols = { ...prefs.symbols };
+  if (Object.keys(own).length) symbols[key] = own;
+  else delete symbols[key];
+  return { ...prefs, symbols };
+}

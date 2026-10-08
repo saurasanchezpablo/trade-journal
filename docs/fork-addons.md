@@ -121,7 +121,10 @@ structure and re-apply the fix; each one has a test that fails without it.
 - Chart workspace (docs/charts.md#workspace): `app/charts/workspace/page.tsx`,
   `components/chart-workspace.tsx`, `components/workspace-symbol-search.ts`,
   `lib/chart-workspace.ts`, `server/chart-workspace/store.ts` (its `chart_workspaces` table),
-  `app/api/chart-workspace/route.ts`, test `chart-workspace.test.ts`. It replaced the fork's
+  `app/api/chart-workspace/route.ts`, `components/workspace-overlays.ts`, test `chart-workspace.test.ts`.
+- Watchlist (docs/charts.md#watchlist): `lib/watchlist.ts`, `server/market-data/quotes.ts`,
+  `server/market-data/latest.ts`, `app/api/market-data/quotes/route.ts`,
+  `components/watchlist-panel.tsx`, `lib/chart-extra-symbols.ts`, test `watchlist.test.ts`. It replaced the fork's
   multiview on the Charts page.
 - Backtesting (docs/backtesting.md): `packages/core/src/backtest.ts` (the fill engine and
   report), `lib/backtest-session.ts`, `lib/backtest-replay.ts`, `lib/backtest-strategies.ts`,

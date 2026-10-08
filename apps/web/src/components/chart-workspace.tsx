@@ -25,6 +25,13 @@ import { keepDrawingsOverSeries } from "./vela-depth-fix";
 import { applyPatternFixes } from "./vela-pattern-fixes";
 import { limitChartView } from "./vela-view-limits";
 import { attachSymbolSearch, localizeSymbolRow } from "./workspace-symbol-search";
+import {
+  attachJournalOverlays,
+  type OverlayEnvironment,
+  type WorkspaceOverlay,
+} from "./workspace-overlays";
+import { overlayPreference } from "@/lib/chart-overlays";
+import type { EconomicEvent } from "@/lib/economic-calendar";
 
 /** Saved at most this often while you work; a page you leave saves at once. */
 const SAVE_DELAY_MS = 1500;
@@ -143,13 +150,19 @@ export interface ChartWorkspaceProps {
     tf: string | null;
   }) => void;
   onStartOver: () => void;
+  /** The economic calendar's events, when it is on (Charts → On the chart). */
+  events: EconomicEvent[];
+  privacy: boolean;
+  onOpenTrade: (key: string) => void;
+  onOpenMissed: (id: string) => void;
 }
 
 /**
  * The full-screen chart workspace on Vela's workspace: a grid of charts under one shared
  * topbar (symbol, candle size, style, layout and links, indicators), one drawing toolbar for
- * the active chart, maximize, drag to swap, resizable splits. Saved on the server as you
- * work.
+ * the active chart, maximize, drag to swap, resizable splits. Each chart shows the journal
+ * as the Charts page does (your trades, missed trades, sessions, economic events). Saved on
+ * the server as you work.
  */
 export function ChartWorkspace(props: ChartWorkspaceProps) {
   const host = useRef<HTMLDivElement>(null);
@@ -157,6 +170,11 @@ export function ChartWorkspace(props: ChartWorkspaceProps) {
   const [error, setError] = useState("");
   const latest = useRef(props);
   latest.current = props;
+  /** The journal's marks on each chart, by cell. */
+  const overlays = useRef(new Map<string, WorkspaceOverlay>());
+  useEffect(() => {
+    for (const overlay of overlays.current.values()) overlay.update();
+  }, [props.events, props.privacy]);
 
   useEffect(() => {
     const element = host.current;
@@ -341,12 +359,40 @@ export function ChartWorkspace(props: ChartWorkspaceProps) {
         limitChartView(chart.renderer);
         patchVisibleRangeProfile(chart.renderer);
       };
+      // The journal on each chart, as on the Charts page (switches read when they change).
+      const environment: OverlayEnvironment = {
+        options: () => {
+          const options = overlayPreference.read();
+          return {
+            ...options,
+            // Zones belong to a saved analysis, which a workspace chart has none of.
+            zones: false,
+            economic: options.economic && latest.current.events.length > 0,
+          };
+        },
+        events: () => latest.current.events,
+        privacy: () => latest.current.privacy,
+        onOpenTrade: (key) => latest.current.onOpenTrade(key),
+        onOpenMissed: (id) => latest.current.onOpenMissed(id),
+      };
+      const mark = (id: string, chart: Vela, cellHost: HTMLElement) => {
+        overlays.current.get(id)?.dispose();
+        overlays.current.set(
+          id,
+          attachJournalOverlays(vela, chart, cellHost, sources, environment),
+        );
+      };
+      teardown.push(() => {
+        for (const overlay of overlays.current.values()) overlay.dispose();
+        overlays.current.clear();
+      });
       const cells = ws.cells();
       // The engines made while the workspace built its first charts, in the same order.
       cells.forEach((cell, i) => {
         const engine = unassigned[i];
         if (engine) enginesByCell.set(cell.id, [engine]);
         prepare(cell.chart);
+        mark(cell.id, cell.chart, cell.host);
       });
       unassigned.splice(0, cells.length);
       const recordMarket = (symbol: string) => {
@@ -362,9 +408,14 @@ export function ChartWorkspace(props: ChartWorkspaceProps) {
         ws.on("cell:created", ({ id }) => {
           claimEngines(id);
           const cell = ws.cell(id);
-          if (cell) prepare(cell.chart);
+          if (cell) {
+            prepare(cell.chart);
+            mark(id, cell.chart, cell.host);
+          }
         }),
         ws.on("cell:destroyed", ({ id }) => {
+          overlays.current.get(id)?.dispose();
+          overlays.current.delete(id);
           for (const engine of enginesByCell.get(id) ?? []) engine.terminate();
           enginesByCell.delete(id);
         }),
@@ -394,7 +445,10 @@ export function ChartWorkspace(props: ChartWorkspaceProps) {
       );
 
       // ── The journal's light and dark themes ──
-      const observer = new MutationObserver(() => ws.setTheme(dark() ? "dark" : "light"));
+      const observer = new MutationObserver(() => {
+        ws.setTheme(dark() ? "dark" : "light");
+        for (const overlay of overlays.current.values()) overlay.repaint();
+      });
       observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
       teardown.push(() => observer.disconnect());
 

@@ -518,6 +518,25 @@ const es: Record<string, string> = {
   "The code is longer than 200 KB.": "El código ocupa más de 200 KB.",
   "The chart's indicators are too large to save.":
     "Los indicadores del gráfico son demasiado grandes para guardarlos.",
+  // Watchlist (components/watchlist-panel.tsx, api/market-data/quotes)
+  "Add a symbol": "Añadir un símbolo",
+  "The watchlist holds at most {max} symbols.":
+    "La lista de seguimiento admite como máximo {max} símbolos.",
+  "Hide the watchlist": "Ocultar la lista de seguimiento",
+  "Show or hide the watchlist": "Mostrar u ocultar la lista de seguimiento",
+  "Star a symbol on its chart, or add one with +, to watch its price here.":
+    "Marca un símbolo con la estrella en su gráfico, o añádelo con +, para seguir aquí su precio.",
+  Last: "Último",
+  Chg: "Var.",
+  "Chg%": "Var.%",
+  "No price": "Sin precio",
+  "Prices show for the first {max} symbols.":
+    "Los precios se muestran para los primeros {max} símbolos.",
+  "Candle files have no live price.": "Los archivos de velas no tienen precio en directo.",
+  "No price for this symbol.": "No hay precio para este símbolo.",
+  "The price could not be read.": "No se pudo leer el precio.",
+  "Cancelled.": "Cancelado.",
+  "Send at most 40 symbols.": "Envía como máximo 40 símbolos.",
 };
 
 export default es;
