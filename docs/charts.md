@@ -524,7 +524,34 @@ Vela's Pine add-on in a Web Worker, so heavy scripts never block drawing.
   signals on the chart.
 
 Indicators are computed in the browser from the candles on the chart; nothing extra is
-requested from the data source.
+requested from the data source, except the larger candles of an indicator set to another
+timeframe (below).
+
+### Indicators on another timeframe
+
+As on TradingView, every indicator's settings end with **Timeframe** and **Wait for timeframe
+closes**: a daily EMA on a 4h chart, a weekly RSI on a 1h chart.
+
+- **Timeframe** is "Chart" (the chart's own candles) or one of 1m to 1W. The script runs on
+  those candles and each chart candle shows the value of the larger candle it belongs to, so a
+  moving average draws as steps. The legend shows the size after the title ("EMA 1D").
+- **Wait for timeframe closes** (on by default) shows a larger candle's value from the chart
+  candle that closes it onwards, so history never repaints: on a 4h chart, Monday's daily
+  value appears on the 20:00 candle and holds through Tuesday. Off, each chart candle shows
+  the larger candle it opens in, including the forming one, which updates live (and, on
+  history, shows each day's final value from its first candle, as TradingView does).
+- Only a larger size than the chart's applies; a smaller or equal one computes on the chart's
+  candles. Strategies and scripts that follow the visible range keep the chart's candles.
+- A script that declares `indicator(..., timeframe="D", timeframe_gaps=false)` starts with
+  those settings. Plots, fills, `plotshape` marks, backgrounds, `barcolor` and drawings
+  (`line.new`, `label.new`, `box.new`, `polyline.new`) all move onto the chart's candles.
+- The larger candles come from the chart's own source through Vela's cache (the same path as
+  `request.security`): enough to cover the chart's candles plus 500 for long averages to
+  settle, up to 5000. The forming one follows the chart's newest candles; when it closes, the
+  closed candle is loaded again. They are never newer than the chart's last candle.
+- The settings are saved with the indicator, like its other inputs. Charts page and workspace;
+  the backtest keeps every indicator on its replay candles, so nothing ahead of the replay
+  can reach a script.
 
 ### License
 
@@ -660,6 +687,9 @@ copied into the analysis. `economic_events` holds the stored calendar.
 - `components/chart-indicators-bridge.ts`: Vela indicators ↔ saved state;
   `components/indicators-panel.tsx`, `components/pine-editor.tsx`: the panel and editor.
 - `server/chart-scripts.ts`, `app/api/chart-scripts/**`: My indicators.
+- `lib/timeframe-engine.ts`: the Pine engine wrapper behind an indicator's Timeframe setting;
+  `lib/indicator-timeframe.ts`: the settings, the alignment of larger candles to the chart's
+  and the projection of a model onto them.
 - `components/analysis-chart.tsx`: the live Vela chart and quick toolbar;
   `components/chart-stylus.ts`: stylus routing; `components/layers-panel.tsx`: the layer tree.
 - `lib/chart-timeframes.ts`, `components/timeframe-bar.tsx`: the timeframe bar;

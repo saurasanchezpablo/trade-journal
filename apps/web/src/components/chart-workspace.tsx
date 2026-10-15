@@ -14,6 +14,7 @@ import {
 } from "@/lib/chart-workspace";
 import { JournalMarketProvider, resolutionForTimeframe } from "@/lib/live-market";
 import { FallbackPineEngine } from "@/lib/pine-fallback-engine";
+import { TimeframePineEngine } from "@/lib/timeframe-engine";
 import { recentSymbols } from "@/lib/recent-symbols";
 import {
   applyCalculationFixes,
@@ -254,12 +255,15 @@ export function ChartWorkspace(props: ChartWorkspaceProps) {
       });
 
       // ── Pine Script engines: one worker per chart, stopped with its chart ──
-      const unassigned: FallbackPineEngine[] = [];
-      const enginesByCell = new Map<string, FallbackPineEngine[]>();
+      const unassigned: TimeframePineEngine[] = [];
+      const enginesByCell = new Map<string, TimeframePineEngine[]>();
       const makeEngine = () => {
-        const engine = new FallbackPineEngine(
-          new PineWorkerEngine({ props: "strategy" }),
-          () => new PineEngine({ props: "strategy" }),
+        // Each indicator can also be computed on a larger candle size (its Timeframe setting).
+        const engine = new TimeframePineEngine(
+          new FallbackPineEngine(
+            new PineWorkerEngine({ props: "strategy" }),
+            () => new PineEngine({ props: "strategy" }),
+          ),
         );
         unassigned.push(engine);
         return engine;

@@ -6,6 +6,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
+- Indicators on another timeframe, as on TradingView: every indicator's settings end with **Timeframe** (1m to 1W) and **Wait for timeframe closes**, so a daily EMA or a weekly RSI shows on a 4h chart, as steps, without repainting by default ([docs/charts.md](docs/charts.md#indicators-on-another-timeframe))
 - A watchlist on Charts, as on TradingView: your starred symbols with their last price, change and change % since the previous close, refreshed while you watch, sortable, a click to open one, a + to add any symbol of a source, and a button to hide it (see [docs/charts.md](docs/charts.md#watchlist))
 - The chart workspace shows the journal on every chart as the Charts page does: your trades with their fills and results, open positions, missed trades, market sessions and economic events, following each chart's symbol
 - The strategy tester writes Pine Script strategies with the AI: describe one to have it written, ask for a change or a completion of the script in the editor, or have a script that failed to run fixed from its error; the code appears as it is written and is used or saved to My scripts only when you choose (see [docs/backtesting.md](docs/backtesting.md#writing-strategies-with-the-ai))

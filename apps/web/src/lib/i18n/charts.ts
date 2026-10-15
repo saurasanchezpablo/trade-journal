@@ -537,6 +537,20 @@ const es: Record<string, string> = {
   "The price could not be read.": "No se pudo leer el precio.",
   "Cancelled.": "Cancelado.",
   "Send at most 40 symbols.": "Envía como máximo 40 símbolos.",
+
+  // Indicators on another candle size (lib/indicator-timeframe.ts, lib/timeframe-engine.ts)
+  Timeframe: "Temporalidad",
+  "Wait for timeframe closes": "Esperar al cierre de la temporalidad",
+  "Compute the indicator on these candles. Each chart candle shows the value of the larger candle it belongs to.":
+    "Calcula el indicador con estas velas. Cada vela del gráfico muestra el valor de la vela mayor a la que pertenece.",
+  "On: a value appears once its candle has closed, so history never changes. Off: the forming candle's value shows and changes until it closes.":
+    "Activado: un valor aparece cuando su vela ha cerrado, así que el histórico nunca cambia. Desactivado: se muestra el valor de la vela en formación, que cambia hasta que cierra.",
+  "This chart cannot load other candle sizes.":
+    "Este gráfico no puede cargar otras temporalidades.",
+  "No {timeframe} candles are available for this symbol.":
+    "No hay velas de {timeframe} disponibles para este símbolo.",
+  "Could not load the {timeframe} candles for this indicator.":
+    "No se pudieron cargar las velas de {timeframe} para este indicador.",
 };
 
 export default es;

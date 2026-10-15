@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { RESOLUTIONS, type Resolution } from "@/lib/market-data";
 import { FallbackPineEngine } from "@/lib/pine-fallback-engine";
+import { TimeframePineEngine } from "@/lib/timeframe-engine";
 import { ALERT_TYPES } from "@/lib/price-alerts";
 import { VELA_TIMEFRAME, type DrawingsDocument } from "@/lib/chart-analysis";
 import { drawingStates, type LayersDocument } from "@/lib/chart-layers";
@@ -569,7 +570,7 @@ export function AnalysisChart({
         drawings: true,
         ...(visible ? { visibleRange: visible } : {}),
       });
-      let engine: FallbackPineEngine | null = null;
+      let engine: TimeframePineEngine | null = null;
       teardown.push(() => {
         instance.destroy();
         engine?.terminate();
@@ -586,10 +587,13 @@ export function AnalysisChart({
       // Vela registers its native indicators on construction: give the VWAP its sessions again.
       patchNativeVwap(vela);
       // Pine Script indicators run in a Web Worker so heavy scripts never block drawing.
-      // Scripts too deep for the worker's smaller stack fall back to the page's thread.
-      engine = new FallbackPineEngine(
-        new PineWorkerEngine({ props: "strategy" }),
-        () => new PineEngine({ props: "strategy" }),
+      // Scripts too deep for the worker's smaller stack fall back to the page's thread, and
+      // each indicator can be computed on a larger candle size (its Timeframe setting).
+      engine = new TimeframePineEngine(
+        new FallbackPineEngine(
+          new PineWorkerEngine({ props: "strategy" }),
+          () => new PineEngine({ props: "strategy" }),
+        ),
       );
       instance.registerEngine("pine", engine);
       chart.current = instance;
