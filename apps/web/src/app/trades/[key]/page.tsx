@@ -10,7 +10,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 
 import { use, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Pencil, Sparkles, Star } from "lucide-react";
+import { Pencil, Sparkles } from "lucide-react";
+import { netReturnOnEntry } from "@luxalgo/journal-core";
 import { TradeFillsEditor } from "@/components/trade-fills-editor";
 import { FillCorrections } from "@/components/fill-corrections";
 import { FilterBar } from "@/components/filter-bar";
@@ -18,6 +19,8 @@ import { useI18n } from "@/components/i18n";
 import { Pnl } from "@/components/pnl";
 import { MonetaryValue, MonetaryField } from "@/components/privacy";
 import { TradeMarketData } from "@/components/trade-market-data";
+import { TradeNavigation } from "@/components/trade-navigation";
+import { TradeRating } from "@/components/trade-rating";
 import { EquityArea } from "@/components/charts/equity-area";
 import { VoiceNote } from "@/components/voice-note";
 import { Badge } from "@/components/ui/badge";
@@ -217,6 +220,7 @@ function TradeView({ tradeKey }: { tradeKey: string }) {
       <FilterBar
         title={`${trade.symbol} · ${(trade.direction === "short" ? t("Short") : t("Long")).toUpperCase()}`}
       />
+      <TradeNavigation tradeKey={tradeKey} />
       <div className="grid gap-3 p-4 xl:grid-cols-3">
         <div className="min-w-0 space-y-3 xl:col-span-2">
           <Card>
@@ -249,17 +253,7 @@ function TradeView({ tradeKey }: { tradeKey: string }) {
               <Meta label={t("Duration")} value={fmtDuration(trade.durationMs)} />
               <Meta
                 label={t("Net / entry notional")}
-                value={fmtPercent(
-                  trade.avgEntry * trade.quantity > 0 &&
-                    (trade.contractMultiplier !== null ||
-                      !["futures", "option", "forex", "cfd"].includes(trade.assetClass ?? ""))
-                    ? trade.netPnl /
-                        (Math.abs(trade.avgEntry) *
-                          trade.quantity *
-                          (trade.contractMultiplier ?? 1))
-                    : null,
-                  2,
-                )}
+                value={fmtPercent(netReturnOnEntry(trade), 2)}
               />
               <Meta
                 label={t("Planned R")}
@@ -482,19 +476,7 @@ function AnnotationsCard({
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-0.5">
-            {[1, 2, 3, 4, 5].map((star) => (
-              <button
-                key={star}
-                onClick={() => void onPatch({ rating: trade.rating === star ? null : star })}
-                aria-label={tn(star, "Rate {count} star", "Rate {count} stars")}
-              >
-                <Star
-                  className={`h-4 w-4 ${trade.rating !== null && star <= trade.rating ? "fill-current text-series-4 text-yellow-600" : "text-muted-foreground"}`}
-                />
-              </button>
-            ))}
-          </div>
+          <TradeRating value={trade.rating} onChange={(rating) => onPatch({ rating })} />
           <label className="flex items-center gap-2 text-sm">
             <Checkbox
               checked={trade.reviewedAt !== null}

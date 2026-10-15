@@ -112,7 +112,7 @@ export interface ImportFormat {
  * These facts stay outside the dedup hash: the fills keep the identity earlier
  * imports gave them.
  */
-export const tradeToExecutions = (trade: ImportedTrade): ImportedExecution[] => {
+export const tradeToExecutions = (trade: ImportedTrade): [ImportedExecution, ImportedExecution] => {
   const group = JSON.stringify([
     "trade",
     trade.symbol,

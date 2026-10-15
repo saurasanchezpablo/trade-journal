@@ -35,6 +35,9 @@ importers:
       '@ai-sdk/openai':
         specifier: ^4.0.64
         version: 4.0.64(zod@4.4.3)
+      '@ai-sdk/openai-compatible':
+        specifier: 3.0.46
+        version: 3.0.46(zod@4.4.3)
       '@dnd-kit/core':
         specifier: 6.3.1
         version: 6.3.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -42,8 +45,8 @@ importers:
         specifier: 10.0.0
         version: 10.0.0(@dnd-kit/core@6.3.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)
       '@luxalgo/broker-sdk':
-        specifier: ^0.3.0
-        version: 0.3.0
+        specifier: 0.5.1
+        version: 0.5.1(react@19.2.8)
       '@luxalgo/journal-core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -52,10 +55,10 @@ importers:
         version: link:../../packages/importers
       '@luxalgo/vela':
         specifier: ^0.7.7
-        version: 0.7.7
+        version: 0.7.8
       '@luxalgo/vela-pinets':
         specifier: ^0.2.13
-        version: 0.2.13(@luxalgo/vela@0.7.7)(pinets@0.9.34)
+        version: 0.2.16(@luxalgo/vela@0.7.8)(pinets@0.9.34)
       '@pdf-lib/fontkit':
         specifier: ^1.1.1
         version: 1.1.1
@@ -200,6 +203,12 @@ packages:
 
   '@ai-sdk/google@4.0.65':
     resolution: {integrity: sha512-W687DtVx59ePCvzv1M8oqCOkSr/gs6wrHlEF/K1UXMHSwB2DuttrSMzXKudaDhwdoiqbCdckvt4efRih1OXHEQ==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
+  '@ai-sdk/openai-compatible@3.0.46':
+    resolution: {integrity: sha512-aN+GB2BqcG8f79oHCfKwfZ/P2i8zL4fseLtsdWhMflTZw6vX3TEoQ3F+MGLrm67V1wZt+Tyr0dJmhspj1Emanw==}
     engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -643,18 +652,24 @@ packages:
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
 
-  '@luxalgo/broker-sdk@0.3.0':
-    resolution: {integrity: sha512-GuqYiENa5EyKwG2mpS+G4JcB8cDceJuSMSLcHybOl2We3h3MWDL9XPjh4mIBDrtvnMFZ/dd4YCvJNCxcSYP4Zw==}
+  '@luxalgo/broker-sdk@0.5.1':
+    resolution: {integrity: sha512-JS+q5kBK6mBFviL3h9q+/R0KEBzddKOtELUGG1KvlyHt/W4Fba/5zz9i9MPyLXLyc5HtNFVxwUra+4wrZa+nfQ==}
     engines: {node: '>=18.17'}
-
-  '@luxalgo/vela-pinets@0.2.13':
-    resolution: {integrity: sha512-KKw/lfAByoZwxM8IcCyGiQXD6lzl3XXGslM8r7kXHMMGRNguDHiUil0vGRwtg4IaoJLRWgFdm5XSn/Bz3iAvjw==}
+    hasBin: true
     peerDependencies:
-      '@luxalgo/vela': ^0.7.7
+      react: '>=18'
+    peerDependenciesMeta:
+      react:
+        optional: true
+
+  '@luxalgo/vela-pinets@0.2.16':
+    resolution: {integrity: sha512-JIMrw4rZSt9Um1pFb3eQWpXe7slVyChLVDO0zmqEZ33t83+UUHgzwhyKkbFLg2HrvBknCXkFeub6hirSoSdC3A==}
+    peerDependencies:
+      '@luxalgo/vela': ^0.7.7 || ^0.8.0
       pinets: '>=0.9.31'
 
-  '@luxalgo/vela@0.7.7':
-    resolution: {integrity: sha512-9V8cCJUP3i+nkrzxU43rrnZFxPGDfOxX/XDlcAdBFMbUrNartDrVVPsk1kTZyQyqBR4115n3n6XACLImTaM4hw==}
+  '@luxalgo/vela@0.7.8':
+    resolution: {integrity: sha512-MUAX6X46ppS6xJrajCHLJg/J9uLoH7yZ2pL27R+X90hFqTfROXjf0o8Mgw+qZnABI2IuCjTHByDCca6I/iLcuQ==}
 
   '@napi-rs/lzma-linux-x64-gnu@1.5.1':
     resolution: {integrity: sha512-oTXEIha4SsuXdTA4Iyskj0kpdx2yVXdhd75c2v3xGrHFfVMsbhTPZU/nMPL4sWKo4pBHm3aucLaqGlF696dTyQ==}
@@ -2974,6 +2989,12 @@ snapshots:
       '@ai-sdk/provider-utils': 5.0.37(zod@4.4.3)
       zod: 4.4.3
 
+  '@ai-sdk/openai-compatible@3.0.46(zod@4.4.3)':
+    dependencies:
+      '@ai-sdk/provider': 4.0.12
+      '@ai-sdk/provider-utils': 5.0.38(zod@4.4.3)
+      zod: 4.4.3
+
   '@ai-sdk/openai@4.0.64(zod@4.4.3)':
     dependencies:
       '@ai-sdk/provider': 4.0.12
@@ -3268,14 +3289,16 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
 
-  '@luxalgo/broker-sdk@0.3.0': {}
+  '@luxalgo/broker-sdk@0.5.1(react@19.2.8)':
+    optionalDependencies:
+      react: 19.2.8
 
-  '@luxalgo/vela-pinets@0.2.13(@luxalgo/vela@0.7.7)(pinets@0.9.34)':
+  '@luxalgo/vela-pinets@0.2.16(@luxalgo/vela@0.7.8)(pinets@0.9.34)':
     dependencies:
-      '@luxalgo/vela': 0.7.7
+      '@luxalgo/vela': 0.7.8
       pinets: 0.9.34
 
-  '@luxalgo/vela@0.7.7':
+  '@luxalgo/vela@0.7.8':
     dependencies:
       '@zag-js/core': 1.43.3
       '@zag-js/dialog': 1.43.3

@@ -52,9 +52,48 @@ touches as little as possible.
 | `apps/web/src/app/journal/[date]/page.tsx` (external analysis)                           | `<ExternalOpinions>` above "Ask about this day", appending to the note like recaps.                                                                               | Re-add the import and the element.                                               |
 | `apps/web/src/server/market-data/http.ts`, `transport.ts`, `public-crypto.ts`            | Concurrent grid-aligned `windows()`, per-host `HOST_LIMITS`, hour-long cache for past pages, Binance symbol details beside the candles.                           | Keep upstream's adapters and re-add the pacing, paging and cache changes.        |
 
-Nothing else upstream owns is changed: no database schema, bootstrap or upgrade edits (the
-add-ons create their own tables), no `next.config.ts` or `layout.tsx` edits. The only
-dependencies added are single sign-on's (push uses Node's crypto).
+Nothing else upstream owns is changed: the add-ons create their own tables, and the only
+schema upgrade in upstream files is the chart analyses' columns (`layers_json`,
+`indicators_json`, `zones_json`, `plan_json`) in `migrate()` in `db/bootstrap.ts`. No
+`next.config.ts` edits. The only dependencies added are single sign-on's (push uses Node's
+crypto).
+
+## Upstream merge of 2026-10-15
+
+Upstream's 15 commits (OpenAI-compatible AI server, account currencies and conversion, XTB
+`.xlsx` and IBKR Flex XML imports, Open/Close position CSVs, optional AI statement parsing,
+notebook folder deletion, sectioned Settings, a concurrency-safe database setup) were merged
+with these decisions:
+
+- **AI providers** (`lib/ai-settings.ts`, `server/settings.ts`, `server/ai.ts`,
+  `components/ai-settings.tsx`, `app/api/settings/route.ts`): four providers, Anthropic,
+  OpenAI, Google Gemini (the fork's) and the OpenAI-compatible server (upstream's).
+  `AI_KEY_ENVIRONMENT` lists each provider's key variables (none for a compatible server);
+  `AiConnection` carries both `environmentKey` and `baseUrl`. `aiModel()` builds every
+  provider's model through upstream's `languageModel`, and `aiFailure()` adds upstream's
+  "server unreachable" message for a compatible server. AI statement parsing
+  (`lib/ai-import.ts`) stays on OpenAI and Anthropic, as upstream wrote it: it needs PDF input
+  and strict structured output.
+- **Database setup**: upstream moved the column upgrades into `migrate()` in
+  `db/bootstrap.ts`, run under one write lock; the fork's chart analysis columns moved there
+  with them.
+- **Imports**: `tradeToExecutions` keeps the fork's reconstruction facts and returns a pair;
+  XTB drops them, since its source identity replaces them. `rowsToFills` keeps the fork's
+  decimal comma reading, unknown side warning, earlier readings and file order alongside
+  upstream's Open/Close position rows.
+- **Accounts**: `server/account-data.ts` (clear, transfer, delete) also carries upstream's
+  IBKR statement timezone: clearing forgets it, a transfer moves it (checked before the
+  duplicate check) in an immediate transaction.
+- **Pages**: upstream's layouts win (Settings sections with **Language** under General, the
+  dashboard's currency groups replacing the fork's mixed-currency notice, drag-only card
+  moves, the account form in a dialog, the trade rating and navigation) with every text
+  through `t()`. Net ROI uses upstream's `netReturnOnEntry`. The trade replay keeps the
+  fork's animated chart with upstream's icon controls, previous-candle button, counter and
+  loading cover; `tests/replay-chart.test.ts` and `tests/trade-interactions.test.ts` read
+  the revealed candles from the replay's data source instead of `setMarket` data.
+- **Tests changed for the fork**: `ai-settings-ui.test.ts` (Gemini connection),
+  `ai-import-ui.test.ts` (renders inside `PrivacyProvider`, since fees respect privacy
+  mode).
 
 ## Bug fixes in upstream code
 
@@ -70,7 +109,7 @@ structure and re-apply the fix; each one has a test that fails without it.
 - **Importers and core** (`packages/importers/src/**`, `packages/core/src/metrics.ts`):
   MetaTrader 4 profit and swap, MT5 swap credits, decimal commas, TradeZella fees, sides and
   times, DAS short sells, ThinkorSwim options, fill order at one instant, UTC suffixes and
-  dash dates, `returnOnNotional`. Hashes stay stable; see "Parsing fixes and earlier
+  dash dates (the contract-multiplier ROI fix is now upstream's `netReturnOnEntry`). Hashes stay stable; see "Parsing fixes and earlier
   imports" in `docs/importers.md`. Tests: the package test suites.
 - **Accounts, trades and data** (`app/api/accounts/**`, `app/api/trades/**`,
   `app/api/playbooks/**`, `app/api/notes/**`, `app/api/journal/[date]`, `app/api/export`,

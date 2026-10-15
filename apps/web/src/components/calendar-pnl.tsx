@@ -8,6 +8,8 @@ import { cn, fmtMoney } from "@/lib/utils";
 import { Pnl } from "./pnl";
 import { MonetaryValue, usePrivacy } from "./privacy";
 import { useI18n } from "./i18n";
+import type { CalendarPnlPoint } from "@/lib/calendar-insights";
+import { CalendarDayPreview } from "./calendar-day-preview";
 
 const compactFormatters = new Map<string, Intl.NumberFormat>();
 const compactMoney = (value: number, currency: string) => {
@@ -34,10 +36,12 @@ export function CalendarPnl({
   calendar,
   currency = "USD",
   monetary = true,
+  runningPnl,
 }: {
   calendar: CalendarMonth;
   currency?: string;
   monetary?: boolean;
+  runningPnl?: Record<string, CalendarPnlPoint[]>;
 }) {
   const { t, tx, tn } = useI18n();
   const maxAbs = Math.max(
@@ -62,6 +66,7 @@ export function CalendarPnl({
             maxAbs={maxAbs}
             currency={currency}
             monetary={monetary}
+            runningPnl={runningPnl}
           />
         ))}
       </div>
@@ -88,11 +93,13 @@ function CalendarWeekRow({
   maxAbs,
   currency,
   monetary,
+  runningPnl,
 }: {
   week: CalendarMonth["weeks"][number];
   maxAbs: number;
   currency: string;
   monetary: boolean;
+  runningPnl?: Record<string, CalendarPnlPoint[]>;
 }) {
   const { t, tn } = useI18n();
   const search = useSearchParams();
@@ -117,7 +124,23 @@ function CalendarWeekRow({
               ? "loss"
               : "neutral";
         return (
-          <HoverHint key={day.date} heading={day.date} content={`${amount} · ${count}`}>
+          <HoverHint
+            key={day.date}
+            heading={day.date}
+            content={
+              runningPnl ? (
+                <CalendarDayPreview
+                  points={runningPnl[day.date] ?? []}
+                  total={day.netPnl}
+                  trades={day.trades}
+                  currency={currency}
+                  monetary={monetary}
+                />
+              ) : (
+                `${amount} · ${count}`
+              )
+            }
+          >
             <Link
               key={day.date}
               href={`/journal/${day.date}?${search}`}

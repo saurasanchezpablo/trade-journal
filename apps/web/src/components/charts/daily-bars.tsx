@@ -62,7 +62,7 @@ export function DailyBars({
             axisLine={false}
             width={70}
             tickFormatter={(value: number) =>
-              privateMode ? "••••" : fmtMoney(value, currency).replace(".00", "")
+              privateMode ? "••••" : fmtMoney(value, currency).replace(/\.00$/, "")
             }
           />
           <ReferenceLine y={0} stroke={tokens.baseline} />

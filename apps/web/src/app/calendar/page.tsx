@@ -3,6 +3,7 @@
 import { Suspense, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { dayKeyOf } from "@luxalgo/journal-core";
+import { CurrencyNotice } from "@/components/currency-notice";
 import { CalendarPnl } from "@/components/calendar-pnl";
 import { FilterBar, useFilters } from "@/components/filter-bar";
 import { Button } from "@/components/ui/button";
@@ -77,6 +78,7 @@ function CalendarView() {
           </div>
         }
       />
+      {data?.currencyScope && <CurrencyNotice scope={data.currencyScope} />}
       <div className="space-y-4 p-4">
         <Card>
           <CardContent className="pt-4">
@@ -87,11 +89,23 @@ function CalendarView() {
                   {t("Try again")}
                 </Button>
               </div>
+            ) : data?.currencyScope?.monetary === false ? (
+              <div className="space-y-6">
+                {data.currencyGroups?.map((group) => (
+                  <div key={group.currency}>
+                    <p className="mb-3 text-sm font-medium">
+                      {t("{currency} accounts", { currency: group.currency })}
+                    </p>
+                    <CalendarPnl calendar={group.calendar} currency={group.currency} />
+                  </div>
+                ))}
+              </div>
             ) : data ? (
               <CalendarPnl
                 calendar={data.calendar}
                 currency={data.currencies[0] ?? "USD"}
                 monetary={data.currencies.length <= 1}
+                runningPnl={data.runningPnl}
               />
             ) : (
               <div role="status" aria-label={t("Loading calendar")}>
@@ -100,7 +114,7 @@ function CalendarView() {
             )}
           </CardContent>
         </Card>
-        {data && (
+        {data && data.currencyScope?.monetary !== false && (
           <CalendarPerformance
             key={`${data.calendar.year}-${data.calendar.month}-${query}`}
             data={data}

@@ -1,12 +1,20 @@
 "use client";
 
 import { Suspense, useState } from "react";
-import { Archive, ArchiveRestore, RefreshCw, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { AccountCreateForm } from "@/components/account-create-form";
 import { FilterBar } from "@/components/filter-bar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -63,6 +71,7 @@ function Accounts() {
   );
   const [syncing, setSyncing] = useState<string | null>(null);
   const timeZone = data?.timeZone ?? "UTC";
+  const [creating, setCreating] = useState(false);
 
   const action = async <T = unknown,>(id: string, body: Record<string, unknown>) => {
     const result = await postJson<T>(`/api/accounts/${id}/actions`, body);
@@ -106,7 +115,32 @@ function Accounts() {
 
   return (
     <div>
-      <FilterBar title="Accounts" />
+      <FilterBar
+        title="Accounts"
+        actions={
+          <Button size="sm" onClick={() => setCreating(true)}>
+            <Plus />
+            {t("New account")}
+          </Button>
+        }
+      />
+      <Dialog open={creating} onOpenChange={setCreating}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{t("New account")}</DialogTitle>
+            <DialogDescription>
+              {t("Create an account for manual trades or file imports.")}
+            </DialogDescription>
+          </DialogHeader>
+          <AccountCreateForm
+            showTitle={false}
+            onCreated={() => {
+              refresh();
+              setCreating(false);
+            }}
+          />
+        </DialogContent>
+      </Dialog>
       <div className="grid gap-3 p-4 md:grid-cols-2">
         {error && (
           <div role="alert" className="col-span-full space-y-2 text-sm text-destructive">
@@ -123,7 +157,7 @@ function Accounts() {
         )}
         {data?.accounts.length === 0 && (
           <p className="col-span-full py-16 text-center text-sm text-muted-foreground">
-            {t("No accounts yet. Create one on the Import page.")}
+            {t("No accounts yet. Use New account to create your first one.")}
           </p>
         )}
         {data?.accounts.map((account) => (
@@ -211,11 +245,11 @@ function Accounts() {
                   </span>
                 </div>
               )}
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div>
+              <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-2">
+                <div className="min-w-0">
                   <label
                     htmlFor={`initial-balance-${account.id}`}
-                    className="text-xs text-muted-foreground"
+                    className="mb-1 block text-xs text-muted-foreground"
                   >
                     {t("Initial balance (anchors drawdown %)")}
                   </label>
@@ -254,10 +288,10 @@ function Accounts() {
                     />
                   </MonetaryField>
                 </div>
-                <div>
+                <div className="min-w-0">
                   <label
                     htmlFor={`profit-calc-${account.id}`}
-                    className="text-xs text-muted-foreground"
+                    className="mb-1 block text-xs text-muted-foreground"
                   >
                     {t("Profit calculation")}
                   </label>

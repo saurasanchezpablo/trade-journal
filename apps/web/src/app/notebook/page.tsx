@@ -2,7 +2,7 @@
 import { OptionSelect } from "@/components/ui/option-select";
 
 import { Suspense, useRef, useState } from "react";
-import { ArrowLeft, FolderPlus, Plus, Search } from "lucide-react";
+import { ArrowLeft, FolderPlus, Plus, Search, Trash2 } from "lucide-react";
 import { FilterBar } from "@/components/filter-bar";
 import { VoiceNote } from "@/components/voice-note";
 import { Button } from "@/components/ui/button";
@@ -59,9 +59,37 @@ function Notebook() {
   const [folderName, setFolderName] = useState("");
   const [folderError, setFolderError] = useState("");
   const [creatingFolder, setCreatingFolder] = useState(false);
+  const [folderToDelete, setFolderToDelete] = useState<FolderRow | null>(null);
+  const [deletingFolder, setDeletingFolder] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   const { data, refresh } = useApi<{ notes: NoteRow[]; folders: FolderRow[] }>(
     `/api/notes?folder=${folder}&q=${encodeURIComponent(search)}`,
   );
+  const currentFolder = data?.folders.find((item) => item.id === folder);
+
+  const requestFolderDelete = (item: FolderRow) => {
+    setDeleteError("");
+    setFolderToDelete(item);
+  };
+
+  const deleteFolder = async () => {
+    if (!folderToDelete || deletingFolder) return;
+    setDeletingFolder(true);
+    setDeleteError("");
+    try {
+      await postJson(`/api/folders/${folderToDelete.id}`, undefined, "DELETE");
+      setFolder((current) => (current === folderToDelete.id ? "my-notes" : current));
+      refresh();
+      setFolderToDelete(null);
+    } catch (error) {
+      setDeleteError(
+        error instanceof Error ? error.message : t("Could not delete the folder. Try again."),
+      );
+    } finally {
+      setDeletingFolder(false);
+    }
+  };
+
   const createNote = async () => {
     if (creating.current) return;
     creating.current = true;
@@ -109,6 +137,40 @@ function Notebook() {
 
   return (
     <div>
+      <Dialog
+        open={Boolean(folderToDelete)}
+        onOpenChange={(open) => !open && !deletingFolder && setFolderToDelete(null)}
+      >
+        <DialogContent>
+          <DialogTitle>
+            {t("Delete “{name}”?", { name: folderToDelete ? folderName_(folderToDelete) : "" })}
+          </DialogTitle>
+          <DialogDescription>
+            {t("The folder will be removed. Its notes will be kept in My notes.")}
+          </DialogDescription>
+          {deleteError && (
+            <p role="alert" className="text-sm text-destructive">
+              {deleteError}
+            </p>
+          )}
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              disabled={deletingFolder}
+              onClick={() => setFolderToDelete(null)}
+            >
+              {t("Cancel")}
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={deletingFolder}
+              onClick={() => void deleteFolder()}
+            >
+              {deletingFolder ? t("Deleting…") : t("Delete folder")}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
       <Dialog open={folderOpen} onOpenChange={(open) => !creatingFolder && setFolderOpen(open)}>
         <DialogContent>
           <DialogTitle>{t("New folder")}</DialogTitle>
@@ -181,19 +243,32 @@ function Notebook() {
           {data?.folders
             .filter((f) => f.id !== "all")
             .map((f) => (
-              <button
-                key={f.id}
-                className={cn(
-                  "w-full break-words rounded-md px-2.5 py-1.5 text-left text-sm",
-                  folder === f.id
-                    ? "bg-accent font-medium"
-                    : "text-muted-foreground hover:bg-accent/60",
+              <div key={f.id} className="flex items-center">
+                <button
+                  className={cn(
+                    "min-w-0 flex-1 break-words rounded-md px-2.5 py-1.5 text-left text-sm",
+                    folder === f.id
+                      ? "bg-accent font-medium"
+                      : "text-muted-foreground hover:bg-accent/60",
+                  )}
+                  aria-pressed={folder === f.id}
+                  onClick={() => setFolder(f.id)}
+                >
+                  {folderName_(f)}
+                </button>
+                {f.id !== "my-notes" && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+                    aria-label={t("Delete folder: {name}", { name: folderName_(f) })}
+                    onClick={() => requestFolderDelete(f)}
+                  >
+                    <Trash2 />
+                  </Button>
                 )}
-                aria-pressed={folder === f.id}
-                onClick={() => setFolder(f.id)}
-              >
-                {folderName_(f)}
-              </button>
+              </div>
             ))}
           <Button
             variant="ghost"
@@ -227,6 +302,18 @@ function Notebook() {
                     </option>
                   ))}
               </OptionSelect>
+              {currentFolder && currentFolder.id !== "all" && currentFolder.id !== "my-notes" && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-9 shrink-0 text-muted-foreground hover:text-destructive"
+                  aria-label={t("Delete folder: {name}", { name: folderName_(currentFolder) })}
+                  onClick={() => requestFolderDelete(currentFolder)}
+                >
+                  <Trash2 />
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="icon"

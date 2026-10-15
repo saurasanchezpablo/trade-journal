@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { BarRange, DataProvider, OHLCV, Vela } from "@luxalgo/vela";
+import { ChevronLeft, ChevronRight, Pause, Play, RotateCcw, SkipForward } from "lucide-react";
 import {
   RESOLUTIONS,
   type MarketConnection,
@@ -25,7 +26,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { OptionSelect } from "./ui/option-select";
-import { randomId } from "@/lib/random-id";
 import type { Vars } from "@/lib/i18n";
 import { useI18n } from "./i18n";
 
@@ -612,14 +612,15 @@ function Excursion({
   return <>{t("Unavailable")}</>;
 }
 
-function HistoricalReplay({
-  savedBefore,
+export function HistoricalReplay({
+  savedBefore = false,
   history,
   trade,
   executions,
   privacy,
 }: {
-  savedBefore: boolean;
+  /** An estimate for this trade was saved for Reports on an earlier load. */
+  savedBefore?: boolean;
   history: TradeMarketResult;
   trade: ChartTrade & { currency: string };
   executions: ChartExecution[];
@@ -642,7 +643,7 @@ function HistoricalReplay({
     [history, executions, count],
   );
   return (
-    <Card>
+    <Card className="journal-replay-enter">
       <CardHeader>
         <CardTitle>{t("Historical candles")}</CardTitle>
       </CardHeader>
@@ -676,46 +677,75 @@ function HistoricalReplay({
               onAdvance={setCount}
               tradeKey={trade.key}
             />
-            <div className="flex flex-wrap items-center gap-2">
+            <div
+              className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/30 p-2"
+              role="group"
+              aria-label={t("Candle replay controls")}
+            >
               <Button
                 variant="outline"
+                size="icon"
+                aria-label={t("Restart replay")}
                 onClick={() => {
                   setPlaying(false);
                   setCount(1);
                 }}
               >
-                {t("Restart")}
+                <RotateCcw />
               </Button>
               <Button
+                variant="outline"
+                size="icon"
+                aria-label={t("Previous candle")}
+                disabled={count <= 1}
+                onClick={() => {
+                  setPlaying(false);
+                  setCount((current) => Math.max(1, current - 1));
+                }}
+              >
+                <ChevronLeft />
+              </Button>
+              <Button
+                className="min-w-24"
+                disabled={history.bars.length <= 1}
                 onClick={() => {
                   if (complete) setCount(1);
                   setPlaying(!playing);
                 }}
               >
+                {playing ? <Pause /> : <Play />}
                 {playing ? t("Pause") : t("Play")}
               </Button>
               <Button
                 variant="outline"
+                size="icon"
+                aria-label={t("Next candle")}
                 disabled={complete}
                 onClick={() => {
                   setPlaying(false);
                   setCount((current) => Math.min(current + 1, history.bars.length));
                 }}
               >
-                {t("Next candle")}
+                <ChevronRight />
               </Button>
               <Button
                 variant="outline"
+                size="icon"
+                aria-label={t("Show all candles")}
+                disabled={complete}
                 onClick={() => {
                   setPlaying(false);
                   setCount(history.bars.length);
                 }}
               >
-                {t("Show all")}
+                <SkipForward />
               </Button>
+              <span className="mx-1 text-xs tabular-nums text-muted-foreground" aria-live="off">
+                {count.toLocaleString()} / {history.bars.length.toLocaleString()}
+              </span>
               <OptionSelect
                 aria-label={t("Replay speed")}
-                className="w-24"
+                className="ml-auto w-20"
                 value={speed}
                 onValueChange={setSpeed}
               >
@@ -830,6 +860,8 @@ function ReplayChart({
   const { t } = useI18n();
   const translate = useRef(t);
   translate.current = t;
+  // Chart-local identity also works on HTTP LAN origins without crypto.randomUUID.
+  const indicatorType = `replay-fills-${useId()}`;
   const host = useRef<HTMLDivElement>(null);
   const [error, setError] = useState("");
   const wanted = useRef({ count, playing, speed });
@@ -842,10 +874,12 @@ function ReplayChart({
   const reached = useRef(count);
   const controls = useRef<{ jump(count: number): void; sync(): void } | null>(null);
 
+  const [ready, setReady] = useState(false);
   useEffect(() => {
     let disposed = false;
     let cleanup = () => {};
     setError("");
+    setReady(false);
     void (async () => {
       const { Vela, registerNativeIndicator, unregisterNativeIndicator } =
         await import("@luxalgo/vela");
@@ -869,7 +903,7 @@ function ReplayChart({
 
       let emitted = NaN;
       let emitFills: (() => void) | null = null;
-      const type = `replay-fills-${randomId()}`;
+      const type = indicatorType;
       registerNativeIndicator({
         type,
         title: translate.current("Recorded fills"),
@@ -1049,6 +1083,8 @@ function ReplayChart({
         instance.destroy();
         unregisterNativeIndicator(type);
       };
+      await instance.ready();
+      if (!disposed) setReady(true);
     })().catch(() => {
       if (!disposed) setError("The historical chart could not be rendered.");
     });
@@ -1056,7 +1092,7 @@ function ReplayChart({
       disposed = true;
       cleanup();
     };
-  }, [history, tradeKey]);
+  }, [history, tradeKey, indicatorType]);
   // A count the chart did not reach itself is a jump.
   useEffect(() => {
     if (count === reached.current) return;
@@ -1073,7 +1109,20 @@ function ReplayChart({
           {t(error)}
         </p>
       )}
-      <div ref={host} className="h-[420px] overflow-hidden rounded-lg border" />
+      <div
+        className="relative h-[420px] overflow-hidden rounded-lg border"
+        aria-busy={!ready && !error}
+      >
+        {!ready && !error && (
+          <div
+            className="absolute inset-0 flex items-center justify-center bg-muted/20 text-sm text-muted-foreground"
+            role="status"
+          >
+            {t("Preparing candle replay…")}
+          </div>
+        )}
+        <div ref={host} className={`h-full ${ready ? "journal-replay-reveal" : "invisible"}`} />
+      </div>
     </>
   );
 }

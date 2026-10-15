@@ -1,5 +1,9 @@
 import { and, eq, inArray } from "drizzle-orm";
-import { storedImportMetadata, type ImportedExecution } from "@luxalgo/journal-importers";
+import {
+  positionFillProblem,
+  storedImportMetadata,
+  type ImportedExecution,
+} from "@luxalgo/journal-importers";
 import { db, executions, accounts, trades } from "@/db";
 import { executionHash, newId, nowIso } from "./ids";
 import { rebuildAccount } from "./rebuild";
@@ -8,6 +12,7 @@ import { defaultFee } from "@/lib/journal-defaults";
 import { requireValue } from "./api";
 import { deleteTradeReferences } from "./trade-references";
 import { removedFillHashes } from "./fill-corrections";
+import { positionImportErrors } from "./position-import";
 
 export interface InsertResult {
   inserted: number;
@@ -72,6 +77,8 @@ export const executionProblem = (row: unknown, source: ExecutionSource): string 
       (legacy.price === undefined || isFiniteNumber(legacy.price)) &&
       (legacy.executedAt === undefined || typeof legacy.executedAt === "string"));
   if (!metaOk || !factsValid || !legacyOk) return `${label}: invalid imported execution metadata.`;
+  const positionProblem = positionFillProblem(r as ImportedExecution);
+  if (positionProblem) return positionProblem;
   return null;
 };
 
@@ -79,7 +86,8 @@ export const executionProblem = (row: unknown, source: ExecutionSource): string 
  * Split a batch into usable rows and skip reasons. Manual entry is strict: the
  * whole batch is rejected on the first bad row. Broker syncs and file imports
  * are lenient: one odd record must not fail the entire batch, so bad rows are
- * dropped and counted for the caller to report.
+ * dropped and counted for the caller to report. Position-labelled histories are
+ * atomic: dropping a bad fill could change which position the remaining fills close.
  */
 export const partitionExecutions = (
   rows: ImportedExecution[],
@@ -90,6 +98,13 @@ export const partitionExecutions = (
   let skipped = 0;
   for (const row of rows) {
     const problem = executionProblem(row, source);
+    if (
+      problem &&
+      (row?.importMetadata?.position ||
+        (typeof row?.importMetadata?.group === "string" &&
+          row.importMetadata.group.startsWith("csv-position:")))
+    )
+      requireValue(false, problem);
     if (problem === null) {
       usable.push(row);
       continue;
@@ -112,6 +127,7 @@ export const insertExecutions = (
   rows: ImportedExecution[],
   source: ExecutionSource,
   manualNotes?: string,
+  options: { preserveFees?: boolean } = {},
 ): InsertResult => {
   requireValue(
     manualNotes === undefined ||
@@ -144,6 +160,8 @@ export const insertExecutions = (
   const note = manualNotes?.trim() ? manualNotes : undefined;
 
   db.transaction((tx) => {
+    const positionErrors = positionImportErrors(accountId, usable);
+    requireValue(positionErrors.length === 0, positionErrors.join(" "));
     if (source === "import") {
       const existingHashes = new Set(
         tx
@@ -193,9 +211,10 @@ export const insertExecutions = (
           side: row.side,
           quantity: row.quantity,
           price: row.price,
-          fee: metadata?.preserveFee
-            ? row.fee
-            : defaultFee(row.fee, row.quantity, accountId, row.symbol, defaults),
+          fee:
+            metadata?.preserveFee || options.preserveFees
+              ? row.fee
+              : defaultFee(row.fee, row.quantity, accountId, row.symbol, defaults),
           executedAt: row.executedAt,
           assetClass: row.assetClass ?? null,
           source,

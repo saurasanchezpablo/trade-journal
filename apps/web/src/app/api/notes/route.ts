@@ -1,6 +1,6 @@
-import { asc, desc, eq } from "drizzle-orm";
+import { asc, desc, eq, isNull } from "drizzle-orm";
 import { db, folders, notes } from "@/db";
-import { handler, ok, requireValue } from "@/server/api";
+import { bad, handler, ok, requireValue } from "@/server/api";
 import { readNote } from "@/server/note-fields";
 import { newId, nowIso } from "@/server/ids";
 
@@ -39,7 +39,12 @@ export const GET = handler(async (request: Request) => {
         : b.updatedAt.localeCompare(a.updatedAt),
   );
 
-  const folderRows = db.select().from(folders).orderBy(asc(folders.createdAt)).all();
+  const folderRows = db
+    .select()
+    .from(folders)
+    .where(isNull(folders.deletedAt))
+    .orderBy(asc(folders.createdAt))
+    .all();
   return ok({ notes: rows, folders: folderRows });
 });
 
@@ -50,12 +55,15 @@ export const POST = handler(async (request: Request) => {
     body.dayDate === undefined || /^\d{4}-\d{2}-\d{2}$/.test(body.dayDate),
     "Day links must be YYYY-MM-DD.",
   );
+  const folderId = body.folderId ?? "my-notes";
+  const folder = db.select().from(folders).where(eq(folders.id, folderId)).get();
+  if (!folder || folder.deletedAt || folderId === "all") return bad("Folder not found", 404);
   const id = newId();
   const now = nowIso();
   db.insert(notes)
     .values({
       id,
-      folderId: body.folderId ?? "my-notes",
+      folderId,
       title: body.title ?? "",
       content: body.content ?? "",
       tagsJson: body.tags ? JSON.stringify(body.tags) : null,

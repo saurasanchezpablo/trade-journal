@@ -1,17 +1,24 @@
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createOpenAI } from "@ai-sdk/openai";
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { APICallError, RetryError, generateText, streamText, type ModelMessage } from "ai";
-import { getAiKey, getAiModel, getAiProvider } from "./settings";
+import {
+  aiProviderConfigured,
+  getAiKey,
+  getAiModel,
+  getAiProvider,
+  getCompatibleBaseUrl,
+} from "./settings";
 import { getLocale } from "./i18n";
-import { AI_PROVIDER_NAMES } from "@/lib/ai-settings";
+import { AI_PROVIDER_NAMES, type AiProvider } from "@/lib/ai-settings";
 
 /**
  * BYO-key AI. Self-hosted means YOUR key on YOUR box: the key is read from the
  * encrypted settings store (or the selected provider's environment variable).
  * Requests go straight from this server to the selected provider.
  */
-export const aiConfigured = (): boolean => getAiKey(getAiProvider()) !== null;
+export const aiConfigured = (): boolean => aiProviderConfigured(getAiProvider());
 
 export const AI_SYSTEM = `You are the reflection layer of a trader's journal.
 You see only the trader's own recorded data — trades, stats, notes, and chart analyses they
@@ -22,7 +29,7 @@ say what to keep and what to fix. No platitudes, no disclaimers about trading be
 the trader knows. Keep it tight.`;
 
 /**
- * The system prompt in the journal's language: with Spanish chosen (Settings → Language) the
+ * The system prompt in the journal's language: with Spanish chosen (Settings → General → Language) the
  * AI writes its answers in Spanish, while the structure it was asked for stays as given.
  */
 export function aiSystem(): string {
@@ -31,25 +38,43 @@ export function aiSystem(): string {
     : AI_SYSTEM;
 }
 
-/** The configured provider's model and request options; throws when no key is set. */
+const languageModel = (provider: AiProvider, apiKey: string | null, model: string) => {
+  if (provider === "compatible")
+    // Chat Completions is the API compatible servers share. Only the key saved for
+    // this server is sent: this adapter never reads provider environment variables.
+    return createOpenAICompatible({
+      name: "compatible",
+      baseURL: getCompatibleBaseUrl()!,
+      apiKey: apiKey ?? undefined,
+    })(model);
+  if (provider === "openai") return createOpenAI({ apiKey: apiKey! }).responses(model);
+  if (provider === "google") return createGoogleGenerativeAI({ apiKey: apiKey! })(model);
+  return createAnthropic({ apiKey: apiKey! })(model);
+};
+
+/** The configured provider's model and request options; throws when it is not set up. */
 export const aiModel = () => {
   const provider = getAiProvider();
-  const apiKey = getAiKey(provider);
-  if (!apiKey) {
+  if (!aiProviderConfigured(provider)) {
     throw new Error(
-      `AI is not configured — add your ${AI_PROVIDER_NAMES[provider]} API key in Settings.`,
+      provider === "compatible"
+        ? "AI is not configured — add your OpenAI-compatible server URL and model in Settings."
+        : `AI is not configured — add your ${AI_PROVIDER_NAMES[provider]} API key in Settings.`,
     );
   }
-  const model = getAiModel(provider);
   return {
-    model:
-      provider === "openai"
-        ? createOpenAI({ apiKey }).responses(model)
-        : provider === "google"
-          ? createGoogleGenerativeAI({ apiKey })(model)
-          : createAnthropic({ apiKey })(model),
+    model: languageModel(provider, getAiKey(provider), getAiModel(provider)),
     ...(provider === "openai" ? { providerOptions: { openai: { store: false } } } : {}),
   };
+};
+
+/** Whether the selected provider is a compatible server (false when settings can't be read). */
+const compatibleSelected = (): boolean => {
+  try {
+    return getAiProvider() === "compatible";
+  } catch {
+    return false;
+  }
 };
 
 /**
@@ -82,6 +107,11 @@ export function aiFailure(error: unknown): Error {
     )
       return new Error(
         "AI model unavailable: check the model ID and your provider access in Settings.",
+      );
+    // No status code means no HTTP response: the server is down or the URL is wrong.
+    if (error.statusCode === undefined && compatibleSelected())
+      return new Error(
+        "AI server unreachable: check the server URL in Settings and that the server is running.",
       );
   }
   return new Error("AI request failed. Check your provider settings or try again shortly.");

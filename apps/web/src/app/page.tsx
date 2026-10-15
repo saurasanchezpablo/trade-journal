@@ -10,6 +10,8 @@ import type {
   TradeMetrics,
 } from "@luxalgo/journal-core";
 import { dayKeyOf, relativeDrawdownCurve } from "@luxalgo/journal-core";
+import { CurrencyNotice } from "@/components/currency-notice";
+import type { CurrencyScope } from "@/lib/currencies";
 import { CalendarPnl } from "@/components/calendar-pnl";
 import { DailyBars } from "@/components/charts/daily-bars";
 import { EdgeRadar } from "@/components/charts/edge-radar";
@@ -41,6 +43,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { HelpHint, Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { postJson, useApi } from "@/lib/use-api";
+import type { CalendarPnlPoint } from "@/lib/calendar-insights";
 import { cn, fmtDuration, fmtMoney, fmtNumber, fmtPercent } from "@/lib/utils";
 
 interface Bucket {
@@ -52,12 +55,16 @@ interface Bucket {
 
 interface StatsPayload {
   timeZone: string;
-  metrics: TradeMetrics;
+  metrics: TradeMetrics | null;
+  currencyScope: CurrencyScope;
+  currencyGroups: { currency: string; metrics: TradeMetrics }[];
   initialBalance: number;
-  edgeScore: EdgeScore;
+  edgeScore: EdgeScore | null;
   days: DayStats[];
   dailyCumulative: EquityPoint[];
   calendar: CalendarMonth;
+  calendarCurrencies: string[];
+  runningPnl: Record<string, CalendarPnlPoint[]>;
   buckets: Record<"symbol" | "weekday" | "hour" | "duration" | "direction", Bucket[]>;
   openPositions: {
     key: string;
@@ -66,10 +73,16 @@ interface StatsPayload {
     openedAt: string;
     quantity: number;
     avgEntry: number;
+    currency: string;
   }[];
-  recentTrades: { key: string; symbol: string; closedAt: string; netPnl: number; status: string }[];
-  /** The selected accounts' currencies; amounts are only added up within one. */
-  currencies: string[];
+  recentTrades: {
+    key: string;
+    symbol: string;
+    closedAt: string;
+    netPnl: number;
+    currency: string;
+    status: string;
+  }[];
 }
 
 export default function DashboardPage() {
@@ -131,9 +144,55 @@ function DashboardContent({
         </div>
       </div>
     );
+  if (!data.currencyScope.monetary) {
+    const closed = data.currencyGroups.reduce((sum, group) => sum + group.metrics.closedTrades, 0);
+    const wins = data.currencyGroups.reduce((sum, group) => sum + group.metrics.wins, 0);
+    return (
+      <>
+        <CurrencyNotice scope={data.currencyScope} />
+        <div className="grid gap-3 p-4 sm:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle>{t("All accounts")}</CardTitle>
+            </CardHeader>
+            <CardContent className="text-sm">
+              {t("{trades} · {rate} trade win rate", {
+                trades: tn(closed, "{count} closed trade", "{count} closed trades"),
+                rate: closed ? fmtPercent(wins / closed) : "–",
+              })}
+            </CardContent>
+          </Card>
+          {data.currencyGroups.map((group) => (
+            <Card key={group.currency}>
+              <CardHeader>
+                <CardTitle>{t("{currency} accounts", { currency: group.currency })}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Pnl
+                  value={group.metrics.netPnl}
+                  currency={group.currency}
+                  className="text-2xl font-semibold"
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {t("{trades} · {rate} trade win rate", {
+                    trades: tn(
+                      group.metrics.closedTrades,
+                      "{count} closed trade",
+                      "{count} closed trades",
+                    ),
+                    rate: fmtPercent(group.metrics.winRate),
+                  })}
+                </p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </>
+    );
+  }
   const { metrics: m, edgeScore } = data;
-  const currencies = data.currencies ?? [];
-  const currency = currencies[0] ?? "USD";
+  if (!m || !edgeScore) return null;
+  const currency = data.currencyScope.currency ?? "USD";
 
   if (m.totalTrades === 0)
     return query ? (
@@ -145,18 +204,6 @@ function DashboardContent({
     ) : (
       <EmptyState />
     );
-  if (currencies.length > 1)
-    return (
-      <div className="p-4">
-        <p className="rounded-lg border p-4 text-sm">
-          {t(
-            "These accounts use different currencies ({currencies}). Select accounts with the same currency in Filters to compare monetary results.",
-            { currencies: currencies.join(", ") },
-          )}
-        </p>
-      </div>
-    );
-
   // Momentum: net P&L of the last 7 calendar days (today included, in the journal's
   // timezone) vs the 7 before them. Hidden when either window has no trading days.
   const weekDelta = (() => {
@@ -186,6 +233,7 @@ function DashboardContent({
 
   return (
     <>
+      <CurrencyNotice scope={data.currencyScope} />
       <DashboardLayout
         widgets={[
           {
@@ -489,7 +537,12 @@ function DashboardContent({
                   </Link>
                 </CardHeader>
                 <CardContent>
-                  <CalendarPnl calendar={data.calendar} currency={currency} />
+                  <CalendarPnl
+                    calendar={data.calendar}
+                    runningPnl={data.runningPnl}
+                    currency={data.calendarCurrencies[0] ?? "USD"}
+                    monetary={data.calendarCurrencies.length <= 1}
+                  />
                 </CardContent>
               </Card>
             ),
@@ -542,7 +595,7 @@ function DashboardContent({
                             <span className="text-xs text-muted-foreground">
                               {trade.closedAt && dayKeyOf(trade.closedAt, data.timeZone)}
                             </span>
-                            <Pnl currency={currency} value={trade.netPnl} />
+                            <Pnl value={trade.netPnl} currency={trade.currency} />
                           </span>
                         </Link>
                       ))}
@@ -564,7 +617,9 @@ function DashboardContent({
                           </span>
                           <span className="tnum text-xs text-muted-foreground">
                             {fmtNumber(position.quantity, 4)} @{" "}
-                            <MonetaryValue>{fmtNumber(position.avgEntry)}</MonetaryValue>
+                            <MonetaryValue>
+                              {fmtNumber(position.avgEntry)} {position.currency}
+                            </MonetaryValue>
                           </span>
                         </div>
                       ))}

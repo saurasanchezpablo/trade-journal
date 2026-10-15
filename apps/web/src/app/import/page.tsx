@@ -28,6 +28,16 @@ import type { ImportReview, ImportReviewOptions } from "@/lib/import-review";
 import { TimeZonePicker } from "@/components/timezone-picker";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/components/i18n";
+import { usePrivacy } from "@/components/privacy";
+import { AiImportOptions } from "@/components/ai-import-options";
+import { AI_DEFAULT_MODELS, type AiSettingsPayload } from "@/lib/ai-settings";
+import {
+  AI_IMPORT_MAX_BYTES,
+  AI_IMPORT_MAX_TEXT,
+  type AiImportOptions as AiOptions,
+} from "@/lib/ai-import";
+import { XLSX_MAX_BYTES } from "@/lib/xlsx-import";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface BrokerInfo {
   id: string;
@@ -45,6 +55,8 @@ interface PreviewTotals {
 }
 
 interface PreviewResponse {
+  aiPreviewToken?: string;
+  sources?: string[];
   reconciliation?: ImportReview;
   detected: string | null;
   timeZone: string;
@@ -59,7 +71,9 @@ interface PreviewResponse {
     side: string;
     quantity: number;
     price: number;
+    fee?: number;
     executedAt: string;
+    importMetadata?: { position?: { direction: "long" | "short"; effect: "open" | "close" } };
   }[];
 }
 
@@ -118,6 +132,7 @@ function ImportView() {
 function FileImport() {
   const router = useRouter();
   const { t, tn, tx } = useI18n();
+  const privacy = usePrivacy();
   const [accountId, setAccountId] = useState("");
   const [reviewOptions, setReviewOptions] = useState<ImportReviewOptions>({});
   const changeReview = (options: ImportReviewOptions) => {
@@ -141,22 +156,42 @@ function FileImport() {
   const [preview, setPreview] = useState<PreviewResponse | null>(null);
   const [mapping, setMapping] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
+  const [aiEnabled, setAiEnabled] = useState(false);
+  const [aiOptions, setAiOptions] = useState<AiOptions>({
+    provider: "openai",
+    model: AI_DEFAULT_MODELS.openai,
+    apiKey: "",
+  });
+  const [encoding, setEncoding] = useState<"text" | "pdf" | "xlsx">("text");
+  const [aiReviewed, setAiReviewed] = useState(false);
   const { data: formatData } = useApi<{ formats: { id: string; label: string }[] }>("/api/import");
-  const { data: settingsData, error: settingsError } = useApi<{
-    timeZone: string;
-    importTimeZone: string;
-  }>("/api/settings");
+  const { data: settingsData, error: settingsError } = useApi<
+    AiSettingsPayload & {
+      timeZone: string;
+      importTimeZone: string;
+    }
+  >("/api/settings");
   const [statementTimeZone, setStatementTimeZone] = useState<string | null>(null);
   const timeZone = statementTimeZone ?? settingsData?.importTimeZone ?? "";
   const validTimeZone = isTimeZone(timeZone);
   const uploadDisabled = busy || !settingsData || !validTimeZone;
   const displayTimeZone = settingsData?.timeZone ?? "UTC";
+  const aiReady = Boolean(
+    aiOptions.model.trim() &&
+    (aiOptions.apiKey?.trim() || settingsData?.aiConnections[aiOptions.provider].configured),
+  );
+  const invalidateAiPreview = () => {
+    setPreview(null);
+    setAiReviewed(false);
+    setError(null);
+  };
 
   const [dragging, setDragging] = useState(false);
   const onFile = async (file: File) => {
     if (!validTimeZone) return;
     setStatementTimeZone(timeZone);
     setPreview(null);
+    setAiReviewed(false);
     setContent(null);
     setFileName(file.name);
     setReviewOptions({});
@@ -167,8 +202,44 @@ function FileImport() {
     setError(null);
     setBusy(true);
     try {
-      const text = decodeImportFile(await file.arrayBuffer());
+      const pdf = /\.pdf$/i.test(file.name);
+      const xlsx = /\.xlsx$/i.test(file.name);
+      if (pdf && !aiEnabled) throw new Error(t("Enable AI parsing to upload a PDF statement."));
+      if (xlsx && aiEnabled)
+        throw new Error(
+          t("Turn off AI parsing for an XTB Excel report. The XTB importer reads it directly."),
+        );
+      if (aiEnabled && file.size > AI_IMPORT_MAX_BYTES)
+        throw new Error(t("AI uploads must be 8 MB or smaller."));
+      if (xlsx && file.size > XLSX_MAX_BYTES)
+        throw new Error(t("Excel uploads must be a .xlsx file of 5 MB or less."));
+      if (aiEnabled && !/\.(csv|tsv|txt|html?|xml|pdf)$/i.test(file.name))
+        throw new Error(
+          t(
+            "Choose a CSV, TSV, HTML, XML, TXT or PDF file. XTB Excel reports use the XTB importer with AI turned off.",
+          ),
+        );
+      const buffer = await file.arrayBuffer();
+      let text: string;
+      // Binary statements travel as base64; the server reads them.
+      if (pdf || xlsx) {
+        const bytes = new Uint8Array(buffer);
+        let binary = "";
+        for (let i = 0; i < bytes.length; i += 8192)
+          binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
+        text = btoa(binary);
+      } else {
+        text = decodeImportFile(buffer);
+        if (aiEnabled && text.length > AI_IMPORT_MAX_TEXT)
+          throw new Error(
+            t("Use a smaller export: AI text parsing supports up to 150,000 characters."),
+          );
+      }
+      const fileEncoding = pdf ? "pdf" : xlsx ? "xlsx" : "text";
+      setEncoding(fileEncoding);
       setContent(text);
+      // Choosing a file alone never sends it to an AI provider.
+      if (aiEnabled) return;
       setPreview(
         await postJson<PreviewResponse>("/api/import", {
           mode: "preview",
@@ -177,6 +248,7 @@ function FileImport() {
           review: {},
           fileName: file.name,
           timeZone,
+          ...(fileEncoding === "xlsx" ? { encoding: fileEncoding } : {}),
         }),
       );
     } catch (cause) {
@@ -187,7 +259,9 @@ function FileImport() {
   };
 
   const previewFile = async () => {
-    if (!content || !validTimeZone) return;
+    if (!content || !validTimeZone || (aiEnabled && !aiReady)) return;
+    setPreview(null);
+    setAiReviewed(false);
     setBusy(true);
     setError(null);
     try {
@@ -200,6 +274,8 @@ function FileImport() {
           fileName,
           symbol,
           timeZone,
+          encoding,
+          ...(aiEnabled ? { ai: aiOptions } : {}),
         }),
       );
     } catch (cause) {
@@ -250,6 +326,15 @@ function FileImport() {
         symbol,
         // Commit with the exact parsing zone used by the reviewed preview.
         timeZone: preview.timeZone,
+        ...(encoding === "xlsx" ? { encoding } : {}),
+        ...(preview.aiPreviewToken
+          ? {
+              ai: { provider: aiOptions.provider, model: aiOptions.model },
+              encoding,
+              aiPreviewToken: preview.aiPreviewToken,
+              aiReviewed,
+            }
+          : {}),
       });
       const skippedNote =
         result.skipped && result.skipped > 0
@@ -313,8 +398,25 @@ function FileImport() {
   return (
     <div className="space-y-3">
       <Card>
-        <CardHeader>
+        <CardHeader className="flex-row flex-wrap items-center justify-between gap-2 space-y-0">
           <CardTitle>{t("Upload a statement or export")}</CardTitle>
+          <AiImportOptions
+            enabled={aiEnabled}
+            onEnabledChange={(enabled) => {
+              setAiEnabled(enabled);
+              invalidateAiPreview();
+              setContent(null);
+              setFileName("");
+              setMappingApplied(false);
+            }}
+            value={aiOptions}
+            onChange={(options) => {
+              setAiOptions(options);
+              invalidateAiPreview();
+            }}
+            settings={settingsData ?? undefined}
+            disabled={busy}
+          />
         </CardHeader>
         <CardContent className="space-y-3">
           <div>
@@ -333,6 +435,7 @@ function FileImport() {
               onValueChange={(zone) => {
                 setStatementTimeZone(zone);
                 setPreview(null);
+                setAiReviewed(false);
                 setMappingApplied(false);
               }}
             />
@@ -373,17 +476,34 @@ function FileImport() {
           >
             <FileUp className="h-6 w-6 text-muted-foreground" />
             <span className="text-sm">
-              {fileName || t("Drop or choose a CSV / HTML statement")}
+              {fileName ||
+                (aiEnabled
+                  ? t("Drop or choose a statement for AI parsing")
+                  : t("Drop or choose a CSV / HTML / XML statement or an XTB Excel report"))}
             </span>
             <span className="text-xs text-muted-foreground">
-              {t("Auto-detected: {formats}. Anything else goes to column mapping.", {
-                formats:
-                  formatData?.formats.map((format) => format.label.split(" (")[0]).join(", ") ?? "",
-              })}
+              {aiEnabled
+                ? t(
+                    "CSV, TSV, HTML, XML, TXT or PDF. Your file stays local until you preview with AI.",
+                  )
+                : t(
+                    "Auto-detected: {formats}. Anything else goes to column mapping. XTB: one .xlsx per account. Closed positions and open holdings are imported; cash operations are left out.",
+                    {
+                      formats: [
+                        ...new Set(
+                          formatData?.formats.map((format) => format.label.split(" (")[0]) ?? [],
+                        ),
+                      ].join(", "),
+                    },
+                  )}
             </span>
             <input
               type="file"
-              accept=".csv,.txt,.htm,.html,.tsv"
+              accept={
+                aiEnabled
+                  ? ".csv,.txt,.htm,.html,.tsv,.xml,.pdf"
+                  : ".csv,.txt,.htm,.html,.tsv,.xml,.xlsx"
+              }
               disabled={uploadDisabled}
               className="sr-only"
               onChange={(event) => {
@@ -391,12 +511,23 @@ function FileImport() {
                 // Cleared so choosing the same file again reads it again.
                 event.target.value = "";
                 if (file) void onFile(file);
+                event.target.value = "";
               }}
             />
           </label>
           {content && !preview && (
-            <Button onClick={previewFile} disabled={busy || !validTimeZone} variant="outline">
-              {busy ? t("Reading…") : t("Preview file")}
+            <Button
+              onClick={previewFile}
+              disabled={busy || !validTimeZone || (aiEnabled && !aiReady)}
+              variant={aiEnabled ? "default" : "outline"}
+            >
+              {busy
+                ? aiEnabled
+                  ? t("AI is reading your statement…")
+                  : t("Reading…")
+                : aiEnabled
+                  ? t("Preview with AI")
+                  : t("Preview file")}
             </Button>
           )}
 
@@ -460,6 +591,49 @@ function FileImport() {
                   </div>
                 ))}
               </div>
+              <details className="space-y-2 text-xs">
+                <summary className="cursor-pointer text-muted-foreground">
+                  {t("Position identity and ordering (optional)")}
+                </summary>
+                <p className="text-muted-foreground">
+                  {t(
+                    "For Open/Close Long/Short rows, map source position IDs, execution IDs or sequence numbers when available. Columns named Position ID, Execution ID, Fill ID and Sequence are recognized automatically. An order ID is not an execution ID.",
+                  )}
+                </p>
+                <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
+                  {(["positionId", "executionId", "sequence"] as const).map((field) => (
+                    <div key={field}>
+                      <Label className="mb-1 block text-xs capitalize text-muted-foreground">
+                        {t(
+                          {
+                            positionId: "Position ID",
+                            executionId: "Execution ID",
+                            sequence: "Sequence",
+                          }[field],
+                        )}
+                      </Label>
+                      <Select
+                        value={mapping[field] || "none"}
+                        onValueChange={(value) =>
+                          setMapping((m) => ({ ...m, [field]: value === "none" ? "" : value }))
+                        }
+                      >
+                        <SelectTrigger className="h-8 text-xs">
+                          <SelectValue placeholder={t("column")} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">—</SelectItem>
+                          {preview.headers!.map((header) => (
+                            <SelectItem key={header} value={header}>
+                              {header}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ))}
+                </div>
+              </details>
               {mappingNote && (
                 <p role="status" className="text-xs text-muted-foreground">
                   {mappingNote}
@@ -530,17 +704,47 @@ function FileImport() {
               </p>
               {!!preview.executions?.length && (
                 <div className="space-y-1 border-t pt-2 text-xs">
-                  {preview.executions.slice(0, 5).map((execution, index) => (
-                    <div key={index} className="flex flex-wrap gap-x-3">
-                      <span>
-                        {execution.symbol} · {execution.side.toUpperCase()}
-                      </span>
-                      <span className="text-muted-foreground">
-                        {formatTimestamp(execution.executedAt, displayTimeZone)}
-                      </span>
-                    </div>
-                  ))}
-                  {preview.totals.executions > 5 && (
+                  <div
+                    className={
+                      preview.aiPreviewToken ? "max-h-80 space-y-2 overflow-auto" : "space-y-1"
+                    }
+                  >
+                    {(preview.aiPreviewToken
+                      ? preview.executions
+                      : preview.executions.slice(0, 5)
+                    ).map((execution, index) => (
+                      <div key={index}>
+                        <div className="flex flex-wrap gap-x-3">
+                          <span>
+                            {execution.symbol} ·{" "}
+                            {execution.importMetadata?.position
+                              ? t(
+                                  `${execution.importMetadata.position.effect === "open" ? "Open" : "Close"} ${execution.importMetadata.position.direction === "long" ? "long" : "short"}`,
+                                ).toUpperCase()
+                              : (execution.side === "buy" ? t("Buy") : t("Sell")).toUpperCase()}
+                          </span>
+                          <span className="text-muted-foreground">
+                            {formatTimestamp(execution.executedAt, displayTimeZone)}
+                          </span>
+                          {preview.aiPreviewToken && (
+                            <span>
+                              {t("{quantity} @ {price} · Fees {fee}", {
+                                quantity: execution.quantity,
+                                price: execution.price,
+                                fee: privacy ? "••••" : (execution.fee ?? 0),
+                              })}
+                            </span>
+                          )}
+                        </div>
+                        {preview.aiPreviewToken && preview.sources?.[index] && (
+                          <p className="mt-0.5 text-muted-foreground">
+                            {t("Source: {source}", { source: preview.sources[index] ?? "" })}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  {!preview.aiPreviewToken && preview.totals.executions > 5 && (
                     <p className="text-muted-foreground">{t("Showing the first 5 executions.")}</p>
                   )}
                 </div>
@@ -556,13 +760,13 @@ function FileImport() {
               </p>
               {preview.warnings?.map((warning, index) => (
                 <p key={index} className="text-xs text-muted-foreground">
-                  ⚠ {warning}
+                  ⚠ {t(warning)}
                 </p>
               ))}
               {!preview.needsSymbol &&
                 preview.errors?.map((message, index) => (
                   <p key={index} role="alert" className="text-xs text-loss">
-                    {message}
+                    {t(message)}
                   </p>
                 ))}
               <fieldset disabled={busy}>
@@ -594,11 +798,24 @@ function FileImport() {
                   busy ||
                   !!preview.errors?.length ||
                   !preview.totals.executions ||
+                  (Boolean(preview.aiPreviewToken) && !aiReviewed) ||
                   (preview.detected === "ninjatrader" && !preview.reconciliation?.token)
                 }
               >
                 {busy ? t("Importing…") : t("Import")}
               </Button>
+              {preview.aiPreviewToken && (
+                <label className="flex items-start gap-2 text-xs text-muted-foreground">
+                  <Checkbox
+                    checked={aiReviewed}
+                    disabled={busy}
+                    onCheckedChange={(checked) => setAiReviewed(checked === true)}
+                  />
+                  {t(
+                    "I compared all extracted executions with my statement, including the account, quantities, prices, fees and timestamps. Import this preview.",
+                  )}
+                </label>
+              )}
             </div>
           )}
         </CardContent>
@@ -611,6 +828,9 @@ function BrokerConnect() {
   const router = useRouter();
   const { t } = useI18n();
   const { data } = useApi<{ brokers: BrokerInfo[] }>("/api/brokers");
+  const { data: settingsData, error: settingsError } = useApi<{ importTimeZone: string }>(
+    "/api/settings",
+  );
   const [brokerId, setBrokerId] = useState("");
   const [name, setName] = useState("");
   const [credentials, setCredentials] = useState<Record<string, string>>({});
@@ -623,12 +843,23 @@ function BrokerConnect() {
     setBusy(true);
     setError(null);
     try {
-      const created = await postJson<{ id: string }>("/api/accounts", {
+      const created = await postJson<{
+        id: string;
+        sync: { skipped: number; skippedReasons: string[] };
+      }>("/api/accounts", {
         name: name || broker.displayName,
         kind: "sync",
         broker: broker.id,
         credentials,
       });
+      if (created.sync.skipped > 0) {
+        alert(
+          t("{skipped} broker record(s) were skipped: {reasons}", {
+            skipped: created.sync.skipped,
+            reasons: created.sync.skippedReasons.join(" "),
+          }),
+        );
+      }
       router.push(`/?accounts=${encodeURIComponent(created.id)}`);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : t("Connection failed"));
@@ -673,6 +904,18 @@ function BrokerConnect() {
             <p className="rounded-md bg-muted/60 p-2.5 text-xs text-muted-foreground">
               {broker.readOnlySetup}
             </p>
+            {broker.id === "ibkr-flex" && (
+              <p className="text-xs text-muted-foreground">
+                {settingsError
+                  ? t("Could not load the import timezone. Refresh and try again.")
+                  : settingsData
+                    ? t(
+                        "Statement timezone: {zone}. Used for Flex timestamps without an offset, and required for Flex XML files uploaded into this account. Change it in Settings → Journal before connecting.",
+                        { zone: settingsData.importTimeZone },
+                      )
+                    : t("Loading statement timezone…")}
+              </p>
+            )}
             <div>
               <Label
                 htmlFor="broker-account-name"
@@ -697,6 +940,7 @@ function BrokerConnect() {
                 </Label>
                 <Input
                   id={`broker-credential-${field.key}`}
+                  aria-label={t(field.label)}
                   type={field.secret ? "password" : "text"}
                   value={credentials[field.key] ?? ""}
                   onChange={(event) =>
@@ -709,7 +953,13 @@ function BrokerConnect() {
             {error && <p className="text-sm text-loss">{error}</p>}
             <Button
               onClick={connect}
-              disabled={busy || broker.credentials.some((field) => !credentials[field.key])}
+              disabled={
+                busy ||
+                broker.credentials.some(
+                  (field) => !/optional/i.test(field.label) && !credentials[field.key]?.trim(),
+                ) ||
+                (broker.id === "ibkr-flex" && !isTimeZone(settingsData?.importTimeZone))
+              }
             >
               {busy ? t("Connecting…") : t("Connect & sync")}
             </Button>

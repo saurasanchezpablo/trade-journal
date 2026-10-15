@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildRoundTrips } from "../src/round-trips";
-import { computeMetrics, realizedR, returnOnNotional } from "../src/metrics";
+import { computeMetrics, realizedR } from "../src/metrics";
+import { netReturnOnEntry } from "../src/returns";
 import { EDGE_SCORE_VERSION, computeEdgeScore } from "../src/edge-score";
 import { calendarMonth, byWeekday, byDuration } from "../src/aggregate";
 import {
@@ -224,11 +225,11 @@ describe("net return on notional", () => {
       { multipliers: { ES: 50 } },
     );
     expect(trade!.netPnl).toBe(500);
-    expect(returnOnNotional(trade!)).toBeCloseTo(0.002, 10);
+    expect(netReturnOnEntry(trade!)).toBeCloseTo(0.002, 10);
   });
 
   it("uses the plain notional without a multiplier and is empty with nothing to divide by", () => {
-    expect(returnOnNotional({ netPnl: 10, avgEntry: 100, quantity: 10 })).toBeCloseTo(0.01, 10);
-    expect(returnOnNotional({ netPnl: 10, avgEntry: 0, quantity: 10 })).toBeNull();
+    expect(netReturnOnEntry({ netPnl: 10, avgEntry: 100, quantity: 10 })).toBeCloseTo(0.01, 10);
+    expect(netReturnOnEntry({ netPnl: 10, avgEntry: 0, quantity: 10 })).toBeNull();
   });
 });

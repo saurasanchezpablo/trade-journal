@@ -38,6 +38,7 @@ export const POST = handler(async (request: Request, { params }: Params) => {
         "toAccountId is required",
       );
       const destinationId = body.toAccountId;
+      requireValue(destinationId !== id, "Choose a different destination account.");
       const destination = db.select().from(accounts).where(eq(accounts.id, destinationId)).get();
       if (!destination) return bad("Destination account not found", 404);
       return ok({ transferred: true, ...transferAccountData(id, destinationId) });

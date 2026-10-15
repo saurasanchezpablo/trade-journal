@@ -8,7 +8,7 @@ import {
 } from "@/lib/i18n";
 import { getSetting, setSetting } from "./settings";
 
-/** The journal's language, one setting for every browser (Settings → Language). */
+/** The journal's language, one setting for every browser (Settings → General → Language). */
 const KEY = "locale";
 
 export function getLocale(): Locale {

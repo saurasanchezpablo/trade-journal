@@ -4,6 +4,7 @@ import { bad, handler, ok, requireValue } from "@/server/api";
 import { readAccountFields } from "@/server/account-fields";
 import { clearAccountData } from "@/server/account-data";
 import { rebuildAccount } from "@/server/rebuild";
+import { hasSyncedExecutions, isIbkrSyncAccount } from "@/server/ibkr-sync-timezone";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -19,15 +20,30 @@ export const PATCH = handler(async (request: Request, { params }: Params) => {
   );
   const patch = readAccountFields(body as Record<string, unknown>);
 
-  db.transaction(() => {
-    if (Object.keys(patch).length > 0) {
-      db.update(accounts).set(patch).where(eq(accounts.id, id)).run();
-    }
-    // A new profit-calc method changes per-exit attribution, so recompute.
-    if (patch.profitCalcMethod && patch.profitCalcMethod !== account.profitCalcMethod) {
-      rebuildAccount(id);
-    }
-  });
+  db.transaction(
+    () => {
+      const current = db.select().from(accounts).where(eq(accounts.id, id)).get();
+      requireValue(current, "Account not found.");
+      if (
+        patch.broker !== undefined &&
+        patch.broker !== current.broker &&
+        isIbkrSyncAccount(current)
+      ) {
+        requireValue(
+          !hasSyncedExecutions(id),
+          "An IBKR account with synced history cannot change brokers. Connect a separate account to preserve its timestamp history.",
+        );
+      }
+      if (Object.keys(patch).length > 0) {
+        db.update(accounts).set(patch).where(eq(accounts.id, id)).run();
+      }
+      // A new profit-calc method changes per-exit attribution, so recompute.
+      if (patch.profitCalcMethod && patch.profitCalcMethod !== current.profitCalcMethod) {
+        rebuildAccount(id);
+      }
+    },
+    { behavior: "immediate" },
+  );
   return ok({ updated: true });
 });
 

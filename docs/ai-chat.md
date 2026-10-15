@@ -5,9 +5,11 @@ trade's **AI review** are conversations: the AI looks up what it needs in the jo
 read-only tools, the answer appears as it is written, and follow-up questions continue the
 same conversation. Conversations are saved and can be reopened from **Saved chats**.
 
-It uses the AI provider chosen in Settings (Anthropic, OpenAI or Google Gemini). Requests go
-from the journal's server straight to that provider; nothing else is contacted, except the
-market data source you already use when the AI asks for a trade's candles.
+It uses the AI provider chosen in Settings (Anthropic, OpenAI, Google Gemini or an
+OpenAI-compatible server such as Ollama; the chat reads your journal through tool calls, so a
+compatible server's model must support them). Requests go from the journal's server straight to
+that provider; nothing else is contacted, except the market data source you already use when
+the AI asks for a trade's candles.
 
 ## Scope
 
