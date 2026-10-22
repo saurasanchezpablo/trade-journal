@@ -175,6 +175,13 @@ structure and re-apply the fix; each one has a test that fails without it.
   `app/api/external/**`, `app/external/page.tsx`, components `external-summary-view.tsx` and
   `external-opinions.tsx`, the chat's `external_opinions` tool, tests `youtube`,
   `youtube.live`, `external-analysis` and `external-summary`.
+- Video intelligence (docs/video-intelligence.md): `packages/core/src/claims.ts`,
+  `lib/video-claims.ts`, `lib/video-intelligence.ts`, `server/video-intelligence/*` (its
+  `vi_*` tables; worker started from `instrumentation-node.ts`), `app/api/video-intelligence/**`,
+  `app/video-intelligence/**`, `components/video-intelligence/*`, tests `claims` and
+  `video-intelligence`. It plugs into upstream files only through `export * from "./claims"`
+  in `packages/core/src/index.ts`, a `NAV` entry in `components/shell.tsx`, and the optional
+  `onUsage` callback of `runAiObject` (`server/ai-structured.ts`, fork code).
 - AI coaching (docs/ai-coaching.md): `packages/core/src/behaviour.ts`; `lib/{lesson-tracking,trade-context,goals,plan-draft,note-search,trade-snapshot}.ts`;
   `server/{ai-structured,ai-images,lessons,trade-context,goals,note-search}.ts` (goals and note passages in their own
   tables); `app/api/{behaviour,lessons,goals,notes-search}/**` and

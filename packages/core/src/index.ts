@@ -10,3 +10,4 @@ export * from "./adherence";
 export * from "./behaviour";
 export * from "./backtest";
 export * from "./returns";
+export * from "./claims";

@@ -25,6 +25,7 @@ import {
   PanelLeftOpen,
   X,
   MonitorPlay,
+  ScanSearch,
   FlaskConical,
   BellRing,
 } from "lucide-react";
@@ -46,6 +47,7 @@ const NAV = [
   { href: "/charts", label: "Charts", icon: CandlestickChart },
   { href: "/backtest", label: "Backtesting", icon: FlaskConical },
   { href: "/external", label: "External analysis", icon: MonitorPlay },
+  { href: "/video-intelligence", label: "Video intelligence", icon: ScanSearch },
   { href: "/alerts", label: "Alerts", icon: BellRing },
   { href: "/trades", label: "Trades", icon: ListOrdered },
   { href: "/reports", label: "Reports", icon: BarChart3 },

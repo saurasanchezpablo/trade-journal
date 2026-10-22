@@ -17,6 +17,8 @@ export async function runAiObject<T>(options: {
   images?: AiImage[];
   /** A video the provider watches itself (Gemini reads public YouTube links). */
   videoUrl?: string;
+  /** Told the tokens the request used, when the provider reports them. */
+  onUsage?: (usage: { inputTokens: number; outputTokens: number }) => void;
 }): Promise<T> {
   const model = aiModel();
   let value: unknown;
@@ -45,6 +47,10 @@ export async function runAiObject<T>(options: {
       maxOutputTokens: options.maxOutputTokens ?? 1500,
     });
     value = result.output;
+    options.onUsage?.({
+      inputTokens: result.usage?.inputTokens ?? 0,
+      outputTokens: result.usage?.outputTokens ?? 0,
+    });
   } catch (error) {
     if (NoObjectGeneratedError.isInstance(error))
       throw new Error("AI returned an answer the journal could not read. Try again.");
