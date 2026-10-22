@@ -18,6 +18,8 @@ const { readClaims, verifyQuote, claimTiming, CLAIM_EXTRACTOR_VERSION } =
 const reportRoute = await import("../src/app/api/video-intelligence/route");
 const actionsRoute = await import("../src/app/api/video-intelligence/actions/route");
 const videoRoute = await import("../src/app/api/video-intelligence/videos/[id]/route");
+const auditRoute = await import("../src/app/api/video-intelligence/audit/route");
+const { auditEvaluations } = await import("../src/server/video-intelligence/audit");
 
 afterAll(() => {
   if (originalDir === undefined) delete process.env.JOURNAL_DATA_DIR;
@@ -453,5 +455,71 @@ describe("the reports", () => {
     expect(store.getIntelligenceSettings().paused).toBe(true);
     expect((await (await post({ action: "cancel" })).json()).cancelled).toBe(1);
     expect((await post({ action: "explode" })).status).toBe(400);
+  });
+});
+
+describe("checking the results can be trusted", () => {
+  const processed = async () => {
+    seedVideo();
+    store.enqueueVideos({ extractorVersion: CLAIM_EXTRACTOR_VERSION });
+    await runJob(VIDEO, { extract: extract(), market: market() });
+  };
+
+  it("reproduces every stored result exactly from the stored candles", async () => {
+    await processed();
+    const response = await auditRoute.GET();
+    const audit = await response.json();
+    expect(audit).toMatchObject({ checked: 2, matched: 2, mismatched: [] });
+  });
+
+  it("catches a stored result that no longer matches its candles", async () => {
+    await processed();
+    const [claim] = store.claimsOfVideo(VIDEO);
+    // A stored outcome edited by hand (or by a bug) can no longer be reproduced.
+    store
+      .client()
+      .prepare(
+        "UPDATE vi_evaluations SET outcome_json = json_set(outcome_json, '$.status', 'invalidated') WHERE claim_id = ?",
+      )
+      .run(claim!.id);
+    const audit = auditEvaluations();
+    expect(audit.mismatched).toHaveLength(1);
+    expect(audit.mismatched[0]).toMatchObject({ claimId: claim!.id, fields: ["status"] });
+    // And a changed stored candle is caught too.
+    store.client().exec("UPDATE vi_candles SET high = high * 2");
+    expect(auditEvaluations().mismatched.length).toBeGreaterThan(1);
+  });
+
+  it("stores each claim's mirror and compares the analyst with it", async () => {
+    await processed();
+    const [forecast] = store.claimsOfVideo(VIDEO);
+    const evaluation = store.evaluationOf(forecast!.id)!;
+    // The rally to 105 (5% up) mirrors to a fall to about 95.24 that never came.
+    expect(evaluation.baseline).toMatchObject({ side: "short" });
+    expect(evaluation.baseline!.target).toBeCloseTo((100 * 100) / 105, 6);
+    expect(evaluation.baseline!.status).not.toBe("target_hit");
+    const report = buildReport(store.allClaimRecords(), {});
+    expect(report.overview.baseline).toMatchObject({
+      analystHits: report.overview.baseline.pairs,
+      mirrorHits: 0,
+    });
+    expect(report.overview.edge.analystOnly).toBe(report.overview.baseline.pairs);
+  });
+
+  it("shows the candles that decided each claim, and the series behind the charts", async () => {
+    await processed();
+    const detail = await videoRoute.GET(new Request("http://localhost"), {
+      params: Promise.resolve({ id: VIDEO }),
+    });
+    const video = await detail.json();
+    const kinds = video.claims[0].trace.map((step: { kind: string }) => step.kind);
+    expect(kinds).toEqual(["reference", "target", "horizon"]);
+    const target = video.claims[0].trace[1];
+    expect(target.candle.high).toBeGreaterThanOrEqual(105);
+    const report = buildReport(store.allClaimRecords(), {});
+    expect(report.charts.equity).toHaveLength(1);
+    expect(report.charts.rValues).toHaveLength(1);
+    expect(report.charts.excursions).toHaveLength(2);
+    expect(report.charts.timeline).toEqual([{ month: "2026-03", counts: { target_hit: 2 } }]);
   });
 });

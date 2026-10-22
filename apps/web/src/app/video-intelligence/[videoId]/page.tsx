@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { use, useState } from "react";
 import { ArrowLeft, ExternalLink, RotateCcw } from "lucide-react";
-import type { ClaimBar } from "@luxalgo/journal-core";
+import type { ClaimBar, TraceStep } from "@luxalgo/journal-core";
 import type { VideoClaim } from "@/lib/video-claims";
 import { postJson, useApi } from "@/lib/use-api";
 import { fmtDuration, fmtPercent } from "@/lib/utils";
@@ -11,6 +11,7 @@ import { FilterBar } from "@/components/filter-bar";
 import { useI18n } from "@/components/i18n";
 import { ClaimChart } from "@/components/video-intelligence/claim-chart";
 import { StatusBadge, signedPercent } from "@/components/video-intelligence/parts";
+import { STATUS_LABELS } from "@/lib/video-intelligence";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -35,7 +36,7 @@ interface Payload {
     source: string | null;
   } | null;
   transcript: string | null;
-  claims: (StoredClaim & { evaluation: StoredEvaluation | null })[];
+  claims: (StoredClaim & { evaluation: StoredEvaluation | null; trace: TraceStep[] })[];
   candles: Record<string, ClaimBar[]>;
 }
 
@@ -158,7 +159,7 @@ function ClaimCard({
   candles,
   url,
 }: {
-  claim: StoredClaim & { evaluation: StoredEvaluation | null };
+  claim: StoredClaim & { evaluation: StoredEvaluation | null; trace: TraceStep[] };
   candles: Record<string, ClaimBar[]>;
   url: string;
 }) {
@@ -327,6 +328,20 @@ function ClaimCard({
             )}
           </section>
         )}
+        {claim.trace.length > 0 && <Trace steps={claim.trace} />}
+        {e?.baseline && o && o.status !== "unevaluable" && (
+          <p className="text-sm">
+            <span className="font-medium">{t("Against chance:")}</span>{" "}
+            {t(
+              "the same distances bet the other way ({side}, target {target}) ended {status} on the same candles.",
+              {
+                side: t(e.baseline.side === "long" ? "Bullish" : "Bearish").toLowerCase(),
+                target: e.baseline.target === null ? "–" : e.baseline.target.toFixed(2),
+                status: t(STATUS_LABELS[e.baseline.status]).toLowerCase(),
+              },
+            )}
+          </p>
+        )}
         {bars.length > 0 && (
           <ClaimChart
             bars={bars}
@@ -427,5 +442,96 @@ function ClaimCard({
         )}
       </CardContent>
     </Card>
+  );
+}
+
+const utc = (time: number) => `${new Date(time).toISOString().slice(0, 16).replace("T", " ")} UTC`;
+const px = (value: number) => String(Number(value.toPrecision(10)));
+
+/** The candles that decided the outcome, each with the price that settled it. */
+function Trace({ steps }: { steps: TraceStep[] }) {
+  const { t, tx } = useI18n();
+  const line = (step: TraceStep) => {
+    const c = step.candle;
+    switch (step.kind) {
+      case "reference":
+        return t(
+          "Reference: the candle opening {time} closed at {price}, the last close before the video.",
+          {
+            time: utc(c.time),
+            price: px(step.price),
+          },
+        );
+      case "trigger":
+        return t(
+          "Trigger: the candle opening {time} traded {direction} {price} (high {high}, low {low}).",
+          {
+            time: utc(c.time),
+            direction: t(step.above ? "above" : "below"),
+            price: px(step.price),
+            high: px(c.high),
+            low: px(c.low),
+          },
+        );
+      case "target":
+        return t(
+          "Target {price}: first reached by the candle opening {time} ({extreme} {value}).",
+          {
+            price: px(step.price),
+            time: utc(c.time),
+            extreme: tx("candle", step.side === "long" ? "high" : "low"),
+            value: px(step.side === "long" ? c.high : c.low),
+          },
+        );
+      case "invalidation":
+        return step.onClose
+          ? t("Invalidation {price}: the candle opening {time} closed beyond it, at {close}.", {
+              price: px(step.price),
+              time: utc(c.time),
+              close: px(c.close),
+            })
+          : t(
+              "Invalidation {price}: first reached by the candle opening {time} (high {high}, low {low}).",
+              {
+                price: px(step.price),
+                time: utc(c.time),
+                high: px(c.high),
+                low: px(c.low),
+              },
+            );
+      case "ambiguous":
+        return t(
+          "The candle opening {time} (high {high}, low {low}) reached both the target {target} and the invalidation {invalidation}: which came first is unknown.",
+          {
+            time: utc(c.time),
+            high: px(c.high),
+            low: px(c.low),
+            target: px(step.target),
+            invalidation: px(step.invalidation),
+          },
+        );
+      case "horizon":
+        return t(
+          "Horizon end: the last candle inside it, opening {time}, closed at {close}: {move} from {reference}.",
+          {
+            time: utc(c.time),
+            close: px(c.close),
+            move: signedPercent(step.move),
+            reference: px(step.reference),
+          },
+        );
+    }
+  };
+  return (
+    <section>
+      <h3 className="mb-2 text-xs font-medium uppercase text-muted-foreground">
+        {t("How this was decided")}
+      </h3>
+      <ol className="list-decimal space-y-1 pl-5 text-sm">
+        {steps.map((step) => (
+          <li key={`${step.kind}-${step.candle.time}`}>{line(step)}</li>
+        ))}
+      </ol>
+    </section>
   );
 }

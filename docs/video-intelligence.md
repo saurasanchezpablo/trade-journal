@@ -144,6 +144,44 @@ trades) shows a **small sample** warning: its rate should not be compared. Marke
 read from the 120 candles before the claim: trend (the close against its 50-candle average) and
 volatility (the last 14 candles' range against the 100 before; high above 1.25×).
 
+## Against chance
+
+A hit rate alone does not say whether an analyst is skilled: with a near target and a far
+invalidation, most calls "win" whatever the direction. So every claim is also evaluated turned
+the other way (`mirrorClaim`): the opposite direction, with each level the same distance away
+in percentage terms (reference² / level), on the same candles. It is what betting against the
+analyst would have scored with the same levels.
+
+- **Analyst vs mirror hit rate**, over the claims settled both ways, each with its 95% interval.
+  Overlapping intervals: no evidence of skill.
+- **Sign test** (`edgeTest`): on the claims where only one side won (when both or neither won,
+  the claim says nothing about skill), the exact two-sided binomial probability of a split at
+  least this uneven if each were a coin flip. The verdict: _better than chance_ (p < 0.05,
+  analyst ahead), _worse than chance_, _no evidence of an edge_, or _too few claims to tell_
+  (under 20 pairs). Comparing many analysts, about one in twenty passes by luck alone.
+
+## Charts
+
+Overview: claims per month by outcome; each claim's best move (MFE) against its worst (MAE),
+by outcome; stated probabilities against how often they came true (calibration, when analysts
+state probabilities). Analysts: each one's outcomes, and their hit rate against their mirror's
+with the intervals as whiskers. Strategies: the cumulative return of the simulated trades (net,
+gross, no cost, double cost) and their results in R.
+
+## How a result can be checked
+
+- **On the claim's page**, _How this was decided_ lists the candles that settled it: the one
+  whose close is the reference, the trigger's, the one whose high or low reached the target or
+  the invalidation (with that price), and the last one inside the horizon (`traceOutcome`, from
+  the same stored candles). The mirror's outcome is shown below it.
+- **The audit** (How it's calculated → _Check every stored result now_,
+  `GET /api/video-intelligence/audit`): every stored evaluation computed again from its stored
+  claim and the stored candles closed by the moment it was made, with the costs it used, and
+  compared field by field (status, reference, target and invalidation times, MFE and MAE,
+  direction, mirror, simulated trade). Anything that no longer matches is listed.
+- **The tests** (Verification below) check the engine against hand-made and real candles, an
+  independent implementation, and statistical properties.
+
 ## Processing
 
 - One job per video (`vi_jobs`): queued, running, done, failed or nothing to read. The worker
@@ -154,7 +192,7 @@ volatility (the last 14 candles' range against the 100 before; high above 1.25×
   stored as unevaluable with its reason and never stops the video or the batch.
 - Idempotent: a video is queued once; its claims are replaced as a whole when it is read again
   (**Read again**, or a new extractor version). Versions are stored on every claim
-  (`claims-extract-1`) and evaluation (`claims-eval-1`): a new evaluator re-evaluates every
+  (`claims-extract-1`) and evaluation (`claims-eval-2`, which added the mirror baseline): a new evaluator re-evaluates every
   claim without reading the videos again.
 - **Pause** lets the video under way finish its step; **Cancel queued** stops the queue.
 - Unfollowing a channel removes its videos' claims and jobs.
@@ -198,9 +236,24 @@ nothing in the journal's schema changes.
 
 ## Verification
 
-`pnpm exec vitest run packages/core/tests/claims.test.ts apps/web/tests/video-intelligence.test.ts`
-covers outcomes (target, invalidation, same-candle ambiguity, pending, expiry, late targets,
-conditional triggers, close-based invalidation, look-ahead), simulated fills (gaps, buffers,
-same-candle stops, costs, time exits, open trades), statistics, extraction with a fake AI
-(quote verification, probabilities, summaries, long transcripts), the job queue (idempotency,
-retries, resuming), unevaluable instruments, and the API.
+- `packages/core/tests/claims.test.ts`: every outcome and fill rule on hand-made candles.
+- `packages/core/tests/claims-real-data.test.ts`: Binance BTCUSDT hourly candles of October
+  2026 (`tests/fixtures/btcusdt-1h-2026-10.json`) with the expected reference, target times,
+  mirror and the setup's fills and returns computed separately (a Python script over the same
+  candles); they match to the decimal.
+- `packages/core/tests/claims-reliability.test.ts`, seeded so every run is the same:
+  - 3,000 random markets and claims, each evaluated by the engine and by an independent
+    implementation of the rules: statuses and decision times always agree;
+  - no look-ahead: cutting every candle after the deciding one never changes an outcome, and
+    one candle fewer always leaves it pending; candles after `now` are never read;
+  - no bias: a claim and its mirror on the mirrored market always get the same outcome; any
+    price scale gives the same results; higher costs never improve a trade;
+  - the statistics: 95% Wilson intervals contain the true rate 92% to 98% of the time in
+    simulation; the sign test is exact; analysts who guess on random-walk markets are flagged
+    as better than chance under 10% of the time (5% expected), and one who knows the future
+    over 80% of the time.
+- `apps/web/tests/video-intelligence.test.ts`: extraction with a fake AI, the job queue, the
+  API, the audit (stored results reproduce exactly; an edited result or candle is caught), the
+  mirror, the trace and the chart series.
+
+Run them with `pnpm exec vitest run packages/core/tests/claims apps/web/tests/video-intelligence.test.ts`.

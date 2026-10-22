@@ -1,4 +1,10 @@
-import type { ClaimStatus, OutcomeTally, TradeStats } from "@luxalgo/journal-core";
+import type {
+  CalibrationBin,
+  ClaimStatus,
+  EdgeTest,
+  OutcomeTally,
+  TradeStats,
+} from "@luxalgo/journal-core";
 
 /**
  * What the Video intelligence page reads: an overview, groups (analyst, instrument,
@@ -33,6 +39,51 @@ export interface GroupReport {
   brierCount: number;
   /** Direction right at the horizon but the target missed or invalidated first. */
   rightButMissed: number;
+  /**
+   * The same claims turned the other way (same distances, opposite direction) on the same
+   * candles: what betting against the analyst scored. Rates over the pairs settled for both.
+   */
+  baseline: {
+    pairs: number;
+    analystHits: number;
+    mirrorHits: number;
+    analystRate: number | null;
+    mirrorRate: number | null;
+    analystInterval: { low: number; high: number } | null;
+    mirrorInterval: { low: number; high: number } | null;
+  };
+  /** Sign test: did the analyst beat the mirror more often than chance would? */
+  edge: EdgeTest;
+}
+
+export interface EquityPoint {
+  time: number;
+  /** Cumulative net, gross, no-cost and double-cost return of the simulated trades. */
+  net: number;
+  gross: number;
+  free: number;
+  double: number;
+}
+
+export interface ReportCharts {
+  equity: EquityPoint[];
+  /** Each closed simulated trade's net result in R. */
+  rValues: number[];
+  /** Each evaluated claim's best and worst move, with its outcome. */
+  excursions: { mfe: number; mae: number; status: ClaimStatus; videoId: string; claimId: string }[];
+  calibration: CalibrationBin[];
+  /** Claims per month (YYYY-MM), by outcome. */
+  timeline: { month: string; counts: Partial<Record<ClaimStatus | "not_evaluated", number>> }[];
+}
+
+export interface AuditReport {
+  checked: number;
+  matched: number;
+  mismatched: { claimId: string; videoId: string; statement: string; fields: string[] }[];
+  /** Not checked: no candles were read (unevaluable), or judged by an older evaluator. */
+  withoutMarket: number;
+  olderVersion: number;
+  ranAt: string;
 }
 
 export interface ProcessingSummary {
@@ -60,6 +111,7 @@ export interface IntelligenceReport {
   levels: { A: number; B: number; C: number };
   evidence: { verified: number; approximate: number; notFound: number; none: number };
   channels: { id: string; title: string }[];
+  charts: ReportCharts;
 }
 
 export interface ClaimRow {

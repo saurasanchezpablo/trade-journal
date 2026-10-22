@@ -1,6 +1,7 @@
 import {
   CLAIM_EVALUATOR_VERSION,
   evaluateClaim,
+  mirrorClaim,
   regimeBefore,
   simulateSetup,
   type ClaimBar,
@@ -237,6 +238,7 @@ export async function evaluateStoredClaim(
       simulation: null,
       regime: null,
       market: null,
+      baseline: null,
       ...extra,
     });
   const unevaluable = (reason: string) =>
@@ -261,6 +263,7 @@ export async function evaluateStoredClaim(
   const closed = fetched.filter((b) => b.time + step <= now && b.time >= from && b.time <= to);
   const series = storeCandles(source, closed);
   const bars = storedCandles(series, from, to);
+  const computed = computeEvaluation(stored, bars, now, getIntelligenceSettings());
   const market: MarketProvenance = {
     series,
     provider: source.provider,
@@ -273,14 +276,33 @@ export async function evaluateStoredClaim(
     bars: bars.length,
     retrievedAt: new Date(now).toISOString(),
   };
-  const outcome = evaluateClaim(toEvaluate(stored), bars, now);
+  save(computed.outcome, {
+    simulation: computed.simulation,
+    regime: computed.regime,
+    baseline: computed.baseline,
+    market,
+  });
+}
+
+/**
+ * Everything an evaluation stores, from the claim, the candles and the moment it was made:
+ * pure, so the audit can compute it again from the stored candles and compare.
+ */
+export function computeEvaluation(
+  stored: StoredClaim,
+  bars: readonly ClaimBar[],
+  now: number,
+  costs: { commissionBps: number; slippageBps: number; targetBufferBps: number },
+) {
+  const claimTime = Date.parse(stored.claimTime);
+  const horizonEnd = Date.parse(stored.horizonEnd);
+  const claim = toEvaluate(stored);
+  const outcome = evaluateClaim(claim, bars, now);
+  const baseline =
+    outcome.referencePrice !== null && outcome.status !== "unevaluable"
+      ? evaluateClaim(mirrorClaim(claim, outcome.referencePrice), bars, now)
+      : null;
   const c = stored.claim;
-  const settings = getIntelligenceSettings();
-  const costs = {
-    commissionBps: settings.commissionBps,
-    slippageBps: settings.slippageBps,
-    targetBufferBps: settings.targetBufferBps,
-  };
   const simulate = (multiplier: number) =>
     simulateSetup(
       {
@@ -303,7 +325,11 @@ export async function evaluateStoredClaim(
   const simulation: StoredSimulation | null = base
     ? {
         ...base,
-        costs,
+        costs: {
+          commissionBps: costs.commissionBps,
+          slippageBps: costs.slippageBps,
+          targetBufferBps: costs.targetBufferBps,
+        },
         sensitivity: {
           free: simulate(0).trade?.netReturn ?? null,
           double: simulate(2).trade?.netReturn ?? null,
@@ -318,5 +344,5 @@ export async function evaluateStoredClaim(
         `The price quoted in the video (${c.referencePrice}) is ${Math.round(gap * 100)}% from the market's (${outcome.referencePrice}): check that this is the right instrument.`,
       );
   }
-  save(outcome, { simulation, regime: regimeBefore(bars, claimTime), market });
+  return { outcome, baseline, simulation, regime: regimeBefore(bars, claimTime) };
 }

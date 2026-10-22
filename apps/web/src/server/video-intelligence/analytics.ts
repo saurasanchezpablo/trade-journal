@@ -1,6 +1,9 @@
 import {
   brierScore,
+  calibrationBins,
+  edgeTest,
   tallyOutcomes,
+  wilsonInterval,
   tradeStats,
   type ClaimOutcome,
   type SimulatedTrade,
@@ -11,6 +14,7 @@ import type {
   IntelligenceFilters,
   IntelligenceReport,
   ProcessingSummary,
+  ReportCharts,
 } from "@/lib/video-intelligence";
 import { client, listJobs, type ClaimRecord } from "./store";
 
@@ -64,9 +68,33 @@ export function groupReport(key: string, label: string, records: ClaimRecord[]):
       probability: r.claim.claim.probability!,
       happened: r.evaluation!.status === "target_hit",
     }));
+  // Analyst against mirror: only claims settled both ways, so each pair is judged alike.
+  const pairs = records
+    .filter(
+      (r) =>
+        r.evaluation?.baseline &&
+        RESOLVED.has(r.evaluation.status) &&
+        RESOLVED.has(r.evaluation.baseline.status),
+    )
+    .map((r) => ({
+      analyst: r.evaluation!.status === "target_hit",
+      mirror: r.evaluation!.baseline!.status === "target_hit",
+    }));
+  const analystHits = pairs.filter((p) => p.analyst).length;
+  const mirrorHits = pairs.filter((p) => p.mirror).length;
   return {
     key,
     label,
+    baseline: {
+      pairs: pairs.length,
+      analystHits,
+      mirrorHits,
+      analystRate: pairs.length ? analystHits / pairs.length : null,
+      mirrorRate: pairs.length ? mirrorHits / pairs.length : null,
+      analystInterval: wilsonInterval(analystHits, pairs.length),
+      mirrorInterval: wilsonInterval(mirrorHits, pairs.length),
+    },
+    edge: edgeTest(pairs),
     tally: tallyOutcomes(outcomes),
     trades: tradeStats(trades),
     costFree: closed.length ? sum(closed.map((s) => s!.sensitivity?.free)) : null,
@@ -121,6 +149,68 @@ export function processingSummary(): ProcessingSummary {
   };
 }
 
+/** The series behind the page's charts, for the filtered claims. */
+export function reportCharts(records: ClaimRecord[]): ReportCharts {
+  const closed = records
+    .map((r) => r.evaluation?.simulation)
+    .filter((s) => s?.trade && s.trade.netReturn !== null && s.trade.exitTime !== null)
+    .sort((a, b) => a!.trade!.exitTime! - b!.trade!.exitTime!);
+  const equity: ReportCharts["equity"] = [];
+  let net = 0;
+  let gross = 0;
+  let free = 0;
+  let double = 0;
+  for (const s of closed) {
+    const t = s!.trade!;
+    net += t.netReturn!;
+    gross += t.grossReturn!;
+    free += s!.sensitivity?.free ?? t.grossReturn!;
+    double += s!.sensitivity?.double ?? t.netReturn!;
+    equity.push({ time: t.exitTime!, net, gross, free, double });
+  }
+  const timeline = new Map<string, ReportCharts["timeline"][number]["counts"]>();
+  for (const r of records) {
+    const month = r.claim.claimTime.slice(0, 7);
+    const status = r.evaluation?.status ?? "not_evaluated";
+    const counts = timeline.get(month) ?? {};
+    counts[status] = (counts[status] ?? 0) + 1;
+    timeline.set(month, counts);
+  }
+  const calibration = records
+    .filter(
+      (r) =>
+        r.claim.claim.probability !== null &&
+        r.claim.claim.origin === "explicit" &&
+        r.evaluation &&
+        RESOLVED.has(r.evaluation.status),
+    )
+    .map((r) => ({
+      probability: r.claim.claim.probability!,
+      happened: r.evaluation!.status === "target_hit",
+    }));
+  return {
+    equity,
+    rValues: closed.map((s) => s!.trade!.r).filter((r): r is number => r !== null),
+    excursions: records
+      .filter(
+        (r) =>
+          r.evaluation && r.evaluation.outcome.mfe !== null && r.evaluation.outcome.mae !== null,
+      )
+      .slice(0, 1500)
+      .map((r) => ({
+        mfe: r.evaluation!.outcome.mfe!,
+        mae: r.evaluation!.outcome.mae!,
+        status: r.evaluation!.status,
+        videoId: r.claim.videoId,
+        claimId: r.claim.id,
+      })),
+    calibration: calibrationBins(calibration),
+    timeline: [...timeline.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([month, counts]) => ({ month, counts })),
+  };
+}
+
 export function buildReport(all: ClaimRecord[], filters: IntelligenceFilters): IntelligenceReport {
   const records = filterRecords(all, filters);
   const regimeLabel = (r: ClaimRecord) => {
@@ -167,6 +257,7 @@ export function buildReport(all: ClaimRecord[], filters: IntelligenceFilters): I
       none: records.filter((r) => r.claim.evidence === "none").length,
     },
     channels: [...channels.entries()].map(([id, title]) => ({ id, title })),
+    charts: reportCharts(records),
   };
 }
 

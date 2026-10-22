@@ -298,6 +298,207 @@ const es: Record<string, string> = {
   "Choose a video to read again.": "Elige un vídeo para volver a leerlo.",
   "Processing is running; try again when it is done.":
     "El procesamiento está en marcha; vuelve a intentarlo cuando termine.",
+
+  // Charts
+  "How each analyst's claims ended": "Cómo terminaron las afirmaciones de cada analista",
+  "Against chance: analyst against the opposite bet":
+    "Frente al azar: el analista contra la apuesta contraria",
+  "Each claim is also evaluated turned the other way (same distances, opposite direction) on the same candles. Dots are hit rates, whiskers their 95% intervals: an analyst whose whisker overlaps their mirror's shows no evidence of skill.":
+    "Cada afirmación se evalúa también al revés (mismas distancias, dirección opuesta) sobre las mismas velas. Los puntos son porcentajes de acierto y los bigotes sus intervalos del 95%: un analista cuyo bigote se solapa con el de su espejo no muestra indicios de habilidad.",
+  "Mirror (opposite bet)": "Espejo (apuesta contraria)",
+  "Claims per month, by outcome": "Afirmaciones por mes, según resultado",
+  "Best and worst move of each claim": "Mejor y peor movimiento de cada afirmación",
+  "No evaluated claims yet.": "Aún no hay afirmaciones evaluadas.",
+  "Stated probabilities against what happened": "Probabilidades indicadas frente a lo que ocurrió",
+  "Stated probabilities": "Probabilidades indicadas",
+  "Stated probability": "Probabilidad indicada",
+  "How often it happened": "Con qué frecuencia ocurrió",
+  "Perfect calibration": "Calibración perfecta",
+  Stated: "Indicada",
+  Observed: "Observada",
+  "Cumulative return of the simulated trades": "Rendimiento acumulado de las operaciones simuladas",
+  "No closed simulated trades yet.": "Aún no hay operaciones simuladas cerradas.",
+  "Trades by result in R": "Operaciones por resultado en R",
+  "No cost": "Sin costes",
+  "2× cost": "Costes ×2",
+
+  // Against chance
+  "Against chance": "Frente al azar",
+  "Too few claims to tell": "Muy pocas afirmaciones para saberlo",
+  "Better than chance": "Mejor que el azar",
+  "Worse than chance": "Peor que el azar",
+  "No evidence of an edge": "Sin indicios de ventaja",
+  "No claim has been settled both ways yet.":
+    "Aún no hay ninguna afirmación resuelta en ambos sentidos.",
+  Pairs: "Pares",
+  "Analyst hit rate": "Acierto del analista",
+  "Mirror hit rate": "Acierto del espejo",
+  "Only analyst / only mirror": "Solo analista / solo espejo",
+  "Claims where only the analyst's target came first, and claims where only the opposite bet's did. When both or neither won, the claim says nothing about skill.":
+    "Afirmaciones en las que solo llegó primero el objetivo del analista, y en las que solo llegó el de la apuesta contraria. Cuando ganan ambos o ninguno, la afirmación no dice nada sobre la habilidad.",
+  "p-value": "Valor p",
+  "The chance of a split at least this uneven if the analyst had no edge (exact two-sided sign test). Under 5% is unlikely to be luck; with many analysts, about one in twenty passes by luck alone.":
+    "La probabilidad de un reparto al menos así de desigual si el analista no tuviera ventaja (prueba de signos exacta de dos colas). Por debajo del 5% es poco probable que sea suerte; con muchos analistas, aproximadamente uno de cada veinte la pasa solo por suerte.",
+  Verdict: "Veredicto",
+  "On {pairs} claims settled both ways, the analysts' targets came first {analyst} of the time; the same distances bet the other way, {mirror}.":
+    "En {pairs} afirmaciones resueltas en ambos sentidos, los objetivos de los analistas llegaron primero el {analyst} de las veces; las mismas distancias apostadas al revés, el {mirror}.",
+  "p = {p} (sign test, {a} analyst-only against {m} mirror-only wins)":
+    "p = {p} (prueba de signos, {a} victorias solo del analista frente a {m} solo del espejo)",
+
+  // How it's calculated: steps
+  "How it's calculated": "Cómo se calcula",
+  "Where the numbers come from": "De dónde salen los números",
+  "1. The video": "1. El vídeo",
+  "Its transcript (captions or one you pasted) or, without one, its summary. Nothing else about the video is read.":
+    "Su transcripción (subtítulos o una que pegaste) o, si no la tiene, su resumen. No se lee nada más del vídeo.",
+  "2. The claims": "2. Las afirmaciones",
+  "Your AI provider lists each checkable statement with a verbatim quote. The journal then looks the quote up in the transcript itself: verified, approximate or not found. A video without a transcript gives its summary's scenarios and setups, marked as such, with no quote. This is the only step that uses AI.":
+    "Tu proveedor de IA enumera cada afirmación comprobable con una cita literal. Después el diario busca la cita en la propia transcripción: verificada, aproximada o no encontrada. Un vídeo sin transcripción aporta los escenarios y configuraciones de su resumen, marcados como tales, sin cita. Es el único paso que usa IA.",
+  "3. The market": "3. El mercado",
+  "The instrument is matched to one of your enabled sources (never guessed across asset classes). Closed candles from before the video to after its horizon are downloaded and stored, with the source, symbol, candle size and time read.":
+    "El instrumento se asocia a una de tus fuentes activadas (nunca se adivina entre clases de activo). Se descargan y guardan las velas cerradas desde antes del vídeo hasta después de su horizonte, con la fuente, el símbolo, la temporalidad y el momento de la lectura.",
+  "4. The evaluation": "4. La evaluación",
+  "Plain code, no AI: from the stored candles it finds the reference price (the last close before publication), then which came first after it, the target or the invalidation, inside the horizon. A setup with an entry, a stop and a target is also traded once under fixed rules. The same claim on the same candles always gives the same result.":
+    "Código sin IA: a partir de las velas guardadas busca el precio de referencia (el último cierre antes de la publicación) y después qué llegó primero, el objetivo o la invalidación, dentro del horizonte. Una configuración con entrada, stop y objetivo además se opera una vez con reglas fijas. La misma afirmación sobre las mismas velas siempre da el mismo resultado.",
+  "5. The statistics": "5. La estadística",
+  "Outcomes are counted per analyst, instrument, direction, kind of claim and market regime, with 95% intervals, and each group is compared with its mirror: the same claims bet the other way.":
+    "Los resultados se cuentan por analista, instrumento, dirección, tipo de afirmación y régimen de mercado, con intervalos del 95%, y cada grupo se compara con su espejo: las mismas afirmaciones apostadas al revés.",
+  "Every claim's page shows this path for that claim: the quote, the source and candles read, and the candles that decided it.":
+    "La página de cada afirmación muestra este recorrido para ella: la cita, la fuente y las velas leídas, y las velas que la decidieron.",
+
+  // How it's calculated: worked example
+  "A worked example": "Un ejemplo resuelto",
+  "A video published on 1 October at 12:00 says bitcoin rallies to 87,000, invalid below 80,000, on the 4-hour chart. No horizon is said, so the system uses ten days (to 11 October 12:00), labelled on the claim.":
+    "Un vídeo publicado el 1 de octubre a las 12:00 dice que bitcoin sube hasta 87,000, invalidado por debajo de 80,000, en el gráfico de 4 horas. No indica horizonte, así que el sistema usa diez días (hasta el 11 de octubre a las 12:00), y así se señala en la afirmación.",
+  "Reference: the 11:00 candle closed at 83,905.76, the last close before publication.":
+    "Referencia: la vela de las 11:00 cerró en 83,905.76, el último cierre antes de la publicación.",
+  "From the 12:00 candle on, the first candle whose high reaches 87,000 is the 2 October 12:00 candle; no candle had reached 80,000 before it.":
+    "Desde la vela de las 12:00, la primera vela cuyo máximo llega a 87,000 es la del 2 de octubre a las 12:00; ninguna vela había llegado a 80,000 antes.",
+  "Outcome: target hit, 1 day after publication.":
+    "Resultado: objetivo alcanzado, 1 día después de la publicación.",
+  "Its mirror, a short to 80,921.57 (as far below the reference as 87,000 is above it) invalid above 88,002.21, also reached its target inside the horizon, on 8 October at 15:00. Both sides won, so this claim counts for neither in the comparison with chance: only claims where one side won and the other did not can show skill.":
+    "Su espejo, un corto hasta 80,921.57 (tan por debajo de la referencia como 87,000 está por encima) invalidado por encima de 88,002.21, también alcanzó su objetivo dentro del horizonte, el 8 de octubre a las 15:00. Ganaron ambos lados, así que esta afirmación no cuenta para ninguno en la comparación con el azar: solo las afirmaciones en las que un lado ganó y el otro no pueden mostrar habilidad.",
+
+  // How it's calculated: metrics
+  "What each number means": "Qué significa cada número",
+  Number: "Número",
+  "How it is computed": "Cómo se calcula",
+  "How to read it": "Cómo leerlo",
+  "Targets hit inside the horizon ÷ claims settled (target hit, invalidated, expired or hit late). Pending, untriggered, ambiguous and unevaluable claims are left out, never counted as misses.":
+    "Objetivos alcanzados dentro del horizonte ÷ afirmaciones resueltas (objetivo alcanzado, invalidada, expirada o alcanzado tarde). Las pendientes, sin activar, ambiguas y no evaluables se dejan fuera, nunca cuentan como fallos.",
+  "The share of finished calls that reached their target in time. The interval is where the true rate likely lies given how few claims there are.":
+    "La proporción de predicciones terminadas que alcanzaron su objetivo a tiempo. El intervalo es donde probablemente está el porcentaje real, dado lo pocas que son las afirmaciones.",
+  "95% interval (Wilson)": "Intervalo del 95% (Wilson)",
+  "A range computed from the count of hits and the sample size; it narrows as claims accumulate.":
+    "Un rango calculado a partir del número de aciertos y del tamaño de la muestra; se estrecha a medida que se acumulan afirmaciones.",
+  "If two analysts' intervals overlap a lot, the data cannot tell them apart.":
+    "Si los intervalos de dos analistas se solapan mucho, los datos no permiten distinguirlos.",
+  "The close of the last candle inside the horizon against the reference price (moves under 0.05% are flat), among claims whose horizon ended.":
+    "El cierre de la última vela dentro del horizonte frente al precio de referencia (los movimientos de menos del 0.05% cuentan como planos), entre las afirmaciones cuyo horizonte terminó.",
+  "Whether the analyst read the direction, regardless of their target and stop.":
+    "Si el analista acertó la dirección, independientemente de su objetivo y su stop.",
+  "Direction right at the horizon's end, but the invalidation came first or the target was never reached.":
+    "Dirección acertada al final del horizonte, pero la invalidación llegó antes o el objetivo nunca se alcanzó.",
+  "Right idea, wrong levels or timing.": "Idea correcta, niveles o momento equivocados.",
+  "The same claims with the opposite direction and every level the same distance away, evaluated on the same candles.":
+    "Las mismas afirmaciones con la dirección opuesta y cada nivel a la misma distancia, evaluadas sobre las mismas velas.",
+  "What betting against the analyst scored. Close to the analyst's rate means no evidence of skill.":
+    "Lo que habría obtenido apostar contra el analista. Si se acerca al porcentaje del analista, no hay indicios de habilidad.",
+  "p-value (sign test)": "Valor p (prueba de signos)",
+  "On claims where only one side won, how likely a split at least this uneven would be if each claim were a coin flip.":
+    "En las afirmaciones en las que solo ganó un lado, la probabilidad de un reparto al menos así de desigual si cada afirmación fuera lanzar una moneda.",
+  "Under 5%: unlikely to be luck. With many analysts compared, expect about one in twenty to pass by chance.":
+    "Por debajo del 5%: poco probable que sea suerte. Al comparar muchos analistas, cuenta con que aproximadamente uno de cada veinte la pase por azar.",
+  "MFE / MAE": "MFE / MAE",
+  "The best and worst move from the reference price inside the horizon, as a percentage.":
+    "El mejor y el peor movimiento desde el precio de referencia dentro del horizonte, en porcentaje.",
+  "A target hit after a deep MAE was hard to hold.":
+    "Un objetivo alcanzado tras un MAE profundo era difícil de aguantar.",
+  "Brier score": "Puntuación de Brier",
+  "Average of (stated probability − outcome)², only for probabilities the analyst stated.":
+    "Media de (probabilidad indicada − resultado)², solo para las probabilidades que indicó el analista.",
+  "0 is perfect; always saying 50% scores 0.25.": "0 es perfecto; decir siempre 50% da 0.25.",
+  "Expectancy, win rate, R": "Esperanza, porcentaje de acierto, R",
+  "From the simulated trades of level C setups only, after commission and slippage. R is the result over the stop's distance.":
+    "Solo a partir de las operaciones simuladas de las configuraciones de nivel C, después de comisiones y deslizamiento. R es el resultado dividido entre la distancia al stop.",
+  "Hypothetical results of the stated rules, not the analyst's own trading record.":
+    "Resultados hipotéticos de las reglas indicadas, no el historial de operaciones del propio analista.",
+
+  // How it's calculated: tests and audit
+  "How the results are tested": "Cómo se prueban los resultados",
+  "Hand-made cases": "Casos hechos a mano",
+  "Every outcome (target hit, invalidated, ambiguous, pending, expired, late, untriggered) on candles built so the right answer is known.":
+    "Cada resultado (objetivo alcanzado, invalidada, ambigua, pendiente, expirada, tardía, sin activar) sobre velas construidas para que se conozca la respuesta correcta.",
+  "Real candles": "Velas reales",
+  "Bitcoin's hourly candles from October 2026 with results worked out separately, by another program: reference, target times and the setup's fills match to the decimal.":
+    "Velas horarias de bitcoin de octubre de 2026 con resultados calculados por separado, con otro programa: la referencia, los momentos de los objetivos y las ejecuciones de la configuración coinciden hasta el decimal.",
+  "3,000 random markets": "3,000 mercados aleatorios",
+  "Every evaluation compared with a second, independent implementation of the rules; they always agree.":
+    "Cada evaluación se compara con una segunda implementación independiente de las reglas; siempre coinciden.",
+  "No look-ahead": "Sin mirar al futuro",
+  "Removing every candle after the deciding one never changes an outcome, and one candle fewer always leaves it pending.":
+    "Quitar todas las velas posteriores a la decisiva nunca cambia un resultado, y una vela menos siempre lo deja pendiente.",
+  "No bias": "Sin sesgo",
+  "A claim and its mirror on a mirrored market always get the same outcome; multiplying all prices by any number changes nothing; higher costs never improve a trade.":
+    "Una afirmación y su espejo sobre un mercado reflejado siempre obtienen el mismo resultado; multiplicar todos los precios por cualquier número no cambia nada; unos costes más altos nunca mejoran una operación.",
+  "The statistics": "La estadística",
+  "On random markets, analysts who guess are flagged as better than chance under 10% of the time (5% expected), while an analyst who knows the future is flagged over 80% of the time. The 95% intervals contain the true rate about 95% of the time.":
+    "En mercados aleatorios, los analistas que adivinan salen como mejores que el azar menos del 10% de las veces (se espera un 5%), mientras que un analista que conoce el futuro sale así más del 80% de las veces. Los intervalos del 95% contienen el porcentaje real aproximadamente el 95% de las veces.",
+  Reproducibility: "Reproducibilidad",
+  "The audit below computes every stored result again from the stored candles and compares it, field by field.":
+    "La auditoría de abajo vuelve a calcular cada resultado guardado a partir de las velas guardadas y lo compara, campo a campo.",
+  "Check every stored result now": "Comprobar ahora todos los resultados guardados",
+  "Recomputes each evaluation from its stored candles; nothing is downloaded.":
+    "Recalcula cada evaluación a partir de sus velas guardadas; no se descarga nada.",
+  "{bad} of {checked} results could not be reproduced.":
+    "{bad} de {checked} resultados no se pudieron reproducir.",
+  "All {checked} results were reproduced exactly from the stored candles.":
+    "Los {checked} resultados se reprodujeron exactamente a partir de las velas guardadas.",
+  "Not checked: {none} claims without candles (unevaluable) and {old} judged by an older evaluator (they are evaluated again in the background).":
+    "Sin comprobar: {none} afirmaciones sin velas (no evaluables) y {old} juzgadas por un evaluador anterior (se vuelven a evaluar en segundo plano).",
+  "Limits to keep in mind": "Límites a tener en cuenta",
+  "The results describe the videos you followed and stored, not the analyst's whole record.":
+    "Los resultados describen los vídeos que seguiste y guardaste, no el historial completo del analista.",
+  "A claim is only as good as its reading: check the quote on its page, especially for inferred claims.":
+    "Una afirmación vale lo que vale su lectura: revisa la cita en su página, sobre todo en las afirmaciones inferidas.",
+  "Candles do not show the order of prices inside them: when a target and an invalidation share a candle, the claim is ambiguous rather than a win.":
+    "Las velas no muestran el orden de los precios dentro de ellas: cuando un objetivo y una invalidación comparten vela, la afirmación es ambigua y no un acierto.",
+  "Under 20 settled claims, rates are shown with a small-sample warning and should not be compared.":
+    "Con menos de 20 afirmaciones resueltas, los porcentajes se muestran con un aviso de muestra pequeña y no deberían compararse.",
+  "Comparing many analysts, about one in twenty will look better than chance by luck alone.":
+    "Al comparar muchos analistas, aproximadamente uno de cada veinte parecerá mejor que el azar solo por suerte.",
+
+  // Audit fields (a result that could not be reproduced lists them)
+  status: "estado",
+  "reference price": "precio de referencia",
+  "target time": "momento del objetivo",
+  "invalidation time": "momento de la invalidación",
+  "best and worst move": "mejor y peor movimiento",
+  "direction at horizon": "dirección en el horizonte",
+  baseline: "apuesta contraria",
+  "simulated trade": "operación simulada",
+
+  // Claim detail: how this was decided
+  "Against chance:": "Frente al azar:",
+  "the same distances bet the other way ({side}, target {target}) ended {status} on the same candles.":
+    "las mismas distancias apostadas al revés ({side}, objetivo {target}) terminaron con resultado {status} sobre las mismas velas.",
+  "How this was decided": "Cómo se decidió",
+  "Reference: the candle opening {time} closed at {price}, the last close before the video.":
+    "Referencia: la vela que abrió el {time} cerró en {price}, el último cierre antes del vídeo.",
+  "Trigger: the candle opening {time} traded {direction} {price} (high {high}, low {low}).":
+    "Activación: la vela que abrió el {time} cotizó {direction} {price} (máximo {high}, mínimo {low}).",
+  "Target {price}: first reached by the candle opening {time} ({extreme} {value}).":
+    "Objetivo {price}: lo alcanzó primero la vela que abrió el {time} ({extreme} {value}).",
+  "candle|high": "máximo",
+  "candle|low": "mínimo",
+  "Invalidation {price}: the candle opening {time} closed beyond it, at {close}.":
+    "Invalidación {price}: la vela que abrió el {time} cerró más allá, en {close}.",
+  "Invalidation {price}: first reached by the candle opening {time} (high {high}, low {low}).":
+    "Invalidación {price}: la alcanzó primero la vela que abrió el {time} (máximo {high}, mínimo {low}).",
+  "The candle opening {time} (high {high}, low {low}) reached both the target {target} and the invalidation {invalidation}: which came first is unknown.":
+    "La vela que abrió el {time} (máximo {high}, mínimo {low}) alcanzó tanto el objetivo {target} como la invalidación {invalidation}: no se sabe cuál llegó primero.",
+  "Horizon end: the last candle inside it, opening {time}, closed at {close}: {move} from {reference}.":
+    "Fin del horizonte: la última vela dentro de él, que abrió el {time}, cerró en {close}: {move} desde {reference}.",
 };
 
 export default es;

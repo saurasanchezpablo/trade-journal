@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS vi_evaluations (
  claim_id TEXT PRIMARY KEY REFERENCES vi_claims(id) ON DELETE CASCADE,
  evaluator_version TEXT NOT NULL, status TEXT NOT NULL,
  outcome_json TEXT NOT NULL, simulation_json TEXT, regime_json TEXT, market_json TEXT,
+ baseline_json TEXT,
  evaluated_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS vi_evaluations_status ON vi_evaluations(status);
@@ -57,6 +58,11 @@ export const client = () => {
     // The videos live in External analysis's tables.
     externalClient();
     db.$client.exec(DDL);
+    // Additive upgrade: evaluations stored before the chance baseline have none (they are
+    // evaluated again under the new evaluator version).
+    const columns = db.$client.pragma("table_info(vi_evaluations)") as { name: string }[];
+    if (!columns.some((c) => c.name === "baseline_json"))
+      db.$client.exec("ALTER TABLE vi_evaluations ADD COLUMN baseline_json TEXT");
     ready.add(db);
   }
   return db.$client;
@@ -414,6 +420,8 @@ export interface StoredEvaluation {
   simulation: StoredSimulation | null;
   regime: Regime | null;
   market: MarketProvenance | null;
+  /** The mirrored claim's outcome on the same candles: what betting the other way scored. */
+  baseline: ClaimOutcome | null;
   evaluatedAt: string;
 }
 
@@ -425,6 +433,7 @@ interface EvaluationRow {
   simulation_json: string | null;
   regime_json: string | null;
   market_json: string | null;
+  baseline_json?: string | null;
   evaluated_at: string;
 }
 const parse = <T>(json: string | null): T | null => {
@@ -446,6 +455,7 @@ const toEvaluation = (r: EvaluationRow): StoredEvaluation | null => {
     simulation: parse<StoredSimulation>(r.simulation_json),
     regime: parse<Regime>(r.regime_json),
     market: parse<MarketProvenance>(r.market_json),
+    baseline: parse<ClaimOutcome>(r.baseline_json ?? null),
     evaluatedAt: r.evaluated_at,
   };
 };
@@ -453,11 +463,11 @@ const toEvaluation = (r: EvaluationRow): StoredEvaluation | null => {
 export function saveEvaluation(e: Omit<StoredEvaluation, "evaluatedAt" | "status">) {
   client()
     .prepare(
-      `INSERT INTO vi_evaluations (claim_id, evaluator_version, status, outcome_json, simulation_json, regime_json, market_json, evaluated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO vi_evaluations (claim_id, evaluator_version, status, outcome_json, simulation_json, regime_json, market_json, baseline_json, evaluated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(claim_id) DO UPDATE SET evaluator_version = excluded.evaluator_version, status = excluded.status,
         outcome_json = excluded.outcome_json, simulation_json = excluded.simulation_json, regime_json = excluded.regime_json,
-        market_json = excluded.market_json, evaluated_at = excluded.evaluated_at`,
+        market_json = excluded.market_json, baseline_json = excluded.baseline_json, evaluated_at = excluded.evaluated_at`,
     )
     .run(
       e.claimId,
@@ -467,6 +477,7 @@ export function saveEvaluation(e: Omit<StoredEvaluation, "evaluatedAt" | "status
       e.simulation ? JSON.stringify(e.simulation) : null,
       e.regime ? JSON.stringify(e.regime) : null,
       e.market ? JSON.stringify(e.market) : null,
+      e.baseline ? JSON.stringify(e.baseline) : null,
       nowIso(),
     );
 }
@@ -506,7 +517,7 @@ export function allClaimRecords(): ClaimRecord[] {
   const rows = client()
     .prepare(
       `SELECT c.*, e.claim_id AS e_claim_id, e.evaluator_version AS e_evaluator_version, e.status AS e_status,
-        e.outcome_json, e.simulation_json, e.regime_json, e.market_json, e.evaluated_at,
+        e.outcome_json, e.simulation_json, e.regime_json, e.market_json, e.baseline_json, e.evaluated_at,
         v.channel_id AS v_channel_id, v.title AS v_title, v.published_at AS v_published_at, ch.title AS ch_title
        FROM vi_claims c
        JOIN external_videos v ON v.video_id = c.video_id
@@ -537,6 +548,7 @@ export function allClaimRecords(): ClaimRecord[] {
             outcome_json: r.outcome_json,
             simulation_json: r.simulation_json ?? null,
             regime_json: r.regime_json ?? null,
+            baseline_json: r.baseline_json ?? null,
             market_json: r.market_json ?? null,
             evaluated_at: r.evaluated_at!,
           })

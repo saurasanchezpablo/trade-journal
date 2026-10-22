@@ -16,6 +16,20 @@ import {
   TradeTable,
   signedPercent,
 } from "@/components/video-intelligence/parts";
+import {
+  AgainstChanceSummary,
+  AgainstChanceTable,
+} from "@/components/video-intelligence/against-chance";
+import {
+  BaselineChart,
+  CalibrationChart,
+  EquityChart,
+  ExcursionScatter,
+  OutcomeBars,
+  RHistogram,
+  TimelineChart,
+} from "@/components/video-intelligence/charts";
+import { Methodology } from "@/components/video-intelligence/methodology";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -127,6 +141,7 @@ function VideoIntelligence() {
               <TabsTrigger value="analysts">{t("Analysts")}</TabsTrigger>
               <TabsTrigger value="strategies">{t("Strategies")}</TabsTrigger>
               <TabsTrigger value="processing">{t("Processing")}</TabsTrigger>
+              <TabsTrigger value="method">{t("How it's calculated")}</TabsTrigger>
             </TabsList>
             <TabsContent value="overview" className="mt-4">
               <Overview report={data.report} settings={data.settings} />
@@ -135,6 +150,28 @@ function VideoIntelligence() {
               <Claims claims={data.claims} />
             </TabsContent>
             <TabsContent value="analysts" className="mt-4 space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>{t("How each analyst's claims ended")}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <OutcomeBars groups={data.report.analysts} />
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader>
+                  <CardTitle>{t("Against chance: analyst against the opposite bet")}</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    {t(
+                      "Each claim is also evaluated turned the other way (same distances, opposite direction) on the same candles. Dots are hit rates, whiskers their 95% intervals: an analyst whose whisker overlaps their mirror's shows no evidence of skill.",
+                    )}
+                  </p>
+                  <BaselineChart groups={data.report.analysts} />
+                  <AgainstChanceTable groups={data.report.analysts} label={t("Analyst")} />
+                </CardContent>
+              </Card>
               <Card>
                 <CardHeader>
                   <CardTitle>{t("Predictions by analyst")}</CardTitle>
@@ -154,6 +191,9 @@ function VideoIntelligence() {
             </TabsContent>
             <TabsContent value="strategies" className="mt-4 space-y-4">
               <Strategies report={data.report} settings={data.settings} onSaved={refresh} />
+            </TabsContent>
+            <TabsContent value="method" className="mt-4">
+              <Methodology />
             </TabsContent>
             <TabsContent value="processing" className="mt-4">
               <Processing payload={data} refresh={refresh} />
@@ -374,6 +414,50 @@ function Overview({ report, settings }: { report: IntelligenceReport; settings: 
       </div>
       <Card>
         <CardHeader>
+          <CardTitle>{t("Against chance")}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <AgainstChanceSummary g={o} />
+        </CardContent>
+      </Card>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("Claims per month, by outcome")}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {report.charts.timeline.length ? (
+              <TimelineChart months={report.charts.timeline} />
+            ) : (
+              <p className="text-sm text-muted-foreground">{t("No claims yet.")}</p>
+            )}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("Best and worst move of each claim")}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {report.charts.excursions.length ? (
+              <ExcursionScatter points={report.charts.excursions} />
+            ) : (
+              <p className="text-sm text-muted-foreground">{t("No evaluated claims yet.")}</p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+      {report.charts.calibration.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("Stated probabilities against what happened")}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <CalibrationChart bins={report.charts.calibration} />
+          </CardContent>
+        </Card>
+      )}
+      <Card>
+        <CardHeader>
           <CardTitle>{t("Data quality")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-1 text-sm">
@@ -505,6 +589,36 @@ function Strategies({
   };
   return (
     <>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("Cumulative return of the simulated trades")}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {report.charts.equity.length ? (
+              <EquityChart points={report.charts.equity} />
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                {t("No closed simulated trades yet.")}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("Trades by result in R")}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {report.charts.rValues.length ? (
+              <RHistogram values={report.charts.rValues} />
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                {t("No closed simulated trades yet.")}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
       <Card>
         <CardHeader>
           <CardTitle>{t("Simulated trades by analyst")}</CardTitle>

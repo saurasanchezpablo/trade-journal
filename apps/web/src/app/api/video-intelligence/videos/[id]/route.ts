@@ -1,4 +1,5 @@
-import type { ClaimBar } from "@luxalgo/journal-core";
+import { traceOutcome, type ClaimBar } from "@luxalgo/journal-core";
+import { toEvaluate } from "@/server/video-intelligence/market";
 import { isVideoId } from "@/lib/youtube";
 import { bad, handler, ok } from "@/server/api";
 import { getVideo, storedTranscript } from "@/server/external-analysis/store";
@@ -22,10 +23,20 @@ export const GET = handler(async (_request: Request, { params }: Params) => {
   const { id } = await params;
   const video = isVideoId(id) ? getVideo(id) : null;
   if (!video) return bad("Video not found", 404);
-  const claims = claimsOfVideo(id).map((claim) => ({
-    ...claim,
-    evaluation: evaluationOf(claim.id),
-  }));
+  const claims = claimsOfVideo(id).map((claim) => {
+    const evaluation = evaluationOf(claim.id);
+    const market = evaluation?.market;
+    // The candles that decided the outcome, from the same stored candles it read.
+    const trace =
+      evaluation && market
+        ? traceOutcome(
+            toEvaluate(claim),
+            evaluation.outcome,
+            storedCandles(market.series, market.from, market.to),
+          )
+        : [];
+    return { ...claim, evaluation, trace };
+  });
   const candles: Record<string, ClaimBar[]> = {};
   for (const { evaluation } of claims) {
     const market = evaluation?.market;

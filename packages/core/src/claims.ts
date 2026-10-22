@@ -15,7 +15,7 @@
  * - A claim with no stated horizon gets the system's (`horizonSource: "convention"`).
  */
 
-export const CLAIM_EVALUATOR_VERSION = "claims-eval-1";
+export const CLAIM_EVALUATOR_VERSION = "claims-eval-2";
 
 export interface ClaimBar {
   /** Open time, epoch ms. */
@@ -684,4 +684,185 @@ export function tradeStats(trades: readonly SimulatedTrade[]): TradeStats {
     ambiguous: closed.filter((t) => t.ambiguous).length,
     insufficient: closed.length < MIN_SAMPLE,
   };
+}
+
+// ── Against chance ──
+
+/**
+ * The claim turned around its reference price: the opposite direction, with every level the
+ * same distance away in percentage terms (a target 5% above becomes one about 5% below:
+ * reference² / level). Evaluated on the same candles it tells what the same distances would
+ * have scored by betting the other way, so an analyst who reads direction no better than
+ * chance scores about as well as their mirror.
+ */
+export function mirrorClaim(claim: ClaimToEvaluate, referencePrice: number): ClaimToEvaluate {
+  const flip = (level: number) => (referencePrice * referencePrice) / level;
+  return {
+    ...claim,
+    direction:
+      claim.direction === "long" ? "short" : claim.direction === "short" ? "long" : "neutral",
+    targets: claim.targets.map(flip),
+    invalidation: claim.invalidation === null ? null : flip(claim.invalidation),
+    trigger: claim.trigger
+      ? {
+          price: flip(claim.trigger.price),
+          kind: claim.trigger.kind === "above" ? "below" : "above",
+        }
+      : null,
+  };
+}
+
+/** P(X ≥ k) for X ~ Binomial(n, 1/2), computed exactly in log space. */
+function upperTail(k: number, n: number): number {
+  if (k <= 0) return 1;
+  if (k > n) return 0;
+  const logChoose = (m: number, r: number) => {
+    let sum = 0;
+    for (let i = 1; i <= r; i++) sum += Math.log(m - r + i) - Math.log(i);
+    return sum;
+  };
+  let total = 0;
+  for (let i = k; i <= n; i++) total += Math.exp(logChoose(n, i) - n * Math.LN2);
+  return Math.min(1, total);
+}
+
+export interface EdgeTest {
+  /** Claims settled for both the analyst and the mirror. */
+  pairs: number;
+  /** Only the analyst's target came first / only the mirror's did. */
+  analystOnly: number;
+  mirrorOnly: number;
+  /**
+   * Exact two-sided sign test on the claims where only one of them was right: the chance of
+   * a split at least this uneven if neither side had an edge. Null with no such claims.
+   */
+  pValue: number | null;
+}
+
+/** Whether the analyst beat their mirror more often than a coin would (sign test). */
+export function edgeTest(pairs: readonly { analyst: boolean; mirror: boolean }[]): EdgeTest {
+  const analystOnly = pairs.filter((p) => p.analyst && !p.mirror).length;
+  const mirrorOnly = pairs.filter((p) => p.mirror && !p.analyst).length;
+  const n = analystOnly + mirrorOnly;
+  return {
+    pairs: pairs.length,
+    analystOnly,
+    mirrorOnly,
+    pValue: n ? Math.min(1, 2 * upperTail(Math.max(analystOnly, mirrorOnly), n)) : null,
+  };
+}
+
+export interface CalibrationBin {
+  from: number;
+  to: number;
+  count: number;
+  /** The mean stated probability in the bin, and how often the target was hit. */
+  stated: number;
+  observed: number;
+}
+
+/** Stated probabilities against outcomes, in equal-width bins (empty bins left out). */
+export function calibrationBins(
+  pairs: readonly { probability: number; happened: boolean }[],
+  bins = 5,
+): CalibrationBin[] {
+  const out: CalibrationBin[] = [];
+  for (let i = 0; i < bins; i++) {
+    const from = i / bins;
+    const to = (i + 1) / bins;
+    const inBin = pairs.filter(
+      (p) => p.probability >= from && (i === bins - 1 ? p.probability <= to : p.probability < to),
+    );
+    if (!inBin.length) continue;
+    out.push({
+      from,
+      to,
+      count: inBin.length,
+      stated: inBin.reduce((s, p) => s + p.probability, 0) / inBin.length,
+      observed: inBin.filter((p) => p.happened).length / inBin.length,
+    });
+  }
+  return out;
+}
+
+// ── How an outcome was decided ──
+
+export type TraceStep =
+  | { kind: "reference"; candle: ClaimBar; price: number }
+  | { kind: "trigger"; candle: ClaimBar; price: number; above: boolean }
+  | { kind: "target"; candle: ClaimBar; price: number; side: "long" | "short" }
+  | { kind: "invalidation"; candle: ClaimBar; price: number; onClose: boolean }
+  | { kind: "ambiguous"; candle: ClaimBar; target: number; invalidation: number }
+  | { kind: "horizon"; candle: ClaimBar; reference: number; move: number };
+
+/**
+ * The candles that decided an outcome, from the same candles the evaluation read: the one
+ * whose close is the reference, the trigger's, the target's or invalidation's (with the
+ * high or low that reached it), and the last one inside the horizon.
+ */
+export function traceOutcome(
+  claim: ClaimToEvaluate,
+  outcome: ClaimOutcome,
+  candles: readonly ClaimBar[],
+): TraceStep[] {
+  const at = (time: number | null) =>
+    time === null ? undefined : candles.find((b) => b.time === time);
+  const steps: TraceStep[] = [];
+  const reference = at(outcome.referenceTime);
+  if (reference && outcome.referencePrice !== null)
+    steps.push({ kind: "reference", candle: reference, price: outcome.referencePrice });
+  const trigger = at(outcome.triggeredAt);
+  if (trigger && claim.trigger)
+    steps.push({
+      kind: "trigger",
+      candle: trigger,
+      price: claim.trigger.price,
+      above: claim.trigger.kind === "above",
+    });
+  const target = at(outcome.targetHitAt);
+  if (target && outcome.target !== null && outcome.side)
+    steps.push({ kind: "target", candle: target, price: outcome.target, side: outcome.side });
+  const invalidated = at(outcome.invalidatedAt);
+  if (invalidated && claim.invalidation !== null)
+    steps.push({
+      kind: "invalidation",
+      candle: invalidated,
+      price: claim.invalidation,
+      onClose: claim.invalidationOn === "close",
+    });
+  if (outcome.status === "ambiguous" && outcome.target !== null && claim.invalidation !== null) {
+    const both = candles.find(
+      (b) =>
+        b.time >= claim.claimTime &&
+        b.high >= Math.min(outcome.target!, claim.invalidation!) &&
+        b.low <= Math.max(outcome.target!, claim.invalidation!),
+    );
+    if (both)
+      steps.push({
+        kind: "ambiguous",
+        candle: both,
+        target: outcome.target,
+        invalidation: claim.invalidation,
+      });
+  }
+  if (outcome.complete && outcome.horizonReturn !== null && outcome.referencePrice !== null) {
+    const last = [...candles]
+      .filter(
+        (b) =>
+          b.time >= claim.claimTime && (claim.horizonEnd === null || b.time < claim.horizonEnd),
+      )
+      .at(-1);
+    if (last)
+      steps.push({
+        kind: "horizon",
+        candle: last,
+        // A conditional claim's move counts from its trigger.
+        reference:
+          claim.trigger && outcome.triggeredAt !== null
+            ? claim.trigger.price
+            : outcome.referencePrice,
+        move: outcome.horizonReturn,
+      });
+  }
+  return steps;
 }
