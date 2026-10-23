@@ -9,6 +9,8 @@ import { THEME_INIT_SCRIPT } from "@/lib/theme";
 import { connection } from "next/server";
 import { I18nProvider } from "@/components/i18n";
 import { getLocale } from "@/server/i18n";
+import { BetaProvider } from "@/components/beta";
+import { getBetaFlags } from "@/server/beta-features";
 
 export const metadata: Metadata = {
   title: "Trade Journal",
@@ -20,6 +22,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // The language is the journal's setting, read on every request (not at build time).
   await connection();
   const locale = getLocale();
+  const beta = getBetaFlags();
   return (
     <html lang={locale} className="dark" suppressHydrationWarning>
       <head>
@@ -31,7 +34,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <I18nProvider locale={locale}>
               <ThemeProvider>
                 <PrivacyProvider>
-                  <Shell>{children}</Shell>
+                  <BetaProvider flags={beta}>
+                    <Shell>{children}</Shell>
+                  </BetaProvider>
                 </PrivacyProvider>
               </ThemeProvider>
             </I18nProvider>

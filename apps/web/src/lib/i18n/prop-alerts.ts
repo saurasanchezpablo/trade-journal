@@ -93,8 +93,8 @@ const es: Record<string, string> = {
   "Off in this browser": "Desactivado en este navegador",
   "Alert me on the Charts page while it is open and live":
     "Avisarme en la página de Gráficos mientras esté abierta y en directo",
-  "In this browser only (also the On/Off switch of the chart's Alerts card). Indicator alerts only run here, never in the background.":
-    "Solo en este navegador (es también el interruptor de la tarjeta Alertas del gráfico). Las alertas de indicadores solo funcionan aquí, nunca en segundo plano.",
+  "In this browser only (also the On/Off switch of the chart's Alerts card). Indicator alert() calls only run here; RSI alerts can be watched in the background under Indicator alerts.":
+    "Solo en este navegador (es también el interruptor de la tarjeta Alertas del gráfico). Las llamadas alert() de los indicadores solo funcionan aquí; las alertas de RSI pueden vigilarse en segundo plano en Alertas de indicadores.",
   "Price crosses a horizontal line, ray or trend line":
     "El precio cruza una línea horizontal, un rayo o una línea de tendencia",
   "Price enters or breaks a support or resistance zone":

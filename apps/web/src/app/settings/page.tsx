@@ -6,6 +6,7 @@ import {
   ChartCandlestick,
   Database,
   Download,
+  FlaskConical,
   Globe,
   SlidersHorizontal,
   Sparkles,
@@ -16,6 +17,7 @@ import { MarketDataSettings } from "@/components/market-data-settings";
 import { AiSettings } from "@/components/ai-settings";
 import { LanguageSettings } from "@/components/language-settings";
 import { CurrencySettings } from "@/components/currency-settings";
+import { BetaSettings } from "@/components/beta-settings";
 import { FilterBar } from "@/components/filter-bar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -55,6 +57,12 @@ const sections = [
     label: "AI",
     icon: Sparkles,
     description: "Choose your AI provider and manage your model and API key.",
+  },
+  {
+    id: "beta",
+    label: "Beta features",
+    icon: FlaskConical,
+    description: "Switch experimental features on or off.",
   },
   {
     id: "your-data",
@@ -185,6 +193,7 @@ function Settings() {
                 {id === "currency-conversion" && <CurrencySettings />}
                 {id === "market-data" && <MarketDataSettings />}
                 {id === "ai-settings" && <AiSettings />}
+                {id === "beta" && <BetaSettings />}
                 {id === "your-data" && (
                   <Card>
                     <CardHeader>

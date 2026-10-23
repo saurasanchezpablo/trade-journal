@@ -39,6 +39,9 @@ import { UpdateNotice } from "./update-notice";
 import { useI18n } from "./i18n";
 import { PageTransition } from "./page-transition";
 import { Button } from "./ui/button";
+import { useBeta } from "./beta";
+import { UrgentAlarm } from "./alerts/urgent-alarm";
+import { hiddenBetaLinks } from "@/lib/beta-features";
 import { HoverHint } from "./ui/tooltip";
 
 const NAV = [
@@ -110,6 +113,7 @@ function NavLink({
 
 export function Shell({ children }: { children: React.ReactNode }) {
   const { t, tx } = useI18n();
+  const hiddenBeta = hiddenBetaLinks(useBeta());
   const pathname = usePathname();
   const search = useSearchParams();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -178,7 +182,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         if ((event.target as HTMLElement).closest("a")) setMenuOpen(false);
       }}
     >
-      {NAV.map(({ href, label, icon }) => (
+      {NAV.filter(({ href }) => !hiddenBeta.has(href)).map(({ href, label, icon }) => (
         <NavLink
           key={href}
           href={href === "/prop-firms" ? href : filterQuery.size ? `${href}?${filterQuery}` : href}
@@ -314,6 +318,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         {footer}
       </aside>
       <PageTransition>{children}</PageTransition>
+      <UrgentAlarm />
     </div>
   );
 }

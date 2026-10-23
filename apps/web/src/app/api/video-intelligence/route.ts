@@ -14,6 +14,7 @@ import {
   type IntelligenceFilters,
 } from "@/lib/video-intelligence";
 import { reevaluateLevelC, workerBusy } from "@/server/video-intelligence/worker";
+import { betaGate } from "@/server/beta-features";
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -52,6 +53,8 @@ function readFilters(params: URLSearchParams): IntelligenceFilters {
 
 /** The report, the filtered claims, the settings and whether work is running. */
 export const GET = handler((request: Request) => {
+  const off = betaGate("videoIntelligence");
+  if (off) return off;
   const filters = readFilters(new URL(request.url).searchParams);
   const records = allClaimRecords();
   return ok({
@@ -65,6 +68,8 @@ export const GET = handler((request: Request) => {
 
 /** Execution costs for simulated setups; a change re-simulates them in the background. */
 export const PUT = handler(async (request: Request) => {
+  const off = betaGate("videoIntelligence");
+  if (off) return off;
   const body = (await request.json()) as Record<string, unknown> | null;
   requireValue(body && typeof body === "object" && !Array.isArray(body), "Enter valid settings.");
   for (const key of ["commissionBps", "slippageBps", "targetBufferBps"])

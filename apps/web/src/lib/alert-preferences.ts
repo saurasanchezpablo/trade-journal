@@ -4,7 +4,14 @@
  * (a YouTube channel). The server applies them to every notification it sends; a test
  * always goes out. Alerts muted here are still logged, with the reason.
  */
-export const ALERT_KINDS = ["lines", "zones", "external", "digest", "strategy"] as const;
+export const ALERT_KINDS = [
+  "lines",
+  "zones",
+  "indicators",
+  "external",
+  "digest",
+  "strategy",
+] as const;
 export type AlertKind = (typeof ALERT_KINDS)[number];
 
 export const ALERT_KIND_LABELS: Record<AlertKind, { title: string; detail: string }> = {
@@ -17,6 +24,10 @@ export const ALERT_KIND_LABELS: Record<AlertKind, { title: string; detail: strin
     title: "Chart zones",
     detail:
       "Price enters or breaks a support or resistance zone of a chart watched in the background.",
+  },
+  indicators: {
+    title: "Indicator alerts",
+    detail: "An indicator rule watched in the background, such as RSI crossing 70, fires.",
   },
   external: {
     title: "YouTube analyses",
@@ -35,6 +46,12 @@ export const ALERT_KIND_LABELS: Record<AlertKind, { title: string; detail: strin
 export interface AlertRoute {
   push: boolean;
   webhook: boolean;
+  /**
+   * Urgent: hard to miss. The phone notification goes out at the webhook's highest priority,
+   * browsers keep it on screen until it is dismissed, open journal pages sound an alarm, and
+   * it is sent again every few minutes until acknowledged.
+   */
+  urgent: boolean;
 }
 
 export interface AlertPreferences {
@@ -45,16 +62,21 @@ export interface AlertPreferences {
   pausedUntil: string | null;
   /** Sources that send nothing, as `external:<channel id>`. */
   muted: string[];
+  /** Urgent alerts are sent again every `repeatMinutes` until acknowledged, at most `maxRepeats` times. */
+  urgent: { repeatMinutes: number; maxRepeats: number };
 }
 
-const ON: AlertRoute = { push: true, webhook: true };
-const OFF: AlertRoute = { push: false, webhook: false };
+const ON: AlertRoute = { push: true, webhook: true, urgent: false };
+const OFF: AlertRoute = { push: false, webhook: false, urgent: false };
+export const REPEAT_MINUTES = [1, 2, 5, 10, 15] as const;
+export const MAX_REPEATS = 30;
 
 export const DEFAULT_ALERT_PREFERENCES: AlertPreferences = {
-  kinds: { lines: ON, zones: ON, external: OFF, digest: ON, strategy: ON },
+  kinds: { lines: ON, zones: ON, indicators: ON, external: OFF, digest: ON, strategy: ON },
   quiet: { enabled: false, from: "22:00", to: "07:00" },
   pausedUntil: null,
   muted: [],
+  urgent: { repeatMinutes: 2, maxRepeats: 10 },
 };
 
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -82,8 +104,13 @@ export function readAlertPreferences(
     return {
       push: typeof r.push === "boolean" ? r.push : fallback.push,
       webhook: typeof r.webhook === "boolean" ? r.webhook : fallback.webhook,
+      urgent: typeof r.urgent === "boolean" ? r.urgent : fallback.urgent,
     };
   };
+  const urgent = (v.urgent && typeof v.urgent === "object" ? v.urgent : {}) as Record<
+    string,
+    unknown
+  >;
   const quiet = (v.quiet && typeof v.quiet === "object" ? v.quiet : {}) as Record<string, unknown>;
   const paused = typeof v.pausedUntil === "string" ? Date.parse(v.pausedUntil) : NaN;
   return {
@@ -107,6 +134,17 @@ export function readAlertPreferences(
           ...new Set(v.muted.filter((s): s is string => typeof s === "string" && SOURCE.test(s))),
         ].slice(0, MAX_MUTED)
       : [],
+    urgent: {
+      repeatMinutes: (REPEAT_MINUTES as readonly unknown[]).includes(urgent.repeatMinutes)
+        ? (urgent.repeatMinutes as number)
+        : DEFAULT_ALERT_PREFERENCES.urgent.repeatMinutes,
+      maxRepeats:
+        Number.isInteger(urgent.maxRepeats) &&
+        (urgent.maxRepeats as number) >= 0 &&
+        (urgent.maxRepeats as number) <= MAX_REPEATS
+          ? (urgent.maxRepeats as number)
+          : DEFAULT_ALERT_PREFERENCES.urgent.maxRepeats,
+    },
   };
 }
 
@@ -121,6 +159,8 @@ export function alertPreferencesProblem(value: unknown): string | null {
       const r = route as Record<string, unknown> | null;
       if (!r || typeof r.push !== "boolean" || typeof r.webhook !== "boolean")
         return "Each alert kind needs push and webhook set to true or false.";
+      if (r.urgent !== undefined && typeof r.urgent !== "boolean")
+        return "Urgent must be true or false.";
     }
   }
   if (v.quiet !== undefined) {
@@ -138,6 +178,17 @@ export function alertPreferencesProblem(value: unknown): string | null {
   if (v.pausedUntil !== undefined && v.pausedUntil !== null) {
     if (typeof v.pausedUntil !== "string" || !Number.isFinite(Date.parse(v.pausedUntil)))
       return "Pause until a valid time.";
+  }
+  if (v.urgent !== undefined) {
+    const u = v.urgent as Record<string, unknown> | null;
+    if (!u || !(REPEAT_MINUTES as readonly unknown[]).includes(u.repeatMinutes))
+      return `Urgent alerts repeat every ${REPEAT_MINUTES.join(", ")} minutes.`;
+    if (
+      !Number.isInteger(u.maxRepeats) ||
+      (u.maxRepeats as number) < 0 ||
+      (u.maxRepeats as number) > MAX_REPEATS
+    )
+      return `Urgent alerts repeat at most ${MAX_REPEATS} times.`;
   }
   if (v.muted !== undefined) {
     if (!Array.isArray(v.muted) || v.muted.length > MAX_MUTED) return "Invalid muted sources.";
@@ -176,6 +227,8 @@ export type MuteReason = "paused" | "quiet" | "kind" | "source";
 export interface Routing {
   push: boolean;
   webhook: boolean;
+  /** Sent as urgent: the kind is set urgent, or the alert asked for it (an urgent rule). */
+  urgent: boolean;
   /** Why nothing (or only part) goes out; null when the kind's destinations all do. */
   muted: MuteReason | null;
 }
@@ -187,18 +240,29 @@ export interface Routing {
  */
 export function routeAlert(
   prefs: AlertPreferences,
-  meta: { kind: AlertKind | "test"; source?: string },
+  meta: { kind: AlertKind | "test"; source?: string; urgent?: boolean },
   at: number,
   timeZone: string,
 ): Routing {
-  if (meta.kind === "test") return { push: true, webhook: true, muted: null };
-  const none = (muted: MuteReason): Routing => ({ push: false, webhook: false, muted });
+  if (meta.kind === "test")
+    return { push: true, webhook: true, urgent: meta.urgent === true, muted: null };
+  const none = (muted: MuteReason): Routing => ({
+    push: false,
+    webhook: false,
+    urgent: false,
+    muted,
+  });
   if (prefs.pausedUntil && Date.parse(prefs.pausedUntil) > at) return none("paused");
   if (inQuietHours(prefs.quiet, at, timeZone)) return none("quiet");
   if (meta.source && prefs.muted.includes(meta.source)) return none("source");
   const route = prefs.kinds[meta.kind];
   if (!route.push && !route.webhook) return none("kind");
-  return { push: route.push, webhook: route.webhook, muted: null };
+  return {
+    push: route.push,
+    webhook: route.webhook,
+    urgent: route.urgent || meta.urgent === true,
+    muted: null,
+  };
 }
 
 export const MUTE_REASONS: Record<MuteReason, string> = {

@@ -1,6 +1,6 @@
 # Strategy research
 
-**Strategy research** (sidebar) tests a small catalog of trading strategies, chosen from the
+**Strategy research** (sidebar, a beta feature: switch it on under **Settings, Beta features**) tests a small catalog of trading strategies, chosen from the
 published evidence, on Binance's daily history after costs, judges them against a standard
 declared before the results, and can monitor and paper trade them. It never places an order and
 needs no exchange account: market data comes from Binance's public, keyless endpoints.

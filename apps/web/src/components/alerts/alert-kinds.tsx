@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { Moon, Pause, Play } from "lucide-react";
+import { BellRing, Moon, Pause, Play } from "lucide-react";
 import { SectionCard } from "@/components/section-card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -10,6 +10,8 @@ import { Input } from "@/components/ui/input";
 import {
   ALERT_KINDS,
   ALERT_KIND_LABELS,
+  MAX_REPEATS,
+  REPEAT_MINUTES,
   inQuietHours,
   type AlertKind,
   type AlertPreferences,
@@ -17,6 +19,8 @@ import {
 } from "@/lib/alert-preferences";
 import { postJson, useApi } from "@/lib/use-api";
 import { useI18n, useT } from "@/components/i18n";
+import { useBeta } from "@/components/beta";
+import { OptionSelect } from "@/components/ui/option-select";
 
 interface Channel {
   channelId: string;
@@ -32,6 +36,10 @@ const PAUSES = [1, 4, 24];
  */
 export function AlertKinds({ hasWebhook, devices }: { hasWebhook: boolean; devices: number }) {
   const { t, tn, tx, intl } = useI18n();
+  const beta = useBeta();
+  // A beta feature that is off sends nothing: its kind is not listed.
+  const kinds = ALERT_KINDS.filter((k) => k !== "strategy" || beta.strategyResearch);
+  const [testing, setTesting] = useState("");
   const {
     data,
     error: loadError,
@@ -93,15 +101,13 @@ export function AlertKinds({ hasWebhook, devices }: { hasWebhook: boolean; devic
   const paused = prefs.pausedUntil && Date.parse(prefs.pausedUntil) > now;
   const quietNow = inQuietHours(prefs.quiet, now, timeZone);
   const channels = external?.channels ?? [];
-  const on = ALERT_KINDS.filter((k) => prefs.kinds[k].push || prefs.kinds[k].webhook).length;
+  const on = kinds.filter((k) => prefs.kinds[k].push || prefs.kinds[k].webhook).length;
   return (
     <SectionCard
       id="alerts-kinds"
       title={t("What you receive")}
       summary={
-        paused
-          ? tx("alerts", "Paused")
-          : t("{on} of {total} kinds on", { on, total: ALERT_KINDS.length })
+        paused ? tx("alerts", "Paused") : t("{on} of {total} kinds on", { on, total: kinds.length })
       }
       contentClassName="space-y-4"
     >
@@ -165,10 +171,14 @@ export function AlertKinds({ hasWebhook, devices }: { hasWebhook: boolean; devic
                   {hasWebhook ? t("set up") : t("none yet")}
                 </span>
               </th>
+              <th className="w-24 px-2 py-1.5 text-center font-normal">
+                {t("Urgent")}
+                <span className="block text-[11px]">{t("until seen")}</span>
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y">
-            {ALERT_KINDS.map((kind) => {
+            {kinds.map((kind) => {
               const label = ALERT_KIND_LABELS[kind];
               return (
                 <tr key={kind} className="align-top">
@@ -204,11 +214,89 @@ export function AlertKinds({ hasWebhook, devices }: { hasWebhook: boolean; devic
                       />
                     </td>
                   ))}
+                  <td className="px-2 py-2 text-center">
+                    <Checkbox
+                      aria-label={`${t(label.title)}: ${t("urgent")}`}
+                      checked={prefs.kinds[kind].urgent}
+                      disabled={!prefs.kinds[kind].push && !prefs.kinds[kind].webhook}
+                      onCheckedChange={(checked) => setRoute(kind, { urgent: checked === true })}
+                    />
+                  </td>
                 </tr>
               );
             })}
           </tbody>
         </table>
+      </div>
+
+      <div className="space-y-2 rounded-md border p-3">
+        <div className="flex items-center gap-2 text-sm font-medium">
+          <BellRing className="size-4" aria-hidden="true" /> {t("Urgent alerts")}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          {t(
+            "Hard to miss: sent to the webhook at the highest priority (ntfy: long vibration, shown over other apps), kept on screen in browsers until dismissed, sounded as an alarm on every open journal page, and sent again until you acknowledge them (open the notification, or press Acknowledge).",
+          )}
+        </p>
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="text-muted-foreground">{t("Repeat every")}</span>
+          <OptionSelect
+            aria-label={t("Repeat every")}
+            className="h-8 w-36"
+            value={String(prefs.urgent.repeatMinutes)}
+            onValueChange={(v) => save({ urgent: { ...prefs.urgent, repeatMinutes: Number(v) } })}
+          >
+            {REPEAT_MINUTES.map((m) => (
+              <option key={m} value={String(m)}>
+                {tn(m, "{count} minute", "{count} minutes")}
+              </option>
+            ))}
+          </OptionSelect>
+          <span className="text-muted-foreground">{t("at most")}</span>
+          <Input
+            type="number"
+            aria-label={t("Maximum repeats")}
+            className="h-8 w-20"
+            min={0}
+            max={MAX_REPEATS}
+            defaultValue={prefs.urgent.maxRepeats}
+            key={prefs.urgent.maxRepeats}
+            onBlur={(e) => {
+              const n = Number(e.target.value);
+              if (
+                Number.isInteger(n) &&
+                n >= 0 &&
+                n <= MAX_REPEATS &&
+                n !== prefs.urgent.maxRepeats
+              )
+                save({ urgent: { ...prefs.urgent, maxRepeats: n } });
+            }}
+          />
+          <span className="text-muted-foreground">{t("times")}</span>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="ml-auto"
+            onClick={() => {
+              setTesting("");
+              void postJson<{ delivered: number }>("/api/alerts/test", { urgent: true })
+                .then((r) =>
+                  setTesting(
+                    t("Urgent test sent to {count} destinations. Acknowledge it to stop it.", {
+                      count: r.delivered,
+                    }),
+                  ),
+                )
+                .catch((cause: unknown) =>
+                  setTesting(cause instanceof Error ? cause.message : String(cause)),
+                );
+            }}
+          >
+            {t("Send an urgent test")}
+          </Button>
+        </div>
+        {testing && <p className="text-xs text-muted-foreground">{testing}</p>}
       </div>
 
       <div className="space-y-2 rounded-md border p-3">

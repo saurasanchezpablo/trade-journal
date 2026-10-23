@@ -7,6 +7,8 @@ import { nowIso } from "../ids";
 import { alertsDb, pushSubscriptions } from "./store";
 import { getAlertPreferences, logNotification } from "./preferences";
 import { generateVapidKeys, sendPush, type PushTarget, type VapidKeys } from "./web-push";
+import { ackUrl, recordUrgent } from "./urgent";
+import { tr } from "@/lib/i18n";
 
 /**
  * Alert delivery: Web Push to every subscribed browser (Chrome, Firefox, Edge and Safari
@@ -155,6 +157,10 @@ export interface DeliveryMeta {
   kind: AlertKind | "test";
   /** What raised it, which can be muted on its own (`external:<channel id>`). */
   source?: string;
+  /** Send it as urgent whatever its kind's setting (an urgent rule, an urgent test). */
+  urgent?: boolean;
+  /** A reminder of this urgent alert (internal: its record already exists). */
+  reminderOf?: string;
 }
 
 /**
@@ -181,8 +187,17 @@ export async function deliver(
     log(0);
     return 0;
   }
+  // Urgent: recorded until acknowledged (repeated meanwhile); opening it acknowledges it.
+  const ackId = route.urgent
+    ? (meta.reminderOf ?? recordUrgent(notification, { kind: meta.kind, source: meta.source }))
+    : null;
+  const opens = ackId ? ackUrl(notification.url, ackId) : notification.url;
   const keys = vapidKeys();
-  const payload = JSON.stringify(notification);
+  const payload = JSON.stringify({
+    ...notification,
+    url: opens,
+    ...(ackId ? { urgent: true, ackId, ackLabel: tr("Acknowledge") } : {}),
+  });
   const db = alertsDb();
   const rows = route.push ? db.select().from(pushSubscriptions).all() : [];
   const results = await Promise.all(
@@ -224,8 +239,20 @@ export async function deliver(
         headers: {
           "Content-Type": "text/plain; charset=utf-8",
           Title: headerText(notification.title),
-          Tags: "chart_with_upwards_trend",
-          ...(origin ? { Click: `${origin}${notification.url}` } : {}),
+          // ntfy: an urgent alert at the highest priority (5: long vibration, pop-over), with
+          // a button that opens it, which acknowledges it.
+          ...(ackId
+            ? {
+                Priority: "5",
+                Tags: "rotating_light",
+                ...(origin
+                  ? {
+                      Actions: `view, ${headerText(tr("Acknowledge"))}, ${origin}${opens}, clear=true`,
+                    }
+                  : {}),
+              }
+            : { Tags: "chart_with_upwards_trend" }),
+          ...(origin ? { Click: `${origin}${opens}` } : {}),
         },
         body: notification.body,
         signal: AbortSignal.timeout(10_000),

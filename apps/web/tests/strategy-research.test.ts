@@ -16,6 +16,7 @@ const { runNow } = await import("../src/server/strategy-research/worker");
 const actions = await import("../src/app/api/research/actions/route");
 const overview = await import("../src/app/api/research/route");
 const detail = await import("../src/app/api/research/[id]/route");
+const { saveBetaFlags } = await import("../src/server/beta-features");
 afterAll(() => {
   if (originalDir === undefined) delete process.env.JOURNAL_DATA_DIR;
   else process.env.JOURNAL_DATA_DIR = originalDir;
@@ -94,6 +95,7 @@ const clearAll = () => {
 };
 
 beforeEach(() => {
+  saveBetaFlags({ videoIntelligence: true, strategyResearch: true });
   vi.stubEnv("JOURNAL_PASSWORD", "");
   clearAll();
 });

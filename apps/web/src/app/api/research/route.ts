@@ -18,8 +18,11 @@ import {
   saveResearchSettings,
   trialCount,
 } from "@/server/strategy-research/store";
+import { betaGate } from "@/server/beta-features";
 
 export const GET = handler(() => {
+  const off = betaGate("strategyResearch");
+  if (off) return off;
   const instruments = loadInstruments();
   const strategies: StrategyOverview[] = research.STRATEGIES.map((s) => {
     const stored = loadReport(s.id);
@@ -65,6 +68,8 @@ export const GET = handler(() => {
 
 /** Cost assumptions (basis points); monitoring is switched by the actions. */
 export const PUT = handler(async (request: Request) => {
+  const off = betaGate("strategyResearch");
+  if (off) return off;
   const body = (await request.json()) as Record<string, unknown> | null;
   requireValue(body && typeof body === "object", "Invalid settings.");
   for (const key of ["spotFeeBps", "perpFeeBps", "slippageBps"]) {

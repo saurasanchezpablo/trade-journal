@@ -42,6 +42,7 @@ describe("which alerts reach you", () => {
     expect(readAlertPreferences(null, { external: true }).kinds.external).toEqual({
       push: true,
       webhook: true,
+      urgent: false,
     });
     // Once saved, the saved choice wins over the old switch.
     expect(
@@ -49,7 +50,7 @@ describe("which alerts reach you", () => {
         { kinds: { external: { push: false, webhook: true } } },
         { external: true },
       ).kinds.external,
-    ).toEqual({ push: false, webhook: true });
+    ).toEqual({ push: false, webhook: true, urgent: false });
   });
 
   it("refuses settings it cannot apply", () => {
@@ -89,18 +90,25 @@ describe("which alerts reach you", () => {
   it("routes each alert by its kind, unless paused, quiet or its source is muted", () => {
     const noon = at("2026-07-01T12:00:00Z");
     const choices = prefs({
-      kinds: { ...DEFAULT_ALERT_PREFERENCES.kinds, digest: { push: false, webhook: true } },
+      kinds: {
+        ...DEFAULT_ALERT_PREFERENCES.kinds,
+        digest: { push: false, webhook: true, urgent: false },
+      },
       muted: ["external:UCmuted"],
     });
     expect(routeAlert(choices, { kind: "digest" }, noon, "UTC")).toEqual({
       push: false,
       webhook: true,
+      urgent: false,
       muted: null,
     });
     expect(routeAlert(choices, { kind: "external" }, noon, "UTC").muted).toBe("kind");
     expect(
       routeAlert(
-        { ...choices, kinds: { ...choices.kinds, external: { push: true, webhook: true } } },
+        {
+          ...choices,
+          kinds: { ...choices.kinds, external: { push: true, webhook: true, urgent: false } },
+        },
         { kind: "external", source: "external:UCmuted" },
         noon,
         "UTC",
@@ -117,8 +125,49 @@ describe("which alerts reach you", () => {
     expect(routeAlert(quiet, { kind: "test" }, noon, "UTC")).toEqual({
       push: true,
       webhook: true,
+      urgent: false,
       muted: null,
     });
+  });
+
+  it("sends an alert as urgent when its kind is set urgent or the alert asks for it", () => {
+    const noon = at("2026-07-01T12:00:00Z");
+    const choices = prefs({
+      kinds: {
+        ...DEFAULT_ALERT_PREFERENCES.kinds,
+        lines: { push: true, webhook: true, urgent: true },
+      },
+    });
+    expect(routeAlert(choices, { kind: "lines" }, noon, "UTC").urgent).toBe(true);
+    expect(routeAlert(choices, { kind: "zones" }, noon, "UTC").urgent).toBe(false);
+    expect(routeAlert(choices, { kind: "zones", urgent: true }, noon, "UTC").urgent).toBe(true);
+    // Quiet hours and a pause still hold an urgent alert back: they are your choice.
+    const paused = { ...choices, pausedUntil: "2026-07-01T13:00:00.000Z" };
+    expect(routeAlert(paused, { kind: "lines" }, noon, "UTC")).toMatchObject({
+      urgent: false,
+      muted: "paused",
+    });
+  });
+
+  it("repeats urgent alerts every 2 minutes, 10 times, unless set otherwise within the limits", () => {
+    expect(readAlertPreferences(null).urgent).toEqual({ repeatMinutes: 2, maxRepeats: 10 });
+    expect(readAlertPreferences({ urgent: { repeatMinutes: 5, maxRepeats: 0 } }).urgent).toEqual({
+      repeatMinutes: 5,
+      maxRepeats: 0,
+    });
+    expect(readAlertPreferences({ urgent: { repeatMinutes: 3, maxRepeats: 999 } }).urgent).toEqual({
+      repeatMinutes: 2,
+      maxRepeats: 10,
+    });
+    expect(alertPreferencesProblem({ urgent: { repeatMinutes: 3, maxRepeats: 1 } })).toMatch(
+      /repeat every/,
+    );
+    expect(alertPreferencesProblem({ urgent: { repeatMinutes: 1, maxRepeats: 31 } })).toMatch(
+      /at most/,
+    );
+    expect(
+      alertPreferencesProblem({ kinds: { lines: { push: true, webhook: true, urgent: "yes" } } }),
+    ).toMatch(/Urgent/);
   });
 
   it("an open chart alerts on the kinds chosen in this browser", () => {
@@ -215,7 +264,7 @@ describe("the server applies them to every notification", () => {
     setSetting("alerts:preferences", "");
     external.saveExternalSettings({ ...external.getExternalSettings(), notify: true });
     const read = async () => (await (await preferencesRoute.GET()).json()).preferences;
-    expect((await read()).kinds.external).toEqual({ push: true, webhook: true });
+    expect((await read()).kinds.external).toEqual({ push: true, webhook: true, urgent: false });
     await put({ muted: ["external:UCquiet"] });
     const fetcher = vi
       .spyOn(delivery.transport, "fetch")

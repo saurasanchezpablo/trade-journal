@@ -1,5 +1,6 @@
 "use client";
 
+import { BetaGate } from "@/components/beta";
 import Link from "next/link";
 import { Suspense, useEffect, useState } from "react";
 import { Download, FlaskConical, Play, RotateCcw, Square } from "lucide-react";
@@ -38,9 +39,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function ResearchPage() {
   return (
-    <Suspense>
-      <Research />
-    </Suspense>
+    <BetaGate feature="strategyResearch">
+      <Suspense>
+        <Research />
+      </Suspense>
+    </BetaGate>
   );
 }
 

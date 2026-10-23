@@ -327,7 +327,9 @@ describe("delivery", () => {
       json("/api/alerts/webhook", { url: "https://ntfy.example/alerts" }, "PUT"),
     );
     const fetcher = vi.spyOn(push.transport, "fetch").mockResolvedValue(new Response("ok"));
-    const response = await testRoute.POST();
+    const response = await testRoute.POST(
+      new Request("http://localhost/api/alerts/test", { method: "POST" }),
+    );
     expect((await response.json()).delivered).toBe(1);
     const [url, init] = fetcher.mock.calls[0]!;
     expect(url).toBe("https://ntfy.example/alerts");

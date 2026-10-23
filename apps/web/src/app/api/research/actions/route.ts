@@ -7,6 +7,7 @@ import {
 } from "@/server/strategy-research/store";
 import { kickResearchWorker, runNow } from "@/server/strategy-research/worker";
 import { nowIso } from "@/server/ids";
+import { betaGate } from "@/server/beta-features";
 
 const ACTIONS = ["refresh", "research", "start", "stop", "reset-paper"] as const;
 type Action = (typeof ACTIONS)[number];
@@ -20,6 +21,8 @@ type Action = (typeof ACTIONS)[number];
  * - `reset-paper`: forget the recorded signals; the paper ledger starts again.
  */
 export const POST = handler(async (request: Request) => {
+  const off = betaGate("strategyResearch");
+  if (off) return off;
   const body = (await request.json()) as { action?: unknown } | null;
   requireValue(body && ACTIONS.includes(body.action as Action), "Unknown action.");
   const settings = getResearchSettings();

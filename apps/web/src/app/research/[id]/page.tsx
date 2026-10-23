@@ -1,5 +1,6 @@
 "use client";
 
+import { BetaGate } from "@/components/beta";
 import Link from "next/link";
 import { Suspense, use, useMemo, useState } from "react";
 import { ArrowLeft } from "lucide-react";
@@ -41,9 +42,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 export default function StrategyPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   return (
-    <Suspense>
-      <Strategy id={id} />
-    </Suspense>
+    <BetaGate feature="strategyResearch">
+      <Suspense>
+        <Strategy id={id} />
+      </Suspense>
+    </BetaGate>
   );
 }
 

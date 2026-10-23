@@ -37,7 +37,13 @@ export function updateAlertPreferences(patch: unknown): AlertPreferences {
   const next = readAlertPreferences({
     ...current,
     ...p,
-    kinds: { ...current.kinds, ...(p.kinds ?? {}) },
+    // A kind's patch keeps what it leaves out (an older page sends no `urgent`).
+    kinds: Object.fromEntries(
+      Object.entries(current.kinds).map(([kind, route]) => [
+        kind,
+        { ...route, ...(p.kinds?.[kind as AlertKind] ?? {}) },
+      ]),
+    ),
   });
   setSetting(KEY, JSON.stringify(next));
   return next;

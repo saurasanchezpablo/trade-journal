@@ -11,6 +11,7 @@ import {
   saveIntelligenceSettings,
 } from "@/server/video-intelligence/store";
 import { kickWorker, reevaluatePending, workerBusy } from "@/server/video-intelligence/worker";
+import { betaGate } from "@/server/beta-features";
 
 const ACTIONS = ["start", "pause", "resume", "cancel", "retry", "reprocess", "reevaluate"] as const;
 type Action = (typeof ACTIONS)[number];
@@ -26,6 +27,8 @@ type Action = (typeof ACTIONS)[number];
  * - `reevaluate`: claims whose outcome can still change are evaluated again now.
  */
 export const POST = handler(async (request: Request) => {
+  const off = betaGate("videoIntelligence");
+  if (off) return off;
   const body = (await request.json()) as { action?: unknown; videoId?: unknown } | null;
   requireValue(body && ACTIONS.includes(body.action as Action), "Unknown action.");
   requireValue(body.videoId === undefined || isVideoId(body.videoId), "Invalid video id.");

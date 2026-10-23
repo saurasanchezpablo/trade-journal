@@ -3,6 +3,7 @@ import { refreshAll } from "./data";
 import { runMonitor, type MonitorDeps } from "./monitor";
 import { researchOutdated, runResearch } from "./research";
 import { getResearchSettings, getResearchState, updateResearchState } from "./store";
+import { betaEnabled } from "../beta-features";
 
 /**
  * Background work for strategy research, started from instrumentation-node.ts and idle until
@@ -86,7 +87,9 @@ export class ResearchWorker {
   }
 
   async tick() {
-    if (shared.__srBusy || !getResearchSettings().monitoring) return;
+    // A beta feature: switched off in Settings, monitoring waits.
+    if (shared.__srBusy || !betaEnabled("strategyResearch") || !getResearchSettings().monitoring)
+      return;
     shared.__srBusy = true;
     try {
       const now = (this.deps.now ?? Date.now)();

@@ -20,6 +20,7 @@ const actionsRoute = await import("../src/app/api/video-intelligence/actions/rou
 const videoRoute = await import("../src/app/api/video-intelligence/videos/[id]/route");
 const auditRoute = await import("../src/app/api/video-intelligence/audit/route");
 const { auditEvaluations } = await import("../src/server/video-intelligence/audit");
+const { saveBetaFlags } = await import("../src/server/beta-features");
 
 afterAll(() => {
   if (originalDir === undefined) delete process.env.JOURNAL_DATA_DIR;
@@ -185,6 +186,7 @@ function seedVideo(options: { transcript?: string | null; summary?: boolean } = 
 }
 
 beforeEach(() => {
+  saveBetaFlags({ videoIntelligence: true, strategyResearch: true });
   vi.stubEnv("JOURNAL_PASSWORD", "");
   vi.stubEnv("ANTHROPIC_API_KEY", "fixture-anthropic-key");
   store

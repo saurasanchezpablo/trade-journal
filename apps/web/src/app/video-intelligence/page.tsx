@@ -1,5 +1,6 @@
 "use client";
 
+import { BetaGate } from "@/components/beta";
 import Link from "next/link";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { Pause, Play, RefreshCw, RotateCcw, Square } from "lucide-react";
@@ -80,9 +81,11 @@ interface Payload {
 
 export default function VideoIntelligencePage() {
   return (
-    <Suspense>
-      <VideoIntelligence />
-    </Suspense>
+    <BetaGate feature="videoIntelligence">
+      <Suspense>
+        <VideoIntelligence />
+      </Suspense>
+    </BetaGate>
   );
 }
 

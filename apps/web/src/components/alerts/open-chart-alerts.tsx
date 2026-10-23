@@ -47,7 +47,7 @@ export function OpenChartAlerts() {
           {t("Alert me on the Charts page while it is open and live")}
           <span className="block text-xs text-muted-foreground">
             {t(
-              "In this browser only (also the On/Off switch of the chart's Alerts card). Indicator alerts only run here, never in the background.",
+              "In this browser only (also the On/Off switch of the chart's Alerts card). Indicator alert() calls only run here; RSI alerts can be watched in the background under Indicator alerts.",
             )}
           </span>
         </span>

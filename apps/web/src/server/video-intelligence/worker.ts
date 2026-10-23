@@ -19,6 +19,7 @@ import {
   requeueOutdated,
   updateJob,
 } from "./store";
+import { betaEnabled } from "../beta-features";
 
 /**
  * The background work: one video at a time, its claims extracted (once per extractor version)
@@ -178,7 +179,8 @@ export class IntelligenceWorker {
 
   /** Run what is due. A tick while one runs does nothing; paused or not started, nothing. */
   async tick() {
-    if (shared.__viBusy) return;
+    // A beta feature: switched off in Settings, nothing runs (what is queued waits).
+    if (shared.__viBusy || !betaEnabled("videoIntelligence")) return;
     const settings = getIntelligenceSettings();
     if (!settings.enabled || settings.paused) return;
     shared.__viBusy = true;

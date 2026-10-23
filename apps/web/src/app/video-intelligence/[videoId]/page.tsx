@@ -1,5 +1,6 @@
 "use client";
 
+import { BetaGate } from "@/components/beta";
 import Link from "next/link";
 import { use, useState } from "react";
 import { ArrowLeft, ExternalLink, RotateCcw } from "lucide-react";
@@ -45,6 +46,14 @@ const clock = (seconds: number) =>
 
 export default function VideoDetailPage({ params }: { params: Promise<{ videoId: string }> }) {
   const { videoId } = use(params);
+  return (
+    <BetaGate feature="videoIntelligence">
+      <VideoDetail videoId={videoId} />
+    </BetaGate>
+  );
+}
+
+function VideoDetail({ videoId }: { videoId: string }) {
   const { t } = useI18n();
   const { data, error, refresh } = useApi<Payload>(
     `/api/video-intelligence/videos/${encodeURIComponent(videoId)}`,

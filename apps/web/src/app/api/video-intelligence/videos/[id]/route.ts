@@ -9,6 +9,7 @@ import {
   getJob,
   storedCandles,
 } from "@/server/video-intelligence/store";
+import { betaGate } from "@/server/beta-features";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -20,6 +21,8 @@ const MAX_CHART_BARS = 3000;
  * (for reading the quotes in context) and the stored candles each evaluation used.
  */
 export const GET = handler(async (_request: Request, { params }: Params) => {
+  const off = betaGate("videoIntelligence");
+  if (off) return off;
   const { id } = await params;
   const video = isVideoId(id) ? getVideo(id) : null;
   if (!video) return bad("Video not found", 404);

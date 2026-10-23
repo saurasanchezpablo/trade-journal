@@ -7,13 +7,15 @@ import { AlertKinds } from "@/components/alerts/alert-kinds";
 import { NotificationLog } from "@/components/alerts/notification-log";
 import { OpenChartAlerts } from "@/components/alerts/open-chart-alerts";
 import { WatchedCharts } from "@/components/alerts/watched-charts";
+import { IndicatorAlerts } from "@/components/alerts/indicator-alerts";
 import { useApi } from "@/lib/use-api";
 import { useT } from "@/components/i18n";
 
 /**
  * Alerts: where they go (browsers, webhook), which you receive (per kind, quiet hours, a
  * pause, muted channels), the charts the server watches, the open chart's own alerts, and
- * everything sent. Chart levels and zones, YouTube analyses and AI digests all go through it.
+ * everything sent. Chart levels and zones, indicator (RSI) rules, YouTube analyses and AI
+ * digests all go through it.
  */
 export default function AlertsPage() {
   const t = useT();
@@ -31,6 +33,7 @@ function AlertsContent() {
     <div className="grid gap-3 p-4 xl:grid-cols-2">
       <div className="space-y-3">
         <AlertKinds hasWebhook={Boolean(push?.webhook)} devices={push?.devices.length ?? 0} />
+        <IndicatorAlerts />
         <WatchedCharts />
         <OpenChartAlerts />
       </div>

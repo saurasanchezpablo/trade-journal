@@ -1,4 +1,4 @@
-import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { index, integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { db } from "@/db";
 
 /**
@@ -59,6 +59,51 @@ export const notificationLog = sqliteTable(
   (table) => [index("notification_log_at").on(table.at)],
 );
 
+/**
+ * Indicator alert rules watched in the background (RSI for now), with what the watcher last
+ * evaluated, so a restart neither repeats an alert nor reads a candle twice.
+ */
+export const indicatorAlertRules = sqliteTable("indicator_alert_rules", {
+  id: text("id").primaryKey(),
+  /** The rule as saved (`IndicatorAlertRule` without its id), JSON. */
+  ruleJson: text("rule_json").notNull(),
+  enabled: integer("enabled").notNull().default(1),
+  createdAt: text("created_at").notNull(),
+  /** The candle (open time) last evaluated, and its value. */
+  lastBarTime: integer("last_bar_time"),
+  lastValue: real("last_value"),
+  /** The candle that last fired (at most one alert per candle), and when. */
+  firedBarTime: integer("fired_bar_time"),
+  firedAt: text("fired_at"),
+  /** The last check's problem (source off, symbol unknown), cleared when one succeeds. */
+  error: text("error"),
+  checkedAt: text("checked_at"),
+});
+
+/**
+ * Urgent alerts not yet acknowledged: each is sent again every few minutes until you
+ * acknowledge it (from the notification, an open journal page or the Alerts page).
+ */
+export const urgentAlerts = sqliteTable(
+  "urgent_alerts",
+  {
+    id: text("id").primaryKey(),
+    kind: text("kind").notNull(),
+    source: text("source"),
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+    /** Where the notification opens, without the acknowledgement parameter. */
+    url: text("url").notNull(),
+    tag: text("tag").notNull(),
+    createdAt: text("created_at").notNull(),
+    lastSentAt: text("last_sent_at").notNull(),
+    /** Times sent, the first included. */
+    sends: integer("sends").notNull().default(1),
+    acknowledgedAt: text("acknowledged_at"),
+  },
+  (table) => [index("urgent_alerts_open").on(table.acknowledgedAt, table.lastSentAt)],
+);
+
 const DDL = `
 CREATE TABLE IF NOT EXISTS background_alert_watches (
  analysis_id TEXT PRIMARY KEY REFERENCES chart_analyses(id) ON DELETE CASCADE,
@@ -79,6 +124,17 @@ CREATE TABLE IF NOT EXISTS notification_log (
  url TEXT NOT NULL, at TEXT NOT NULL, delivered INTEGER NOT NULL DEFAULT 0, muted TEXT
 );
 CREATE INDEX IF NOT EXISTS notification_log_at ON notification_log(at);
+CREATE TABLE IF NOT EXISTS indicator_alert_rules (
+ id TEXT PRIMARY KEY, rule_json TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 1,
+ created_at TEXT NOT NULL, last_bar_time INTEGER, last_value REAL, fired_bar_time INTEGER,
+ fired_at TEXT, error TEXT, checked_at TEXT
+);
+CREATE TABLE IF NOT EXISTS urgent_alerts (
+ id TEXT PRIMARY KEY, kind TEXT NOT NULL, source TEXT, title TEXT NOT NULL, body TEXT NOT NULL,
+ url TEXT NOT NULL, tag TEXT NOT NULL, created_at TEXT NOT NULL, last_sent_at TEXT NOT NULL,
+ sends INTEGER NOT NULL DEFAULT 1, acknowledged_at TEXT
+);
+CREATE INDEX IF NOT EXISTS urgent_alerts_open ON urgent_alerts(acknowledged_at, last_sent_at);
 -- The watcher polls each watched analysis's save stamp; this answers it without reading rows.
 CREATE INDEX IF NOT EXISTS background_alert_stamps ON chart_analyses(id, updated_at);
 `;

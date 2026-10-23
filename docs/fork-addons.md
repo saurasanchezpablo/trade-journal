@@ -135,8 +135,16 @@ structure and re-apply the fix; each one has a test that fails without it.
 - Background alerts and the Alerts page: `server/background-alerts/*` (with the preferences
   and `notification_log`), `instrumentation.ts`, `instrumentation-node.ts`, `app/api/alerts/**`,
   `app/alerts/page.tsx`, `components/alerts/*`, `components/background-alerts.tsx`,
-  `lib/alert-messages.ts`, `lib/alert-preferences.ts`, tests `background-alerts.test.ts`,
-  `alert-preferences.test.ts` and `web-push.test.ts`.
+  `lib/alert-messages.ts`, `lib/alert-preferences.ts`, `lib/indicator-alerts.ts` (RSI rules),
+  `packages/core/src/indicators.ts` (RSI), tests `background-alerts.test.ts`,
+  `alert-preferences.test.ts`, `indicator-urgent-alerts.test.ts`, `indicators.test.ts` and
+  `web-push.test.ts`. The urgent alarm is mounted in `components/shell.tsx` (one line).
+- Beta features (Settings, Beta features): `lib/beta-features.ts`, `server/beta-features.ts`
+  (`betaGate` in the beta features' API routes, `betaEnabled` in their workers),
+  `components/beta.tsx` (`BetaProvider` from `app/layout.tsx`, `BetaGate` on their pages),
+  `components/beta-settings.tsx`, `app/api/beta/route.ts`, test `beta-features.test.ts`. They
+  touch upstream files only through the provider in `app/layout.tsx`, a filter on `NAV` in
+  `components/shell.tsx` and one section in `app/settings/page.tsx`.
 - Single sign-on: `server/oidc/*` (configuration, provider client, sessions and login
   transactions in their own tables), `app/api/auth/oidc/**`, `app/api/auth/logout/route.ts`,
   `components/sign-out.tsx`, `lib/auth-redirect.ts`, `docs/authentication.md`, tests

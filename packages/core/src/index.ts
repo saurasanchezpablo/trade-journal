@@ -12,3 +12,4 @@ export * from "./backtest";
 export * from "./returns";
 export * from "./claims";
 export * as research from "./research";
+export * from "./indicators";

@@ -1,6 +1,6 @@
 # Video intelligence
 
-**Video intelligence** (sidebar) checks what the analysts you follow on
+**Video intelligence** (sidebar, a beta feature: switch it on under **Settings, Beta features**) checks what the analysts you follow on
 [External analysis](external-analysis.md) claimed in their videos against what the market did
 afterwards. It answers, with the evidence and the sample behind each number: which claims came
 true, which were invalidated or never resolved, which analysts get the direction right but the
