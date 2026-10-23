@@ -4,7 +4,7 @@
  * (a YouTube channel). The server applies them to every notification it sends; a test
  * always goes out. Alerts muted here are still logged, with the reason.
  */
-export const ALERT_KINDS = ["lines", "zones", "external", "digest"] as const;
+export const ALERT_KINDS = ["lines", "zones", "external", "digest", "strategy"] as const;
 export type AlertKind = (typeof ALERT_KINDS)[number];
 
 export const ALERT_KIND_LABELS: Record<AlertKind, { title: string; detail: string }> = {
@@ -25,6 +25,10 @@ export const ALERT_KIND_LABELS: Record<AlertKind, { title: string; detail: strin
   digest: {
     title: "AI digests",
     detail: "The scheduled session recap and weekly review are written.",
+  },
+  strategy: {
+    title: "Strategy signals",
+    detail: "A monitored research strategy changes its paper position (no order is placed).",
   },
 };
 
@@ -47,7 +51,7 @@ const ON: AlertRoute = { push: true, webhook: true };
 const OFF: AlertRoute = { push: false, webhook: false };
 
 export const DEFAULT_ALERT_PREFERENCES: AlertPreferences = {
-  kinds: { lines: ON, zones: ON, external: OFF, digest: ON },
+  kinds: { lines: ON, zones: ON, external: OFF, digest: ON, strategy: ON },
   quiet: { enabled: false, from: "22:00", to: "07:00" },
   pausedUntil: null,
   muted: [],

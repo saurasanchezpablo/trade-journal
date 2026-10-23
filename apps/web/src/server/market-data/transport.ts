@@ -14,6 +14,8 @@ type Flight = { controller: AbortController; promise: Promise<unknown>; users: n
 export const HOST_LIMITS: Record<string, { concurrent: number; intervalMs: number }> = {
   "data-api.binance.vision": { concurrent: 4, intervalMs: 60 },
   "api.binance.com": { concurrent: 4, intervalMs: 60 },
+  // USD-M futures (strategy research): funding history allows 500 requests in 5 minutes.
+  "fapi.binance.com": { concurrent: 1, intervalMs: 700 },
   "api.bybit.com": { concurrent: 4, intervalMs: 60 },
   "api.exchange.coinbase.com": { concurrent: 3, intervalMs: 150 },
   // OKX history candles: 20 requests in 2 seconds.

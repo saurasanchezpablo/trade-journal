@@ -182,6 +182,15 @@ structure and re-apply the fix; each one has a test that fails without it.
   `video-intelligence`. It plugs into upstream files only through `export * from "./claims"`
   in `packages/core/src/index.ts`, a `NAV` entry in `components/shell.tsx`, and the optional
   `onUsage` callback of `runAiObject` (`server/ai-structured.ts`, fork code).
+- Strategy research (docs/strategy-research.md, docs/trading/): `packages/core/src/research/*`
+  (exported as the `research` namespace), `lib/strategy-research.ts`, `lib/i18n/strategy-research.ts`,
+  `server/strategy-research/*` (its `sr_*` tables; worker started from `instrumentation-node.ts`),
+  `app/api/research/**`, `app/research/**`, `components/strategy-research/*`,
+  `scripts/research/reference.py`, tests `research`, `research-evaluate`, `strategy-research` and
+  `strategy-research.live`. It plugs into upstream files only through
+  `export * as research from "./research"` in `packages/core/src/index.ts`, a `NAV` entry in
+  `components/shell.tsx`, the `strategy` alert kind in `lib/alert-preferences.ts` and a
+  `fapi.binance.com` entry in `HOST_LIMITS` (`server/market-data/transport.ts`).
 - AI coaching (docs/ai-coaching.md): `packages/core/src/behaviour.ts`; `lib/{lesson-tracking,trade-context,goals,plan-draft,note-search,trade-snapshot}.ts`;
   `server/{ai-structured,ai-images,lessons,trade-context,goals,note-search}.ts` (goals and note passages in their own
   tables); `app/api/{behaviour,lessons,goals,notes-search}/**` and

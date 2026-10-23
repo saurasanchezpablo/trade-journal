@@ -76,6 +76,9 @@ const es: Record<string, string> = {
   "Price enters or breaks a support or resistance zone of a chart watched in the background.":
     "El precio entra en una zona de soporte o resistencia de un gráfico vigilado en segundo plano, o la rompe.",
   "YouTube analyses": "Análisis de YouTube",
+  "Strategy signals": "Señales de estrategias",
+  "A monitored research strategy changes its paper position (no order is placed).":
+    "Una estrategia de investigación vigilada cambia su posición simulada (no se envía ninguna orden).",
   "A followed channel's new video is summarised.":
     "Se resume el vídeo nuevo de un canal que sigues.",
   "AI digests": "Resúmenes programados de IA",

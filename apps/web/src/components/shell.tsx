@@ -26,6 +26,7 @@ import {
   X,
   MonitorPlay,
   ScanSearch,
+  Sigma,
   FlaskConical,
   BellRing,
 } from "lucide-react";
@@ -48,6 +49,7 @@ const NAV = [
   { href: "/backtest", label: "Backtesting", icon: FlaskConical },
   { href: "/external", label: "External analysis", icon: MonitorPlay },
   { href: "/video-intelligence", label: "Video intelligence", icon: ScanSearch },
+  { href: "/research", label: "Strategy research", icon: Sigma },
   { href: "/alerts", label: "Alerts", icon: BellRing },
   { href: "/trades", label: "Trades", icon: ListOrdered },
   { href: "/reports", label: "Reports", icon: BarChart3 },

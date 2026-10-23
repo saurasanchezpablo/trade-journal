@@ -13,6 +13,7 @@ import serverUpdate from "./server-update";
 import shellSettings from "./shell-settings";
 import trades from "./trades";
 import videoIntelligence from "./video-intelligence";
+import strategyResearch from "./strategy-research";
 
 /**
  * Every Spanish string, keyed by its English source text. One module per area of the app
@@ -34,4 +35,5 @@ export const ES: Readonly<Record<string, string>> = {
   ...pagesUpdate,
   ...serverUpdate,
   ...videoIntelligence,
+  ...strategyResearch,
 };
